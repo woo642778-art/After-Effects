@@ -1,7 +1,7 @@
 import Foundation
 
 public struct WaveformAccumulator: Sendable {
-    private let totalFrames: Int
+    private let estimatedTotalFrames: Int
     private let channelCount: Int
     private let bucketCount: Int
     private var processedFrames = 0
@@ -13,7 +13,7 @@ public struct WaveformAccumulator: Sendable {
         guard totalFrames > 0, channelCount > 0, bucketCount > 0 else {
             throw MediaError.invalidRequest("Waveform dimensions must be positive.")
         }
-        self.totalFrames = totalFrames
+        self.estimatedTotalFrames = totalFrames
         self.channelCount = channelCount
         self.bucketCount = bucketCount
         self.peaks = Array(repeating: 0, count: bucketCount)
@@ -26,13 +26,17 @@ public struct WaveformAccumulator: Sendable {
             throw MediaError.invalidRequest("Interleaved sample count must be divisible by channel count.")
         }
         let frameCount = interleavedSamples.count / channelCount
-        guard processedFrames + frameCount <= totalFrames else {
-            throw MediaError.invalidRequest("Waveform received more frames than declared.")
-        }
 
         for localFrame in 0..<frameCount {
             let globalFrame = processedFrames + localFrame
-            let bucket = min(bucketCount - 1, globalFrame * bucketCount / totalFrames)
+            let bucket: Int
+            if globalFrame >= estimatedTotalFrames {
+                bucket = bucketCount - 1
+            } else {
+                let position = Double(globalFrame) / Double(estimatedTotalFrames)
+                bucket = min(bucketCount - 1, Int(position * Double(bucketCount)))
+            }
+
             for channel in 0..<channelCount {
                 let sample = max(-1, min(1, interleavedSamples[localFrame * channelCount + channel]))
                 peaks[bucket] = max(peaks[bucket], abs(sample))
