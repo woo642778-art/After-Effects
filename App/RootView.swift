@@ -18,6 +18,7 @@ struct RootView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     header
                     statusCard
+                    MediaImportView()
                     architectureSection
                     sourcesSection
                     artifactCard
