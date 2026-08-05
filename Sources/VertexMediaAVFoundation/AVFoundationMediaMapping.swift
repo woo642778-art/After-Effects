@@ -23,8 +23,7 @@ internal enum AVFoundationMediaMapping {
 
     static func rotationDegrees(_ transform: CGAffineTransform) -> Int {
         let degrees = Int((atan2(transform.b, transform.a) * 180 / .pi).rounded())
-        let normalized = ((degrees % 360) + 360) % 360
-        return normalized == 360 ? 0 : normalized
+        return ((degrees % 360) + 360) % 360
     }
 
     static func codecName(from formatDescription: CMFormatDescription?) -> String {
@@ -58,41 +57,39 @@ internal enum AVFoundationMediaMapping {
         let transferValue = extensions[kCMFormatDescriptionExtension_TransferFunction] as? String
         let matrixValue = extensions[kCMFormatDescriptionExtension_YCbCrMatrix] as? String
 
+        let p3D65 = kCVImageBufferColorPrimaries_P3_D65 as String
+        let rec2020 = kCVImageBufferColorPrimaries_ITU_R_2020 as String
+        let pq = kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ as String
+        let hlg = kCVImageBufferTransferFunction_ITU_R_2100_HLG as String
+        let sRGB = kCVImageBufferTransferFunction_sRGB as String
+        let bt2020 = kCVImageBufferYCbCrMatrix_ITU_R_2020 as String
+
         let primaries: ColorPrimaries
-        switch primaryValue {
-        case kCVImageBufferColorPrimaries_P3_D65 as String:
+        if primaryValue == p3D65 {
             primaries = .displayP3
-        case kCVImageBufferColorPrimaries_ITU_R_2020 as String:
+        } else if primaryValue == rec2020 {
             primaries = .rec2020
-        default:
+        } else {
             primaries = .rec709
         }
 
         let transfer: TransferFunction
         let isHDR: Bool
-        switch transferValue {
-        case kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ as String:
+        if transferValue == pq {
             transfer = .pq
             isHDR = true
-        case kCVImageBufferTransferFunction_ITU_R_2100_HLG as String:
+        } else if transferValue == hlg {
             transfer = .hlg
             isHDR = true
-        case kCVImageBufferTransferFunction_sRGB as String:
+        } else if transferValue == sRGB {
             transfer = .sRGB
             isHDR = false
-        default:
+        } else {
             transfer = .rec709
             isHDR = false
         }
 
-        let matrix: ColorMatrix
-        switch matrixValue {
-        case kCVImageBufferYCbCrMatrix_ITU_R_2020 as String:
-            matrix = .bt2020NonConstantLuminance
-        default:
-            matrix = .bt709
-        }
-
+        let matrix: ColorMatrix = matrixValue == bt2020 ? .bt2020NonConstantLuminance : .bt709
         let hasAlpha = (extensions[kCMFormatDescriptionExtension_ContainsAlphaChannel] as? Bool) ?? false
         let descriptor = ColorDescriptor(
             primaries: primaries,
