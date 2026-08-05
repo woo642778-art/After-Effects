@@ -47,6 +47,16 @@ func accumulator() throws {
     #expect(abs(waveform.rms[1] - 0.35355338) < 0.0001)
 }
 
+@Test("Waveform accumulator assigns codec padding to the final bucket")
+func accumulatorAcceptsCodecPadding() throws {
+    var accumulator = try WaveformAccumulator(totalFrames: 4, channelCount: 1, bucketCount: 2)
+    try accumulator.append(interleavedSamples: [0.1, 0.2, 0.3, 0.4, 0.9, -1.0])
+    let waveform = try accumulator.finalize()
+
+    #expect(abs(waveform.peaks[0] - 0.2) < 0.0001)
+    #expect(waveform.peaks[1] == 1)
+}
+
 private struct FakeInspector: MediaAssetInspecting {
     let descriptor: MediaAssetDescriptor
 
