@@ -34,7 +34,9 @@
 - [x] Write failing tests for normalization, comparison, addition, and rescaling.
 - [x] Verify the tests fail because the types do not exist.
 - [x] Implement normalized rational time without floating-point timeline storage.
-- [x] Verify the tests pass locally.
+- [x] Replace iOS 18-only `Int128` arithmetic with checked iOS 17-compatible `Int64` arithmetic and continued-fraction comparison.
+- [x] Add extreme-value comparison and signed-rounding regression tests.
+- [x] Verify 11 Phase 2 core tests pass locally and remotely.
 
 ### Task 2: Identity, geometry, color, dependency, and error contracts
 
@@ -77,10 +79,10 @@
 
 **Produces:** Deterministically generated AppIcon and LaunchLogo files derived from the supplied Ae image.
 
-- [ ] Store the exact source image as lossless base64 text.
-- [ ] Generate required iPhone, iPad, marketing, and launch-logo PNG sizes.
-- [ ] Configure the app display name, bundle identifier, version, and app icon catalog.
-- [ ] Verify the generated assets are included in the compiled application.
+- [x] Store the exact source image as lossless base64 text.
+- [x] Generate required iPhone, iPad, marketing, and launch-logo PNG sizes.
+- [x] Configure the app display name, bundle identifier, version, and app icon catalog.
+- [x] Verify `Assets.car` and generated icon PNG files are included in the compiled application.
 
 ### Task 5: Startup and one-time Telegram promotion
 
@@ -92,10 +94,10 @@
 
 **Produces:** A visible startup loading surface and a once-per-installation Telegram promotion.
 
-- [ ] Show the supplied Ae logo, `After Effects`, and `Made by Maze` during startup.
-- [ ] Transition into the milestone application after the startup task finishes.
-- [ ] Present the Telegram promotion once and persist consumption before showing it.
-- [ ] Provide an explicit Telegram button and a non-coercive continue button.
+- [x] Show the supplied Ae logo, `After Effects`, and `Made by Maze` during startup.
+- [x] Transition into the milestone application after the startup task finishes.
+- [x] Present the Telegram promotion once and persist consumption before showing it.
+- [x] Provide an explicit Telegram button and a non-coercive continue button.
 
 ### Task 6: Phase record and unsigned IPA automation
 
@@ -110,10 +112,21 @@
 
 **Produces:** A complete Phase 2 record, remote test evidence, unsigned IPA, checksum, and continuation point.
 
-- [ ] Run all `VertexCore` tests on Linux.
-- [ ] Generate assets and the Xcode project on macOS.
-- [ ] Build the arm64 iOS application with signing disabled.
-- [ ] Verify the compiled display name and asset catalog.
-- [ ] Package and upload `After-Effects-Phase-2-unsigned.ipa`.
-- [ ] Inspect the downloaded IPA and record its checksum.
-- [ ] Open a stacked Draft PR targeting the Phase 1 branch.
+- [x] Run all `VertexCore` tests on Linux.
+- [x] Generate assets and the Xcode project on macOS.
+- [x] Build the arm64 iOS application with signing disabled.
+- [x] Verify the compiled display name and asset catalog.
+- [x] Package and upload `After-Effects-Phase-2-unsigned.ipa`.
+- [x] Inspect the downloaded IPA and record its checksum.
+- [x] Open stacked Draft PR #2 targeting the Phase 1 branch.
+
+## Final Evidence
+
+- Successful workflow run: `31018608691`.
+- Artifact ID: `8935672424`.
+- Artifact archive digest: `sha256:cad01c087d4ca76b01f0fa1a588b932779e6b8c508302331197bcf1e50b6f0c0`.
+- Extracted IPA SHA-256: `9694eac17a701974050a0c87529910a19e95e4b994b0e9ece6bf51cdd321dab1`.
+- Verified executable: `Payload/AfterEffects.app/AfterEffects`, 64-bit arm64 Mach-O.
+- Verified display name: `After Effects`.
+- Verified bundle identifier: `com.woo642778.aftereffects`.
+- Verified version: `0.2.0 (2)`.
