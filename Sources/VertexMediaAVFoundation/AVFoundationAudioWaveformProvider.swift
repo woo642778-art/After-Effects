@@ -49,7 +49,7 @@ public actor AVFoundationAudioWaveformProvider: AudioWaveformProvider {
 
             let estimatedFrames = max(
                 request.bucketCount,
-                Int(ceil(request.timeRange.duration.seconds * audio.sampleRate)) + 8_192
+                Int(ceil(request.timeRange.duration.seconds * audio.sampleRate))
             )
             var accumulator = try WaveformAccumulator(
                 totalFrames: estimatedFrames,
