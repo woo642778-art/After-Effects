@@ -1,0 +1,54 @@
+name: Vertex
+options:
+  bundleIdPrefix: com.woo642778
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  VertexCore:
+    path: .
+
+targets:
+  Vertex:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: VertexCore
+        product: VertexCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.vertex
+        PRODUCT_NAME: Vertex
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Vertex
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photo-video
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - VertexTests
+
+  VertexTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/VertexCoreTests
+    dependencies:
+      - target: Vertex
+      - package: VertexCore
+        product: VertexCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.vertex.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"

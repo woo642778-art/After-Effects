@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+Payload/
+artifacts/
+*.ipa
+*.ipa.sha256
+.swiftpm/
