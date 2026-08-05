@@ -103,6 +103,6 @@ public enum MilestoneCatalog {
                 purpose: "Timeline interaction research only; no source copied into the MIT product"
             )
         ],
-        artifactPolicy: "Phase 3 publishes After-Effects-3.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number."
+        artifactPolicy: "Phase 3 publishes After-Effects-3.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
     )
 }
