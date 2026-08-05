@@ -46,7 +46,7 @@ struct MediaImportView: View {
                 viewModel.importMedia(from: url)
             case .failure(let error):
                 if (error as NSError).code != NSUserCancelledError {
-                    viewModel.importMedia(from: URL(fileURLWithPath: "/invalid-selection"))
+                    viewModel.presentImporterError(error)
                 }
             }
         }
