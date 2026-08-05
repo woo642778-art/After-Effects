@@ -24,13 +24,7 @@ public struct SourceAdoption: Codable, Equatable, Sendable, Identifiable {
     public let mode: AdoptionMode
     public let purpose: String
 
-    public init(
-        id: String,
-        repository: String,
-        license: String,
-        mode: AdoptionMode,
-        purpose: String
-    ) {
+    public init(id: String, repository: String, license: String, mode: AdoptionMode, purpose: String) {
         self.id = id
         self.repository = repository
         self.license = license
@@ -47,17 +41,9 @@ public struct Milestone: Codable, Equatable, Sendable {
     public let sourceAdoptions: [SourceAdoption]
     public let artifactPolicy: String
 
-    public init(
-        number: Int,
-        title: String,
-        status: MilestoneStatus,
-        deliverables: [String],
-        sourceAdoptions: [SourceAdoption],
-        artifactPolicy: String
-    ) {
+    public init(number: Int, title: String, status: MilestoneStatus, deliverables: [String], sourceAdoptions: [SourceAdoption], artifactPolicy: String) {
         precondition(number >= 0, "Milestone number must be non-negative")
         precondition(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Milestone title must not be empty")
-
         self.number = number
         self.title = title
         self.status = status
@@ -69,45 +55,45 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 2,
-        title: "Core Architecture and Product Identity",
+        number: 3,
+        title: "Media Input and Output Foundation",
         status: .implemented,
         deliverables: [
-            "Exact rational timeline time with explicit rescaling and overflow handling",
-            "Stable UUID entity identity and structured subsystem errors",
-            "Explicit coordinate-space conversion and color metadata contracts",
-            "Deterministic dependency ordering with cycle detection",
-            "After Effects app identity, generated Ae icon, startup loading, and Made by Maze attribution",
-            "Once-per-installation Telegram promotion for the AE Motion channel"
+            "Portable media descriptors, exact requests, providers, cancellation, and structured errors",
+            "AVFoundation metadata inspection without leaking platform types into VertexMedia",
+            "Requested-time thumbnail decoding with preferred-transform handling",
+            "Bounded normalized audio waveform extraction",
+            "Real Files-based movie selection with metadata, thumbnail, and waveform presentation",
+            "Versioned After Effects 3.0.0 unsigned IPA artifact"
         ],
         sourceAdoptions: [
+            SourceAdoption(
+                id: "avfoundation",
+                repository: "Apple AVFoundation",
+                license: "Apple platform SDK",
+                mode: .wrappedDependency,
+                purpose: "Phase 3 production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
+            ),
             SourceAdoption(
                 id: "metalpetal",
                 repository: "MetalPetal/MetalPetal",
                 license: "MIT",
                 mode: .directDependency,
-                purpose: "GPU image processing, compositing, filters, and render-graph optimization"
+                purpose: "Deferred to Phase 4 GPU image processing and render graph"
             ),
             SourceAdoption(
                 id: "videoio",
                 repository: "MetalPetal/VideoIO",
                 license: "MIT",
-                mode: .wrappedDependency,
-                purpose: "AVFoundation preview, frame output, and export adapters"
+                mode: .researchOnly,
+                purpose: "Isolated Phase 4 preview/export candidate; not imported by Phase 3 product code"
             ),
             SourceAdoption(
                 id: "videolab",
                 repository: "ruanjx/VideoLab",
                 license: "MIT",
                 mode: .designReference,
-                purpose: "Layer, keyframe, operation, and pre-composition architecture study"
-            ),
-            SourceAdoption(
-                id: "cabbage",
-                repository: "VideoFlint/Cabbage",
-                license: "MIT",
-                mode: .designReference,
-                purpose: "AVFoundation timeline and resource abstraction study"
+                purpose: "Future layer, keyframe, operation, and pre-composition architecture study"
             ),
             SourceAdoption(
                 id: "minicut",
@@ -115,15 +101,8 @@ public enum MilestoneCatalog {
                 license: "GPL-3.0",
                 mode: .behavioralReference,
                 purpose: "Timeline interaction research only; no source copied into the MIT product"
-            ),
-            SourceAdoption(
-                id: "otio",
-                repository: "AcademySoftwareFoundation/OpenTimelineIO",
-                license: "Apache-2.0",
-                mode: .wrappedDependency,
-                purpose: "Future timeline interchange with professional NLE applications"
             )
         ],
-        artifactPolicy: "Every buildable phase publishes an unsigned IPA. Installable signed IPAs require user-provided signing credentials."
+        artifactPolicy: "Phase 3 publishes After-Effects-3.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number."
     )
 }
