@@ -1,14 +1,15 @@
 import Testing
 @testable import VertexCore
 
-@Test("Phase 2 is the active implemented milestone")
-func phaseTwoIsActiveMilestone() {
+@Test("Phase 3 is the active implemented milestone")
+func phaseThreeIsActiveMilestone() {
     let milestone = MilestoneCatalog.current
 
-    #expect(milestone.number == 2)
+    #expect(milestone.number == 3)
     #expect(milestone.status == .implemented)
-    #expect(milestone.title == "Core Architecture and Product Identity")
-    #expect(milestone.deliverables.contains { $0.contains("rational timeline time") })
+    #expect(milestone.title == "Media Input and Output Foundation")
+    #expect(milestone.deliverables.contains { $0.contains("AVFoundation metadata inspection") })
+    #expect(milestone.deliverables.contains { $0.contains("3.0.0") })
 }
 
 @Test("Core source candidates retain explicit adoption boundaries")
@@ -16,6 +17,7 @@ func sourceCandidatesHaveBoundaries() {
     let sources = MilestoneCatalog.current.sourceAdoptions
     let repositories = Set(sources.map(\.repository))
 
+    #expect(repositories.contains("Apple AVFoundation"))
     #expect(repositories.contains("MetalPetal/MetalPetal"))
     #expect(repositories.contains("MetalPetal/VideoIO"))
     #expect(repositories.contains("ruanjx/VideoLab"))
@@ -28,9 +30,10 @@ func gplSourceIsNotAdoptedIntoProduct() {
     #expect(miniCut?.mode == .behavioralReference)
 }
 
-@Test("Artifact policy distinguishes unsigned and signed IPA files")
+@Test("Artifact policy fixes the phase-major version and signing boundary")
 func artifactPolicyIsExplicit() {
     let policy = MilestoneCatalog.current.artifactPolicy.lowercased()
-    #expect(policy.contains("unsigned ipa"))
+    #expect(policy.contains("after-effects-3.0.0-unsigned.ipa"))
     #expect(policy.contains("signing credentials"))
+    #expect(policy.contains("major version"))
 }
