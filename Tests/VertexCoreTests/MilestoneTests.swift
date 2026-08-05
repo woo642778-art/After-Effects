@@ -1,15 +1,17 @@
 import Testing
 @testable import VertexCore
 
-@Test("Phase 1 is the active implemented milestone")
-func phaseOneIsActive() {
+@Test("Phase 2 is the active implemented milestone")
+func phaseTwoIsActiveMilestone() {
     let milestone = MilestoneCatalog.current
-    #expect(milestone.number == 1)
+
+    #expect(milestone.number == 2)
     #expect(milestone.status == .implemented)
-    #expect(milestone.title == "Repository Foundation and Source Audit")
+    #expect(milestone.title == "Core Architecture and Product Identity")
+    #expect(milestone.deliverables.contains { $0.contains("rational timeline time") })
 }
 
-@Test("Core source candidates have explicit adoption boundaries")
+@Test("Core source candidates retain explicit adoption boundaries")
 func sourceCandidatesHaveBoundaries() {
     let sources = MilestoneCatalog.current.sourceAdoptions
     let repositories = Set(sources.map(\.repository))
@@ -20,7 +22,7 @@ func sourceCandidatesHaveBoundaries() {
     #expect(sources.allSatisfy { !$0.license.isEmpty && !$0.purpose.isEmpty })
 }
 
-@Test("GPL UI source is isolated to behavioral reference")
+@Test("GPL UI source remains isolated to behavioral reference")
 func gplSourceIsNotAdoptedIntoProduct() {
     let miniCut = MilestoneCatalog.current.sourceAdoptions.first { $0.repository == "fwcd/mini-cut" }
     #expect(miniCut?.mode == .behavioralReference)
