@@ -67,7 +67,7 @@ public actor AVFoundationMediaInspector: MediaAssetInspecting {
                         sampleRate: audio.sampleRate,
                         channelCount: audio.channels,
                         codec: AVFoundationMediaMapping.codecName(from: formatDescription),
-                        estimatedBitRate: estimatedDataRate > 0 ? estimatedDataRate : nil
+                        estimatedBitRate: estimatedDataRate > 0 ? Double(estimatedDataRate) : nil
                     )
                 )
             }
