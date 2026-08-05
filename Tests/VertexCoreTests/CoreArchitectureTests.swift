@@ -102,3 +102,23 @@ func phaseTwoIsActive() {
     #expect(MilestoneCatalog.current.title == "Core Architecture and Product Identity")
     #expect(MilestoneCatalog.current.status == .implemented)
 }
+
+@Test("Rational time comparison avoids cross multiplication overflow")
+func rationalTimeComparisonAtIntegerLimits() {
+    let lhs = RationalTime(value: Int64.max, timescale: Int32.max)
+    let rhs = RationalTime(value: Int64.max - 1, timescale: Int32.max)
+    let negativeLHS = RationalTime(value: Int64.min + 1, timescale: Int32.max)
+    let negativeRHS = RationalTime(value: Int64.min + 2, timescale: Int32.max)
+
+    #expect(rhs < lhs)
+    #expect(negativeLHS < negativeRHS)
+}
+
+@Test("Rational time applies signed rounding consistently")
+func rationalTimeSignedRounding() throws {
+    let negativeFrame = RationalTime(value: -1, timescale: 24)
+
+    #expect(try negativeFrame.rescaled(to: 1, rounding: .towardZero) == .zero)
+    #expect(try negativeFrame.rescaled(to: 1, rounding: .floor) == RationalTime(value: -1, timescale: 1))
+    #expect(try negativeFrame.rescaled(to: 1, rounding: .ceiling) == .zero)
+}
