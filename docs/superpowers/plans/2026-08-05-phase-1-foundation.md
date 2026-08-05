@@ -82,8 +82,8 @@
 - [x] Generate the Xcode project on macOS.
 - [x] Build for generic iOS with signing disabled.
 - [x] Package `Payload/Vertex.app` into an IPA.
-- [ ] Confirm the remote GitHub Actions run succeeds.
-- [ ] Record artifact checksum and run URL in the work log.
+- [x] Confirm GitHub Actions run `31015258350` succeeds.
+- [x] Record artifact ID `8934224640` and IPA checksum in the work log.
 
 ### Task 6: Persistent continuation record
 
