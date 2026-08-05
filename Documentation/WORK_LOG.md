@@ -73,26 +73,46 @@ Core architecture contracts, After Effects product identity, generated icon asse
 - Updated the main milestone UI to use the After Effects identity and display the six Phase 2 architecture contracts.
 - Updated GitHub Actions to generate assets, verify the compiled display name and arm64 binary, and package a Phase 2 unsigned IPA.
 
-### Verified locally
+### Test-driven implementation evidence
 
-- A red test run failed because Phase 2 types did not exist.
-- After implementation, `swift test` passed under Swift 6.2.1 on Linux.
-- The Phase 2 local suite executed 9 tests with 0 failures.
+- The first local test run failed because the Phase 2 types did not exist.
+- The initial implementation passed on Linux but used Swift `Int128`, which remote Xcode 16.4 correctly rejected for the iOS 17 deployment target because that API is available only on iOS 18 and later.
+- The exact-time implementation was corrected without raising the deployment target: checked `Int64` arithmetic now handles addition, subtraction, rescaling, and overflow, while continued-fraction comparison avoids overflowing cross multiplication.
+- Extreme-value comparison and signed-rounding regression tests were added.
+- Final local `swift test` under Swift 6.2.1 executed 11 Phase 2 tests with 0 failures.
+- Final remote `VertexCore tests` also passed.
 - The platform-neutral core contains no SwiftUI, UIKit, AVFoundation, MetalPetal, or VideoIO dependency.
 
-### Pending remote verification
+### Verified remotely
 
-- macOS asset generation through `Tools/generate_app_assets.sh`.
-- XcodeGen generation using the updated `project.yml`.
-- SwiftUI compilation for iOS 17.
-- AppIcon and LaunchLogo compilation into `Assets.car`.
-- `CFBundleDisplayName` verification as `After Effects`.
-- Unsigned arm64 IPA packaging and checksum inspection.
+- Final source HEAD used for the artifact: `f285dba216ce71fb4591f8243dafeb83cd6214c1`.
+- Successful GitHub Actions run: `31018608691`.
+- Core tests, supplied-image asset generation, XcodeGen generation, iOS 17 Release compilation, product identity verification, IPA packaging, and artifact upload all completed successfully.
+- Artifact ID: `8935672424`.
+- Artifact name: `After-Effects-Phase-2-unsigned-ipa`.
+- Artifact archive digest: `sha256:cad01c087d4ca76b01f0fa1a588b932779e6b8c508302331197bcf1e50b6f0c0`.
+- Extracted IPA SHA-256: `9694eac17a701974050a0c87529910a19e95e4b994b0e9ece6bf51cdd321dab1`.
+
+### Downloaded IPA inspection
+
+- IPA path: `After-Effects-Phase-2-unsigned.ipa`.
+- Executable path: `Payload/AfterEffects.app/AfterEffects`.
+- Executable format: 64-bit arm64 Mach-O.
+- `CFBundleDisplayName`: `After Effects`.
+- `CFBundleName`: `AfterEffects`.
+- `CFBundleIdentifier`: `com.woo642778.aftereffects`.
+- Version: `0.2.0 (2)`.
+- Compiled asset catalog: `Payload/AfterEffects.app/Assets.car`.
+- Generated icon files include iPhone and iPad application icons.
 
 ### Product functionality at this point
 
-The app remains a milestone and architecture-status shell. Startup, branding, and the once-per-installation Telegram promotion are real application behaviors. No production media import, timeline, renderer, export engine, motion engine, effect engine, tracking, AI cutout, shape editor, text engine, audio engine, color-processing engine, or 3D engine is claimed.
+The app remains a milestone and architecture-status shell. Startup, branding, exact-time contracts, and the once-per-installation Telegram promotion are real application behaviors. No production media import, timeline, renderer, export engine, motion engine, effect engine, tracking, AI cutout, shape editor, text engine, audio engine, color-processing engine, or 3D engine is claimed.
+
+### Phase 2 result
+
+Phase 2 implementation, documentation, tests, iOS 17 build, product identity verification, supplied icon generation, startup behavior, Telegram first-run behavior, unsigned IPA, and checksum requirements are complete. Draft PR #2 remains stacked on Phase 1 PR #1.
 
 ### Next gate
 
-Run the final Phase 2 GitHub Actions workflow, fix only verified build or test failures, download and inspect the unsigned IPA, record its SHA-256 and artifact identifiers, then create or update the stacked Draft PR targeting the Phase 1 branch.
+Review and merge the stacked Phase 1 and Phase 2 pull requests in order. Phase 3 must begin as a media input/output source audit and adapter spike, not as a decorative editor timeline. It must define frame-provider and audio-provider protocols before adopting AVFoundation, MetalPetal, VideoIO, or FFmpeg code.
