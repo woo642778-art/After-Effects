@@ -22,18 +22,18 @@ concurrency:
 
 jobs:
   core-tests:
-    name: VertexCore tests
+    name: Vertex core and media tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Run deterministic core tests
+      - name: Run deterministic portable tests
         run: swift test
 
   unsigned-ipa:
-    name: Build unsigned IPA
+    name: Build After Effects 3.0.0 unsigned IPA
     runs-on: macos-15
     needs: core-tests
     steps:
@@ -66,14 +66,20 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             clean build
 
-      - name: Verify product identity and architecture
+      - name: Verify product identity, version, and architecture
         run: |
           set -euo pipefail
           APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
           test -d "$APP_PATH"
           test -f "$APP_PATH/Assets.car"
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           test "$DISPLAY_NAME" = "After Effects"
+          test "$VERSION" = "3.0.0"
+          test "$BUILD" = "3"
+          test "$BUNDLE_ID" = "com.woo642778.aftereffects"
           /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
 
       - name: Package unsigned IPA and checksum
@@ -83,13 +89,13 @@ jobs:
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP_PATH" Payload/AfterEffects.app
-          /usr/bin/zip -qry artifacts/After-Effects-Phase-2-unsigned.ipa Payload
-          shasum -a 256 artifacts/After-Effects-Phase-2-unsigned.ipa > artifacts/After-Effects-Phase-2-unsigned.ipa.sha256
+          /usr/bin/zip -qry artifacts/After-Effects-3.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-3.0.0-unsigned.ipa > artifacts/After-Effects-3.0.0-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: After-Effects-Phase-2-unsigned-ipa
+          name: After-Effects-3.0.0-unsigned-ipa
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30
