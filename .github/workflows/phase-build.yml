@@ -1,0 +1,75 @@
+name: Phase Build and Unsigned IPA
+
+on:
+  push:
+    branches:
+      - main
+      - "agent/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: phase-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: VertexCore tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - name: Run deterministic core tests
+        run: swift test
+
+  unsigned-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    needs: core-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build iOS application without signing
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$PWD/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: Package unsigned IPA and checksum
+        run: |
+          set -euo pipefail
+          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/Vertex.app"
+          test -d "$APP_PATH"
+          rm -rf Payload artifacts
+          mkdir -p Payload artifacts
+          cp -R "$APP_PATH" Payload/Vertex.app
+          /usr/bin/zip -qry artifacts/Vertex-Phase-1-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex-Phase-1-unsigned.ipa > artifacts/Vertex-Phase-1-unsigned.ipa.sha256
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex-Phase-1-unsigned-ipa
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
