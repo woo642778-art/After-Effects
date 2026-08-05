@@ -72,6 +72,7 @@ Core architecture contracts, After Effects product identity, generated icon asse
 - Added a first-install Telegram promotion for `https://t.me/aemotionios`, with Open Telegram and Continue choices.
 - Updated the main milestone UI to use the After Effects identity and display the six Phase 2 architecture contracts.
 - Updated GitHub Actions to generate assets, verify the compiled display name and arm64 binary, and package a Phase 2 unsigned IPA.
+- Prevented documentation-only commits from rebuilding the IPA, allowing final artifact evidence to be recorded without creating a checksum loop.
 
 ### Test-driven implementation evidence
 
@@ -83,15 +84,15 @@ Core architecture contracts, After Effects product identity, generated icon asse
 - Final remote `VertexCore tests` also passed.
 - The platform-neutral core contains no SwiftUI, UIKit, AVFoundation, MetalPetal, or VideoIO dependency.
 
-### Verified remotely
+### Final verified artifact
 
-- Final source HEAD used for the artifact: `f285dba216ce71fb4591f8243dafeb83cd6214c1`.
-- Successful GitHub Actions run: `31018608691`.
+- Final source and CI HEAD: `0aef837a7ca6dba72fa7228b7ebcde903e371dd5`.
+- Successful GitHub Actions run: `31019377690`.
 - Core tests, supplied-image asset generation, XcodeGen generation, iOS 17 Release compilation, product identity verification, IPA packaging, and artifact upload all completed successfully.
-- Artifact ID: `8935672424`.
+- Artifact ID: `8935962354`.
 - Artifact name: `After-Effects-Phase-2-unsigned-ipa`.
-- Artifact archive digest: `sha256:cad01c087d4ca76b01f0fa1a588b932779e6b8c508302331197bcf1e50b6f0c0`.
-- Extracted IPA SHA-256: `9694eac17a701974050a0c87529910a19e95e4b994b0e9ece6bf51cdd321dab1`.
+- Artifact archive digest: `sha256:cc2f642f35fa1c38e4510f026bf5baf6b6a2c9c28f86647bb4fa72c79ac7f830`.
+- Extracted IPA SHA-256: `de21e8749af68726683a4ec277a28b187b7b484f949846cea1dcf1e97bf9fd42`.
 
 ### Downloaded IPA inspection
 
