@@ -23,18 +23,29 @@ Repository foundation, source-adoption baseline, persistent handoff, minimal mil
 
 ### Verified locally
 
-- `swift test` passes under Swift 6.2.1 on Linux.
+- `swift test` passes under Swift 6.2.1 on Linux with 4 tests.
 - The Swift package contains no UIKit or SwiftUI dependencies and can be tested independently.
 
-### Not verified locally
+### Verified remotely
 
-- The iOS application and IPA cannot be compiled in the current Linux execution environment because Xcode and Apple SDKs are unavailable.
-- The GitHub macOS workflow must validate XcodeGen generation and the unsigned device build after the branch is pushed.
+- GitHub Actions run `31015258350` completed successfully.
+- `VertexCore tests` completed successfully.
+- XcodeGen project generation completed successfully.
+- Generic iOS Release compilation with code signing disabled completed successfully.
+- Unsigned IPA packaging and artifact upload completed successfully.
+- Artifact ID: `8934224640`.
+- Artifact archive digest: `sha256:2189b4dfb0f6139e081bce4486cf448596bcf2d24ac063a592e2cac6cf9043c2`.
+- Extracted IPA SHA-256: `3f86b2ab943e2b7374e2cc9ae905429538619342a07814f379d16d332946a13d`.
+- The IPA contains `Payload/Vertex.app/Vertex`, verified as a 64-bit arm64 Mach-O executable.
 
 ### Product functionality at this point
 
 The app is a milestone-status shell only. There is no media import, timeline, renderer, export engine, motion engine, effect engine, tracking, AI cutout, shape editor, text engine, audio engine, color engine, or 3D engine yet.
 
+### Phase 1 result
+
+The Phase 1 source, tests, iOS build, unsigned IPA, checksum, documentation, work log, and handoff requirements are complete. The pull request remains draft until final review and merge.
+
 ### Next gate
 
-Inspect the GitHub Actions result. If successful, download and checksum the unsigned Phase 1 IPA. If unsuccessful, fix only the build-system cause before beginning Phase 2.
+Review and merge PR #1. Phase 2 must begin with the exact-time, identity, coordinate, color, dependency, and error-model specification before production editor functionality is added.
