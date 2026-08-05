@@ -69,15 +69,16 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 1,
-        title: "Repository Foundation and Source Audit",
+        number: 2,
+        title: "Core Architecture and Product Identity",
         status: .implemented,
         deliverables: [
-            "Versioned product vision and 28-phase roadmap",
-            "Source adoption and license boundary matrix",
-            "Handoff and work-log documents for future sessions",
-            "Minimal iOS milestone shell",
-            "Automated unsigned IPA artifact workflow"
+            "Exact rational timeline time with explicit rescaling and overflow handling",
+            "Stable UUID entity identity and structured subsystem errors",
+            "Explicit coordinate-space conversion and color metadata contracts",
+            "Deterministic dependency ordering with cycle detection",
+            "After Effects app identity, generated Ae icon, startup loading, and Made by Maze attribution",
+            "Once-per-installation Telegram promotion for the AE Motion channel"
         ],
         sourceAdoptions: [
             SourceAdoption(

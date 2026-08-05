@@ -2,41 +2,59 @@ import SwiftUI
 import VertexCore
 
 struct RootView: View {
+    @AppStorage("afterEffects.didPresentTelegramPromotion.v1")
+    private var didPresentTelegramPromotion = false
+
+    @State private var isTelegramPromotionPresented = false
+
     private let milestone = MilestoneCatalog.current
+    private let architectureContracts = CoreArchitectureCatalog.contracts
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            AfterEffectsTheme.background.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     header
                     statusCard
+                    architectureSection
                     sourcesSection
                     artifactCard
+                    attribution
                 }
                 .padding(20)
+                .padding(.bottom, 20)
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear(perform: presentTelegramPromotionIfNeeded)
+        .sheet(isPresented: $isTelegramPromotionPresented) {
+            TelegramPromotionView()
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.red)
-                    .frame(width: 12, height: 34)
+        HStack(spacing: 14) {
+            Image("LaunchLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 58, height: 58)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                Text("VERTEX")
-                    .font(.system(size: 32, weight: .black, design: .rounded))
-                    .tracking(2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("After Effects")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("Made by Maze")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AfterEffectsTheme.accent)
             }
 
-            Text("Professional motion, compositing, editing, color, audio, 3D, and AI on one timeline.")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
+            Spacer()
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var statusCard: some View {
@@ -44,7 +62,7 @@ struct RootView: View {
             HStack {
                 Text("PHASE \(milestone.number)")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.red)
+                    .foregroundStyle(AfterEffectsTheme.accent)
 
                 Spacer()
 
@@ -52,48 +70,69 @@ struct RootView: View {
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.red.opacity(0.18), in: Capsule())
+                    .background(AfterEffectsTheme.accent.opacity(0.18), in: Capsule())
             }
 
             Text(milestone.title)
                 .font(.title2.weight(.bold))
+                .foregroundStyle(.white)
 
             ForEach(milestone.deliverables, id: \.self) { deliverable in
                 Label(deliverable, systemImage: "checkmark.circle.fill")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AfterEffectsTheme.secondaryText)
                     .symbolRenderingMode(.hierarchical)
             }
         }
-        .vertexCard()
+        .afterEffectsCard()
+    }
+
+    private var architectureSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("CORE CONTRACTS")
+
+            ForEach(architectureContracts) { contract in
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(contract.title)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    Text(contract.guarantee)
+                        .font(.caption)
+                        .foregroundStyle(AfterEffectsTheme.secondaryText)
+                }
+                .afterEffectsCard()
+            }
+        }
     }
 
     private var sourcesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("SOURCE ADOPTION")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
+            sectionTitle("SOURCE ADOPTION")
 
             ForEach(milestone.sourceAdoptions) { source in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(source.repository)
                             .font(.headline)
+                            .foregroundStyle(.white)
+
                         Spacer()
+
                         Text(source.license)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AfterEffectsTheme.secondaryText)
                     }
 
                     Text(source.mode.rawValue)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.red)
+                        .foregroundStyle(AfterEffectsTheme.accent)
 
                     Text(source.purpose)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AfterEffectsTheme.secondaryText)
                 }
-                .vertexCard()
+                .afterEffectsCard()
             }
         }
     }
@@ -102,26 +141,37 @@ struct RootView: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Unsigned IPA pipeline", systemImage: "shippingbox.fill")
                 .font(.headline)
+                .foregroundStyle(.white)
+
             Text(milestone.artifactPolicy)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AfterEffectsTheme.secondaryText)
         }
-        .vertexCard()
+        .afterEffectsCard()
     }
-}
 
-private extension View {
-    func vertexCard() -> some View {
-        self
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.065))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                    )
-            )
+    private var attribution: some View {
+        Text("After Effects · Made by Maze")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.48))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(AfterEffectsTheme.accent)
+            .tracking(0.8)
+    }
+
+    private func presentTelegramPromotionIfNeeded() {
+        var gate = OneTimePresentationGate(hasPresented: didPresentTelegramPromotion)
+        guard gate.consumePresentation() else { return }
+
+        didPresentTelegramPromotion = gate.hasPresented
+        DispatchQueue.main.async {
+            isTelegramPromotionPresented = true
+        }
     }
 }
