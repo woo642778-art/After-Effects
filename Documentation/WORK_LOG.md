@@ -117,3 +117,68 @@ Phase 2 implementation, documentation, tests, iOS 17 build, product identity ver
 ### Next gate
 
 Review and merge the stacked Phase 1 and Phase 2 pull requests in order. Phase 3 must begin as a media input/output source audit and adapter spike, not as a decorative editor timeline. It must define frame-provider and audio-provider protocols before adopting AVFoundation, MetalPetal, VideoIO, or FFmpeg code.
+
+## 2026-08-05 — Phase 3 implementation
+
+### Scope
+
+Platform-neutral media contracts, an isolated AVFoundation implementation, real Files-based movie selection, metadata inspection, requested-time thumbnail decoding, audio waveform extraction, phase-major versioning, and the unsigned 3.0.0 IPA.
+
+### Implemented
+
+- Added the `VertexMedia` product and target without AVFoundation, UIKit, SwiftUI, MetalPetal, VideoIO, or FFmpeg dependencies.
+- Added portable asset, video-stream, audio-stream, exact time-range, frame-request, image, frame, and waveform value types.
+- Added provider protocols, explicit cancellation, back-pressure policy, validation, and structured `MediaError` cases.
+- Added a bounded streaming `WaveformAccumulator` for normalized peak and RMS buckets.
+- Added the isolated `VertexMediaAVFoundation` product and target.
+- Added asynchronous AVFoundation asset inspection for duration, stream metadata, preferred transform, dimensions, codec, nominal frame rate, conservative VFR status, color, HDR, alpha, sample rate, channels, and estimated bitrate.
+- Added preferred-transform-aware frame decoding at a requested exact time, with bounded target size and PNG output.
+- Added PCM extraction through `AVAssetReaderTrackOutput` and normalized waveform aggregation.
+- Added a real system Files importer for movie files.
+- Added cancellable app analysis state and stale-result rejection when a different file is selected.
+- Added presentation of actual filename, duration, container, video/audio metadata, color/HDR information, thumbnail, and waveform.
+- Preserved the supplied Ae icon, loading screen, `Made by Maze`, and once-per-installation Telegram promotion.
+- Set `MARKETING_VERSION` to `3.0.0`, build number to `3`, and artifact filename to `After-Effects-3.0.0-unsigned.ipa`.
+- Added media architecture, source audit, test matrix, version policy, approved design, and implementation plan documents.
+
+### Test and debugging evidence
+
+- Portable behavior was developed with failing tests before implementation.
+- The final Linux job executed 20 `VertexCore` and `VertexMedia` tests successfully.
+- Initial CI run `31056905621` exposed Phase 2-specific milestone assertions and old artifact-policy wording. Tests were updated to validate the Phase 3 contract rather than removed.
+- CI run `31057013596` passed portable tests and then exposed two Apple-platform type issues: `estimatedDataRate` required explicit `Float` to `Double` conversion, and Core Video color constants required safe `CFString` to `String` bridging.
+- Both platform issues were fixed at the adapter boundary without weakening portable types or raising the iOS target.
+- Final run `31057238294` passed portable tests, asset generation, XcodeGen generation, iOS 17 Release compilation, identity/version validation, packaging, and upload.
+
+### Final verified artifact
+
+- Final product source and CI HEAD: `42c9fbb252a1185658d967fac62cb30b698762f5`.
+- Successful GitHub Actions run: `31057238294`.
+- Artifact ID: `8950765514`.
+- Artifact name: `After-Effects-3.0.0-unsigned-ipa`.
+- Artifact archive digest: `sha256:5a793e1c4d729a79392338d1bb56d0319cb4b08a9316df2e018da9c47d8bfa50`.
+- Extracted IPA SHA-256: `05f89e8fde5b7494bdb1638e5a863e2e74c6faacf5ac0cb105d3eb67ec402d19`.
+
+### Downloaded IPA inspection
+
+- IPA path: `After-Effects-3.0.0-unsigned.ipa`.
+- Executable path: `Payload/AfterEffects.app/AfterEffects`.
+- Executable format: 64-bit arm64 Mach-O.
+- `CFBundleDisplayName`: `After Effects`.
+- `CFBundleName`: `AfterEffects`.
+- `CFBundleIdentifier`: `com.woo642778.aftereffects`.
+- Version: `3.0.0 (3)`.
+- Minimum OS: iOS `17.0`.
+- Compiled asset catalog exists at `Payload/AfterEffects.app/Assets.car`.
+
+### Product functionality at this point
+
+Media selection, inspection, thumbnail decoding, waveform extraction, branding, startup, and first-run Telegram behavior are real. The app does not yet provide playback, timeline editing, multilayer rendering, video export, effects, motion, retiming, masks, tracking, AI cutout, shape tools, text animation, color grading, audio effects, particles, node compositing, or 3D.
+
+### Phase 3 result
+
+Phase 3 implementation, portable tests, AVFoundation compilation, real media-import vertical slice, documentation, versioned unsigned IPA, checksum, and persistent handoff are complete. Draft PR #3 remains stacked on Phase 2 PR #2.
+
+### Next gate
+
+Phase 4 must begin with a written GPU render-graph design. It must evaluate MetalPetal and VideoIO at pinned revisions, establish one semantic render request shared by preview and export, add deterministic SDR/HDR/rotation fixtures, and prove a decoded frame can pass through a Metal-backed transform or filter into both preview and file output without creating a second time or color model.
