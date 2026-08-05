@@ -9,6 +9,11 @@ on:
       - "Documentation/**"
       - "docs/**"
       - "README.md"
+  pull_request:
+    paths-ignore:
+      - "Documentation/**"
+      - "docs/**"
+      - "README.md"
   workflow_dispatch:
 
 concurrency:
