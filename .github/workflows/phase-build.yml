@@ -37,6 +37,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Generate supplied icon assets
+        run: bash Tools/generate_app_assets.sh
+
       - name: Generate Xcode project
         run: xcodegen generate
 
@@ -55,21 +58,30 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             clean build
 
+      - name: Verify product identity and architecture
+        run: |
+          set -euo pipefail
+          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
+          test -d "$APP_PATH"
+          test -f "$APP_PATH/Assets.car"
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
+          test "$DISPLAY_NAME" = "After Effects"
+          /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
+
       - name: Package unsigned IPA and checksum
         run: |
           set -euo pipefail
-          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/Vertex.app"
-          test -d "$APP_PATH"
+          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
-          cp -R "$APP_PATH" Payload/Vertex.app
-          /usr/bin/zip -qry artifacts/Vertex-Phase-1-unsigned.ipa Payload
-          shasum -a 256 artifacts/Vertex-Phase-1-unsigned.ipa > artifacts/Vertex-Phase-1-unsigned.ipa.sha256
+          cp -R "$APP_PATH" Payload/AfterEffects.app
+          /usr/bin/zip -qry artifacts/After-Effects-Phase-2-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-Phase-2-unsigned.ipa > artifacts/After-Effects-Phase-2-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex-Phase-1-unsigned-ipa
+          name: After-Effects-Phase-2-unsigned-ipa
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30
