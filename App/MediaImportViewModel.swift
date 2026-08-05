@@ -27,6 +27,12 @@ final class MediaImportViewModel: ObservableObject {
         analysisTask?.cancel()
     }
 
+    func presentImporterError(_ error: Error) {
+        analysisTask?.cancel()
+        selectionID = UUID()
+        state = .failed(message: error.localizedDescription)
+    }
+
     func importMedia(from url: URL) {
         analysisTask?.cancel()
         let requestID = UUID()
