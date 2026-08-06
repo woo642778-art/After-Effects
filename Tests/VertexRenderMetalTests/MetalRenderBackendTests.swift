@@ -42,10 +42,12 @@ private func solidFixture(red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8 = 
     )
 }
 
-private func firstPixel(_ data: Data) throws -> [UInt8] {
+private func pixel(_ data: Data, x: Int, y: Int) throws -> [UInt8] {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-        throw RenderError.unsupportedImage("Rendered fixture could not be decoded.")
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+          (0..<image.width).contains(x),
+          (0..<image.height).contains(y) else {
+        throw RenderError.unsupportedImage("Rendered fixture could not be decoded or the pixel coordinate is invalid.")
     }
     var bytes = Array(repeating: UInt8(0), count: image.width * image.height * 4)
     let succeeded = bytes.withUnsafeMutableBytes { buffer -> Bool in
@@ -62,7 +64,8 @@ private func firstPixel(_ data: Data) throws -> [UInt8] {
         return true
     }
     guard succeeded else { throw RenderError.unsupportedImage("Rendered fixture context failed.") }
-    return Array(bytes.prefix(4))
+    let offset = (y * image.width + x) * 4
+    return Array(bytes[offset..<(offset + 4)])
 }
 
 private func metalRequest(invert: Bool, opacity: Double = 1) throws -> RenderRequest {
@@ -101,11 +104,11 @@ func metalInversionAndDimensions() async throws {
     #expect(result.image.pixelSize == VertexSize(width: 4, height: 4))
     #expect(result.metrics.outputPixelCount == 16)
 
-    let pixel = try firstPixel(result.image.data)
-    #expect(pixel[0] < 16)
-    #expect(pixel[1] > 235)
-    #expect(pixel[2] > 235)
-    #expect(pixel[3] > 235)
+    let interiorPixel = try pixel(result.image.data, x: 1, y: 1)
+    #expect(interiorPixel[0] < 16)
+    #expect(interiorPixel[1] > 235)
+    #expect(interiorPixel[2] > 235)
+    #expect(interiorPixel[3] > 235)
 }
 
 @Test("Metal backend applies opacity to alpha")
@@ -115,7 +118,7 @@ func metalOpacity() async throws {
         metalRequest(invert: false, opacity: 0.5),
         cancellationToken: RenderCancellationToken()
     )
-    let pixel = try firstPixel(result.image.data)
-    #expect((115...140).contains(Int(pixel[3])))
+    let interiorPixel = try pixel(result.image.data, x: 1, y: 1)
+    #expect((115...140).contains(Int(interiorPixel[3])))
 }
 #endif
