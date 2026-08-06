@@ -75,9 +75,11 @@ jobs:
         run: xcodegen generate
 
       - name: Compile iOS app session tests
+        id: ios-test-compile
         run: |
           set -euo pipefail
           TEST_BUILD_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
+          echo "TEST_BUILD_LOG=$TEST_BUILD_LOG" >> "$GITHUB_ENV"
           if ! xcodebuild \
             -project Vertex.xcodeproj \
             -scheme Vertex \
@@ -94,6 +96,15 @@ jobs:
             exit 1
           fi
           /usr/bin/tail -n 80 "$TEST_BUILD_LOG"
+
+      - name: Upload iOS app test compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-test-compiler-log
+          path: ${{ env.TEST_BUILD_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Build iOS application without signing
         run: |
