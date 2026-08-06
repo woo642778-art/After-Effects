@@ -82,6 +82,7 @@ jobs:
           APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
           test -d "$APP_PATH"
           test -f "$APP_PATH/Assets.car"
+          test -f "$APP_PATH/Vertex_VertexRenderMetal.bundle/default.metallib"
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
           BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
@@ -91,7 +92,6 @@ jobs:
           test "$BUILD" = "4"
           test "$BUNDLE_ID" = "com.woo642778.aftereffects"
           /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
-          /usr/bin/find "$APP_PATH" -name 'VertexRenderKernels.metal' -print -quit | /usr/bin/grep -q VertexRenderKernels.metal
 
       - name: Package unsigned IPA and checksum
         run: |
