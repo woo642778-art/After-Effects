@@ -6,9 +6,9 @@ The product target is not a cosmetic clone. The project is intended to remove ma
 
 ## Current status
 
-**Phase 4 of 28: GPU Render Graph**
+**Phase 5 of 28: Project Persistence and Recovery**
 
-Current product version: **4.0.0 (4)**
+Current product version: **5.0.0 (5)**
 
 Implemented:
 
@@ -16,22 +16,24 @@ Implemented:
 - structured dependency and error contracts
 - After Effects identity, supplied Ae icon, startup loading, and `Made by Maze`
 - once-per-installation Telegram promotion for `https://t.me/aemotionios`
-- platform-neutral media descriptors, requests, providers, cancellation, and waveform aggregation
-- isolated AVFoundation metadata inspection, thumbnail decoding, and waveform extraction
+- platform-neutral media descriptors and isolated AVFoundation inspection, thumbnail decoding, and waveform extraction
 - real Files-based movie selection and media presentation
-- platform-neutral `VertexRender` semantic graph, validation, cache identity, cancellation, and latest-request scheduling
-- isolated native `VertexRenderMetal` compute backend
-- GPU translation, scale, exposure, saturation, inversion, opacity, and output resizing
-- interactive Render Lab using a real imported movie thumbnail
-- CPU/GPU/total render metrics
-- byte-identical preview and PNG file export
-- reproducible unsigned `After-Effects-4.0.0-unsigned.ipa`
+- platform-neutral `VertexRender` semantic graph and isolated native Metal compute backend
+- GPU translation, scale, exposure, saturation, inversion, opacity, resizing, metrics, and byte-identical PNG output
+- schema-versioned `.aeproject` packages
+- deterministic project JSON and checksums
+- command-based Undo and Redo with coalescing
+- checksummed write-ahead journal and replay
+- atomic save, backup, autosave rotation, and non-destructive recovery
+- future-schema inspection and migration contracts
+- missing-media detection, fingerprint relinking, and optional media embedding
+- real project create, open, save, export, recovery, Undo, Redo, embed, and relink application flows
+- reproducible unsigned `After-Effects-5.0.0-unsigned.ipa`
 
 Not implemented yet:
 
 - continuous video playback or timeline editing
-- multilayer composition or video-file export
-- project persistence and recovery
+- real multilayer composition or video-file export
 - general effect stacks, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, node compositing, or 3D
 
 ## Build
@@ -59,7 +61,9 @@ Every successful phase publishes an **unsigned IPA** through GitHub Actions. Sta
 - `Documentation/GPU_RENDER_GRAPH_ARCHITECTURE.md`
 - `Documentation/GPU_SOURCE_AUDIT.md`
 - `Documentation/GPU_TEST_MATRIX.md`
-- `Documentation/PHASE_4_COMPLETION.md`
+- `Documentation/PROJECT_PERSISTENCE_ARCHITECTURE.md`
+- `Documentation/PROJECT_TEST_MATRIX.md`
+- `Documentation/PHASE_5_COMPLETION.md`
 - `Documentation/VERSIONING_AND_ARTIFACTS.md`
 - `Documentation/BRANDING_AND_FIRST_RUN.md`
 - `Documentation/WORK_LOG.md`
