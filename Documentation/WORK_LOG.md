@@ -130,12 +130,14 @@ Platform-neutral media contracts, an isolated AVFoundation implementation, real 
 - Added portable asset, video-stream, audio-stream, exact time-range, frame-request, image, frame, and waveform value types.
 - Added provider protocols, explicit cancellation, back-pressure policy, validation, and structured `MediaError` cases.
 - Added a bounded streaming `WaveformAccumulator` for normalized peak and RMS buckets.
+- Added codec-padding tolerance so minor decoded-frame overrun is assigned to the final waveform bucket instead of failing.
 - Added the isolated `VertexMediaAVFoundation` product and target.
 - Added asynchronous AVFoundation asset inspection for duration, stream metadata, preferred transform, dimensions, codec, nominal frame rate, conservative VFR status, color, HDR, alpha, sample rate, channels, and estimated bitrate.
 - Added preferred-transform-aware frame decoding at a requested exact time, with bounded target size and PNG output.
-- Added PCM extraction through `AVAssetReaderTrackOutput` and normalized waveform aggregation.
+- Added PCM extraction through `AVAssetReaderTrackOutput` and normalized waveform aggregation across the requested duration without artificial trailing padding.
 - Added a real system Files importer for movie files.
 - Added cancellable app analysis state and stale-result rejection when a different file is selected.
+- Replaced the initial invalid-path fallback for importer errors with explicit error-state presentation.
 - Added presentation of actual filename, duration, container, video/audio metadata, color/HDR information, thumbnail, and waveform.
 - Preserved the supplied Ae icon, loading screen, `Made by Maze`, and once-per-installation Telegram promotion.
 - Set `MARKETING_VERSION` to `3.0.0`, build number to `3`, and artifact filename to `After-Effects-3.0.0-unsigned.ipa`.
@@ -144,20 +146,20 @@ Platform-neutral media contracts, an isolated AVFoundation implementation, real 
 ### Test and debugging evidence
 
 - Portable behavior was developed with failing tests before implementation.
-- The final Linux job executed 20 `VertexCore` and `VertexMedia` tests successfully.
 - Initial CI run `31056905621` exposed Phase 2-specific milestone assertions and old artifact-policy wording. Tests were updated to validate the Phase 3 contract rather than removed.
 - CI run `31057013596` passed portable tests and then exposed two Apple-platform type issues: `estimatedDataRate` required explicit `Float` to `Double` conversion, and Core Video color constants required safe `CFString` to `String` bridging.
 - Both platform issues were fixed at the adapter boundary without weakening portable types or raising the iOS target.
-- Final run `31057238294` passed portable tests, asset generation, XcodeGen generation, iOS 17 Release compilation, identity/version validation, packaging, and upload.
+- A post-build code review found waveform-tail distortion caused by an 8,192-frame estimate pad and an invalid-file-path importer fallback. Both were corrected and a codec-padding regression test was added.
+- Final run `31058027136` executed 21 portable tests and passed asset generation, XcodeGen generation, iOS 17 Release compilation, identity/version validation, packaging, and upload.
 
 ### Final verified artifact
 
-- Final product source and CI HEAD: `42c9fbb252a1185658d967fac62cb30b698762f5`.
-- Successful GitHub Actions run: `31057238294`.
-- Artifact ID: `8950765514`.
+- Final product source and CI HEAD: `ed2997a0f76004829590e823976eaae611af70d7`.
+- Successful GitHub Actions run: `31058027136`.
+- Artifact ID: `8951042390`.
 - Artifact name: `After-Effects-3.0.0-unsigned-ipa`.
-- Artifact archive digest: `sha256:5a793e1c4d729a79392338d1bb56d0319cb4b08a9316df2e018da9c47d8bfa50`.
-- Extracted IPA SHA-256: `05f89e8fde5b7494bdb1638e5a863e2e74c6faacf5ac0cb105d3eb67ec402d19`.
+- Artifact archive digest: `sha256:85be5d0ffdead43b6a1d4e75adcf9a31b3f91dee22133838fbd13640146ae06f`.
+- Extracted IPA SHA-256: `60fe59d769c1c73d6737dce3df404b6d3e56f661530d6edf83516964b049a6e1`.
 
 ### Downloaded IPA inspection
 
@@ -177,7 +179,7 @@ Media selection, inspection, thumbnail decoding, waveform extraction, branding, 
 
 ### Phase 3 result
 
-Phase 3 implementation, portable tests, AVFoundation compilation, real media-import vertical slice, documentation, versioned unsigned IPA, checksum, and persistent handoff are complete. Draft PR #3 remains stacked on Phase 2 PR #2.
+Phase 3 implementation, 21 portable tests, AVFoundation compilation, real media-import vertical slice, documentation, versioned unsigned IPA, checksum, and persistent handoff are complete. Draft PR #3 remains stacked on Phase 2 PR #2.
 
 ### Next gate
 
