@@ -9,13 +9,6 @@ on:
       - "Documentation/**"
       - "docs/**"
       - "README.md"
-  pull_request:
-    branches:
-      - agent/phase-5-project-persistence
-    paths-ignore:
-      - "Documentation/**"
-      - "docs/**"
-      - "README.md"
   workflow_dispatch:
 
 concurrency:
