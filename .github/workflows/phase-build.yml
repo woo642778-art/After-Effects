@@ -42,10 +42,55 @@ jobs:
       - name: Run deterministic portable tests
         run: swift test
 
+  ios-app-tests:
+    name: Compile iOS app session tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate supplied icon assets
+        run: bash Tools/generate_app_assets.sh
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Compile iOS app session tests
+        run: |
+          set -euo pipefail
+          TEST_BUILD_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
+          echo "TEST_BUILD_LOG=$TEST_BUILD_LOG" >> "$GITHUB_ENV"
+          if ! xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$PWD/DerivedDataTests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build-for-testing >"$TEST_BUILD_LOG" 2>&1; then
+            echo "iOS test compilation failed. Compiler diagnostics:"
+            /usr/bin/grep -n -C 4 "error:" "$TEST_BUILD_LOG" || /usr/bin/tail -n 250 "$TEST_BUILD_LOG"
+            exit 1
+          fi
+          /usr/bin/tail -n 80 "$TEST_BUILD_LOG"
+      - name: Upload iOS app test compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-test-compiler-log
+          path: ${{ env.TEST_BUILD_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
   unsigned-ipa:
     name: Build After Effects 5.0.0 unsigned IPA
     runs-on: macos-15
-    needs: portable-tests
+    needs:
+      - portable-tests
+      - ios-app-tests
     steps:
       - uses: actions/checkout@v4
 
@@ -73,38 +118,6 @@ jobs:
 
       - name: Generate Xcode project
         run: xcodegen generate
-
-      - name: Compile iOS app session tests
-        id: ios-test-compile
-        run: |
-          set -euo pipefail
-          TEST_BUILD_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
-          echo "TEST_BUILD_LOG=$TEST_BUILD_LOG" >> "$GITHUB_ENV"
-          if ! xcodebuild \
-            -project Vertex.xcodeproj \
-            -scheme Vertex \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath "$PWD/DerivedDataTests" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build-for-testing >"$TEST_BUILD_LOG" 2>&1; then
-            echo "iOS test compilation failed. Compiler diagnostics:"
-            /usr/bin/grep -n -C 4 "error:" "$TEST_BUILD_LOG" || /usr/bin/tail -n 250 "$TEST_BUILD_LOG"
-            exit 1
-          fi
-          /usr/bin/tail -n 80 "$TEST_BUILD_LOG"
-
-      - name: Upload iOS app test compiler log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-app-test-compiler-log
-          path: ${{ env.TEST_BUILD_LOG }}
-          if-no-files-found: warn
-          retention-days: 7
 
       - name: Build iOS application without signing
         run: |
