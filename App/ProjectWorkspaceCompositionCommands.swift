@@ -59,10 +59,16 @@ extension ProjectWorkspaceViewModel {
         guard let project, let composition = activeComposition,
               project.compositionRegistry.count > 1,
               let index = project.compositionRegistry.firstIndex(where: { $0.id == composition.id }) else { return }
-        let replacement = project.compositionRegistry.first { $0.id != composition.id }
-        if let replacement {
-            applyProjectOperation(.setActiveComposition(before: composition.id, after: replacement.id))
+
+        let isReferenced = project.layerRegistry.contains { layer in
+            guard layer.compositionID != composition.id,
+                  case .composition(let targetID, _) = layer.source else { return false }
+            return targetID == composition.id
         }
+        guard !isReferenced else { return }
+
+        guard let replacement = project.compositionRegistry.first(where: { $0.id != composition.id }) else { return }
+        applyProjectOperation(.setActiveComposition(before: composition.id, after: replacement.id))
         applyProjectOperation(.removeComposition(
             composition,
             ownedLayers: project.layers(in: composition.id),
