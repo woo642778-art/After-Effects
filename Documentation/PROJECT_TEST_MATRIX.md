@@ -86,8 +86,9 @@ The final GitHub Actions run passed:
 - Native project-package tests: 9 passed
 - Native Metal fixture tests: 2 passed
 - Artifact ID: `8955148634`
-- Artifact API digest: `sha256:f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- Extracted IPA SHA-256: `395e67c262fa24cb7f9b75f459ced1bf4673d6edbdc24d622d1456342f18d366`
+- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
+- Extracted IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
+- IPA size: 884,969 bytes
 
 ## Unverified environment
 
