@@ -9,7 +9,8 @@ Starting with Phase 3, the successful phase number is the product major version.
 | 2 | 2.0.0 policy baseline | 2 | historical Phase 2 filename | completed |
 | 3 | 3.0.0 | 3 | `After-Effects-3.0.0-unsigned.ipa` | completed |
 | 4 | 4.0.0 | 4 | `After-Effects-4.0.0-unsigned.ipa` | completed and verified |
-| 5 | 5.0.0 | 5 | `After-Effects-5.0.0-unsigned.ipa` | reserved for completed Phase 5 only |
+| 5 | 5.0.0 | 5 | `After-Effects-5.0.0-unsigned.ipa` | completed and verified |
+| 6 | 6.0.0 | 6 | `After-Effects-6.0.0-unsigned.ipa` | reserved for completed Phase 6 only |
 | N | N.0.0 | N | `After-Effects-N.0.0-unsigned.ipa` | future successful phase |
 
 A phase version is published only when its required tests, iOS Release compilation, identity checks, packaging, artifact upload, downloaded-IPA inspection, documentation, and handoff are complete. Partial milestones remain on the current phase version or use internal prerelease identifiers; they do not consume the next major number.
@@ -36,14 +37,21 @@ Every phase record must include:
 
 Documentation-only commits are excluded from the product-build trigger so final evidence can be recorded without generating a different ZIP timestamp and checksum.
 
-## Verified Phase 4 artifact
+## Verified Phase 5 artifact
 
-- Product and CI HEAD: `2bcc43869cb495feef0297dad3eed59d8548efa7`
-- Workflow run: `31060781516`
-- Artifact ID: `8952047400`
-- Artifact archive SHA-256: `ce8f6fe16ca4bfe3f07b2ddd4d5b9fb0c6322dac1605a025f7657b8c53ef78a8`
-- IPA SHA-256: `fb4aac8c8370dc90f3b347cb7fbb2548d05808d1d2a5a091b868a41a420be331`
+- Product and CI source HEAD: `e68ffde2eebcdb58becc9d3d1ecaf195f1861e76`
+- Workflow run: `31069517329`
+- Artifact ID: `8955148634`
+- Artifact API digest: `sha256:f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
+- IPA SHA-256: `395e67c262fa24cb7f9b75f459ced1bf4673d6edbdc24d622d1456342f18d366`
 - Executable: `Payload/AfterEffects.app/AfterEffects`, Mach-O 64-bit arm64
-- Version: `4.0.0 (4)`
+- Display name: `After Effects`
+- Bundle identifier: `com.woo642778.aftereffects`
+- Version: `5.0.0 (5)`
 - Minimum OS: iOS 17.0
-- Compiled Metal resource: `Vertex_VertexRenderMetal.bundle/default.metallib`
+- Compiled asset catalog: `Assets.car`
+- Compiled Metal resource: `Vertex_VertexRenderMetal.bundle/default.metallib`, 6,996 bytes
+
+## Previous verified artifact
+
+Phase 4 remains recorded in `Documentation/PHASE_4_COMPLETION.md`. Phase-specific completion records are immutable evidence for their corresponding product source and workflow run.
