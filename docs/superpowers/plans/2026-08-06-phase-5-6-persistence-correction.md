@@ -2,84 +2,78 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the draft `.aeproject` WAL/history persistence dialect with the approved `.vertexproject` full-snapshot contract, then reintegrate and reverify Phase 6 without weakening layer or composition rendering.
+**Goal:** Replace the draft `.aeproject` WAL/history dialect with the approved `.vertexproject` full-snapshot contract, then reintegrate and reverify Phase 6 without weakening Layers, Compositions, Metal rendering, or preview/PNG parity.
 
-**Architecture:** `VertexProject` owns only canonical portable project data and an in-memory editing session. A new `VertexProjectPersistence` target owns package layout, full pending-save transactions, immutable autosaves, bookmark sidecars, embedded media, and import-only legacy readers. Work lands on `agent/phase-5-project-persistence` first; the corrected Phase 5 branch is then merged into `agent/phase-6-layers-compositions`, where Schema 2 and the composition workspace are adapted and a replacement 6.0.0 IPA is produced.
+**Architecture:** `VertexProject` owns canonical portable project data, desired-state command requests, engine-derived transitions, and one in-memory editing session. `VertexProjectPersistence` owns the filesystem package, pending-save recovery, immutable autosaves, bookmark sidecars, embedded media, and import-only legacy readers. The correction lands on `agent/phase-5-project-persistence` first; that branch is merged into `agent/phase-6-layers-compositions`, which restores canonical Schema 2 and produces the replacement 6.0.0 IPA.
 
-**Tech Stack:** Swift 6, Swift Package Manager, Foundation, Swift Concurrency actors, SwiftUI, UniformTypeIdentifiers, XCTest/Swift Testing, Metal, XcodeGen, GitHub Actions, iOS 17 arm64.
+**Tech Stack:** Swift 6, Swift Package Manager, Foundation, Swift Concurrency actors, SwiftUI, UniformTypeIdentifiers, Swift Testing/XCTest, Metal, XcodeGen, GitHub Actions, iOS 17 arm64.
 
 ## Global Constraints
 
-- Canonical writable extension is exactly `.vertexproject`.
-- `.aeproject` is import-only and the source package is never modified.
-- Corrected product version remains `6.0.0 (6)`; this work does not consume Phase 7.
-- Canonical Project Schema remains 2 in the final Phase 6 branch.
-- `VertexProject` may not expose file URLs, bookmark bytes, security-scoped access, AVFoundation, Metal, UIKit, SwiftUI, file descriptors, or absolute paths.
-- Public file-system APIs live in `VertexProjectPersistence`; the `VertexProjectFoundation` product is removed.
-- Canonical JSON never contains `bookmarkData`, `appliedCommandIDs`, `legacyRenderSettings`, Undo, Redo, command inverses, or WAL records.
-- Undo/Redo and duplicate-command tracking are session-local: 200 history entries and 512 recent command IDs.
-- New saves use one complete `Journal/pending-save.json` envelope; new projects never append an operation WAL.
-- Autosaves are immutable, checksummed full-document snapshots; keep the eight newest valid unique snapshots.
+- Canonical writable extension: `.vertexproject`.
+- Legacy `.aeproject`: import and convert only; never modify the source.
+- Final corrected product: `6.0.0 (6)` and `After-Effects-6.0.0-unsigned.ipa`.
+- Final corrected Phase 6 project schema: 2.
+- `VertexProject` exposes no file URLs, bookmark bytes, security-scoped objects, file descriptors, AVFoundation, Metal, UIKit, SwiftUI, or absolute paths.
+- The public filesystem module is `VertexProjectPersistence`; `VertexProjectFoundation` is removed.
+- Canonical JSON and autosaves contain no `bookmarkData`, `appliedCommandIDs`, `legacyRenderSettings`, Undo, Redo, command inverse, or operation WAL.
+- Undo/Redo are session-only: at most 200 entries per stack. Recent command IDs are session-only: at most 512.
+- Workspace selection may persist but never enters edit Undo/Redo and never clears Redo.
+- New saves use one full `Journal/pending-save.json` envelope.
+- Autosaves are immutable full-document snapshots; retain the eight newest valid unique snapshots.
 - Bookmark bytes exist only at `Bookmarks/<lowercase-mediaID>.bookmark`.
-- Existing Phase 6 Metal, blend, adjustment, nested-composition, preview, and PNG parity behavior must remain active.
-- Existing 6.0 artifacts remain superseded draft artifacts and are not Phase 7 bases.
-- PR #5 and PR #6 remain Draft and unmerged throughout this plan.
+- Existing Phase 6 blend, adjustment, nested composition, compiler, Metal, preview, and PNG tests remain active.
+- PR #5 and PR #6 remain Draft and unmerged.
+- Every earlier 6.0 artifact remains a superseded draft artifact and cannot be the Phase 7 base.
 
----
+## Locked File Boundaries
 
-## File Structure Locked by This Plan
+### `VertexProject`
 
-### Portable model and editing
+- `ProjectSchema.swift`: canonical product data only.
+- `ProjectCommandPayload.swift`: desired values requested by callers.
+- `ProjectMutation.swift`: exact state transitions with previous and next values.
+- `ProjectTransition.swift`: command metadata plus engine-derived forward/inverse mutations.
+- `ProjectCommands.swift`: request validation, inverse derivation, and mutation application.
+- `ProjectEditingSession.swift`: working document, loaded snapshot, session history, command-ID set, coalescing, navigation, and save markers.
 
-- `Sources/VertexProject/ProjectSchema.swift`: canonical writable project and media values only.
-- `Sources/VertexProject/ProjectCommandPayload.swift`: user-requested edits without historical `before` values.
-- `Sources/VertexProject/ProjectTransition.swift`: engine-derived forward and inverse transitions used only in memory.
-- `Sources/VertexProject/ProjectEditingSession.swift`: document, session Undo/Redo, recent command IDs, save markers, and coalescing.
-- `Sources/VertexProject/ProjectCommands.swift`: validated payload-to-transition preparation and transition application.
-- `Sources/VertexProject/DeterministicProjectCodec.swift`: canonical Schema 1 on corrected Phase 5 and Schema 2 after Phase 6 reintegration.
+### `VertexProjectPersistence`
 
-### Persistence
-
-- `Sources/VertexProjectPersistence/ProjectPersistenceError.swift`: stable package error categories and safe context.
-- `Sources/VertexProjectPersistence/VertexProjectPackageLayout.swift`: extension validation, allowlist, and exact paths.
-- `Sources/VertexProjectPersistence/DurableFileIO.swift`: synchronized temporary writes, atomic rename, directory sync, and failure injection.
-- `Sources/VertexProjectPersistence/VertexProjectManifest.swift`: package-format manifest; no committed WAL sequence.
-- `Sources/VertexProjectPersistence/PendingSaveEnvelope.swift`: exact project and manifest bytes plus independent SHA-256 values.
-- `Sources/VertexProjectPersistence/VertexProjectPackageStore.swift`: create, open, save, and verified pending recovery.
-- `Sources/VertexProjectPersistence/ImmutableAutosaveStore.swift`: monotonic immutable autosaves and retention.
-- `Sources/VertexProjectPersistence/BookmarkSidecarStore.swift`: raw sidecar I/O and Apple bookmark adapter.
-- `Sources/VertexProjectPersistence/EmbeddedMediaStore.swift`: verified package media copy and resolution.
-- `Sources/VertexProjectPersistence/LegacyImport/LegacyProjectDTO.swift`: legacy schema values including embedded bookmark bytes and old render settings.
-- `Sources/VertexProjectPersistence/LegacyImport/LegacyManifestDTO.swift`: old manifest and committed WAL sequence.
-- `Sources/VertexProjectPersistence/LegacyImport/LegacyJournalReader.swift`: complete, checksummed, contiguous record parsing.
-- `Sources/VertexProjectPersistence/LegacyImport/LegacySourceTreeDigest.swift`: sorted relative-path and file-byte digest.
-- `Sources/VertexProjectPersistence/LegacyImport/LegacyProjectImporter.swift`: inspection, report, conversion, validation, and source-integrity proof.
+- `ProjectPersistenceError.swift`: stable package errors.
+- `VertexProjectPackageLayout.swift`: extension, paths, and allowlist.
+- `DurableFileIO.swift`: synchronized temporary write, atomic rename, directory sync, and injected failures.
+- `VertexProjectManifest.swift`: package manifest with no WAL sequence.
+- `PendingSaveEnvelope.swift`: exact project and manifest bytes plus independent checksums.
+- `VertexProjectPackageStore.swift`: create, open, save, pending classification, and verified recovery.
+- `ImmutableAutosaveStore.swift`: immutable sequence/checksum snapshots.
+- `BookmarkSidecarStore.swift`: raw sidecar I/O and Apple bookmark adapter.
+- `EmbeddedMediaStore.swift`: verified media copy and resolution.
+- `LegacyImport/*`: internal `.aeproject` DTOs, manifest, journal reader, source digest, inspection, and conversion.
 
 ### App
 
-- `App/ProjectDocumentTypes.swift`: canonical and legacy UTTypes and picker modes.
-- `App/ProjectSessionActor.swift`: serializes open, edit, Undo/Redo, save, autosave, import, and close.
-- `App/ProjectWorkspaceViewModel.swift`: MainActor presentation adapter with explicit terminal states.
-- `App/LegacyProjectImportView.swift`: report, destination selection, progress, cancellation, and result.
-- `App/ProjectPackageFileDocument.swift`: canonical `.vertexproject` export wrapper only.
-- `App/VertexApp.swift`: bounded startup transition independent of project and Metal work.
+- `ProjectDocumentTypes.swift`: canonical and legacy UTTypes.
+- `ProjectSessionActor.swift`: serial project operations.
+- `ProjectWorkspaceViewModel.swift`: MainActor presentation state.
+- `LegacyProjectImportView.swift`: inspection report and explicit conversion.
+- `ProjectPackageFileDocument.swift`: canonical export wrapper only.
+- `VertexApp.swift`: bounded startup independent of recovery, Metal, and release phase.
+- `Tests/VertexAppTests/*`: Xcode app-target tests; these are not SwiftPM test targets.
 
 ---
 
-# Execution Segment A — Correct PR #5 First
+# Segment A — Correct PR #5
 
-### Task 0: Freeze the two draft baselines and enable correction CI
+### Task 0: Freeze draft baselines and enable correction CI
 
 **Files:**
 - Modify: `.github/workflows/phase-build.yml`
 - Modify: `Documentation/VERSIONING_AND_ARTIFACTS.md`
 - Modify: `Documentation/HANDOFF.md`
 
-**Interfaces:**
-- Consumes: current Draft PR #5 and Draft PR #6 branch heads.
-- Produces: safety refs, explicit superseded-artifact documentation, and temporary PR-triggered CI for correction work.
+**Produces:** immutable safety refs and PR-triggered correction CI.
 
-- [ ] **Step 1: Record and protect the current branch heads**
+- [ ] Record and archive the current heads.
 
 ```bash
 git fetch origin
@@ -90,9 +84,7 @@ git branch agent/archive/phase-6-pre-correction origin/agent/phase-6-layers-comp
 git push origin agent/archive/phase-5-pre-correction agent/archive/phase-6-pre-correction
 ```
 
-Expected: both archive refs point to the exact pre-correction heads and neither PR is merged.
-
-- [ ] **Step 2: Check out the Phase 5 draft branch and verify the baseline**
+- [ ] Switch to Phase 5 and run the untouched baseline.
 
 ```bash
 git switch agent/phase-5-project-persistence
@@ -100,11 +92,9 @@ git pull --ff-only origin agent/phase-5-project-persistence
 swift test
 ```
 
-Expected: the existing Phase 5 portable suite passes before correction work.
+Expected: existing Phase 5 portable tests pass.
 
-- [ ] **Step 3: Add a temporary `pull_request` workflow trigger for PR #5 and PR #6**
-
-Add this alongside the existing `push` trigger:
+- [ ] Temporarily add this workflow trigger.
 
 ```yaml
 pull_request:
@@ -113,46 +103,37 @@ pull_request:
     - agent/phase-5-project-persistence
 ```
 
-Do not change version or artifact names in this task.
-
-- [ ] **Step 4: Mark every existing 6.0 artifact as superseded**
-
-Add the exact status line to versioning and handoff documents:
+- [ ] Add this exact status beside every historical 6.0 artifact record:
 
 ```text
 Superseded draft artifact — do not use as the Phase 7 base.
 ```
 
-Include the previously recorded run IDs and checksums without deleting historical evidence.
-
-- [ ] **Step 5: Run baseline CI and commit**
+- [ ] Commit and push.
 
 ```bash
-swift test
 git add .github/workflows/phase-build.yml Documentation/VERSIONING_AND_ARTIFACTS.md Documentation/HANDOFF.md
 git commit -m "chore: begin persistence contract correction"
 git push origin agent/phase-5-project-persistence
 ```
 
-Expected: portable tests pass and PR #5 receives a correction workflow run.
-
 ---
 
-### Task 1: Remove persistence state from the portable project model
+### Task 1: Make the portable model canonical and history session-only
 
 **Files:**
 - Modify: `Sources/VertexProject/ProjectSchema.swift`
 - Modify: `Sources/VertexProject/DeterministicProjectCodec.swift`
 - Create: `Sources/VertexProject/ProjectCommandPayload.swift`
+- Create: `Sources/VertexProject/ProjectMutation.swift`
 - Create: `Sources/VertexProject/ProjectTransition.swift`
 - Modify: `Sources/VertexProject/ProjectCommands.swift`
-- Replace: `Sources/VertexProject/ProjectHistory.swift` with `Sources/VertexProject/ProjectEditingSession.swift`
-- Test: `Tests/VertexProjectTests/CanonicalProjectModelTests.swift`
-- Test: `Tests/VertexProjectTests/ProjectEditingSessionTests.swift`
+- Delete after replacement: `Sources/VertexProject/ProjectHistory.swift`
+- Create: `Sources/VertexProject/ProjectEditingSession.swift`
+- Create: `Tests/VertexProjectTests/CanonicalProjectModelTests.swift`
+- Create: `Tests/VertexProjectTests/ProjectEditingSessionTests.swift`
 
-**Interfaces:**
-- Consumes: `ProjectDocument`, existing `ProjectOperation` cases, `VertexID`, `RationalTime`.
-- Produces:
+**Produces:**
 
 ```swift
 public struct ProjectCommandRequest: Equatable, Sendable {
@@ -175,6 +156,7 @@ public struct ProjectTransition: Equatable, Sendable {
 }
 
 public struct ProjectEditingSession: Sendable {
+    public private(set) var loadedSnapshot: ProjectDocument
     public private(set) var document: ProjectDocument
     public private(set) var savedRevision: UInt64
     public private(set) var hasUnsavedChanges: Bool
@@ -183,60 +165,44 @@ public struct ProjectEditingSession: Sendable {
     public mutating func apply(_ request: ProjectCommandRequest) throws -> ProjectTransition
     public mutating func undo(commandID: VertexID, timestamp: Date) throws -> ProjectTransition
     public mutating func redo(commandID: VertexID, timestamp: Date) throws -> ProjectTransition
+    public mutating func setSelectedMedia(_ mediaID: VertexID?, timestamp: Date) throws
     public mutating func markSaved(revision: UInt64) throws
 }
 ```
 
-- [ ] **Step 1: Write canonical-encoding RED tests**
+- [ ] Write the canonical encoding RED test.
 
 ```swift
 @Test("Canonical project JSON excludes persistence state")
 func canonicalProjectExcludesPersistenceState() throws {
     let document = try ProjectDocument.makeNew(name: "Canonical", timestamp: .init(timeIntervalSince1970: 100))
-    let text = String(decoding: try DeterministicProjectCodec().encode(document), as: UTF8.self)
-    #expect(!text.contains("bookmarkData"))
-    #expect(!text.contains("appliedCommandIDs"))
-    #expect(!text.contains("legacyRenderSettings"))
-    #expect(!text.contains("inverseOperation"))
+    let json = String(decoding: try DeterministicProjectCodec().encode(document), as: UTF8.self)
+    #expect(!json.contains("bookmarkData"))
+    #expect(!json.contains("appliedCommandIDs"))
+    #expect(!json.contains("legacyRenderSettings"))
+    #expect(!json.contains("inverseOperation"))
 }
 ```
 
-Add compile-time construction tests proving `MediaLocator` accepts only `relativeHint` and `embeddedPath`, and `ProjectDocument` initializers have no applied-command or legacy-render arguments.
+Add compile-time construction coverage proving canonical `MediaLocator` has only `relativeHint` and `embeddedPath`.
 
-- [ ] **Step 2: Run RED tests**
+- [ ] Run it and confirm RED.
 
 ```bash
 swift test --filter CanonicalProjectModelTests
 ```
 
-Expected: FAIL because canonical types still expose forbidden fields.
+Expected: failure because current canonical types expose forbidden fields.
 
-- [ ] **Step 3: Write session RED tests**
+- [ ] Write session RED tests for empty history on open, 200-entry bounds, 512 command-ID bounds, duplicate ID rejection inside one session, same ID acceptance after reopen, coalescing, Redo preservation across selection changes, and failed `markSaved` state preservation.
 
-Cover these exact behaviors:
-
-```swift
-@Test("Opening a session starts with empty Undo and Redo")
-@Test("Duplicate command IDs are rejected only within the active session")
-@Test("Undo and Redo are bounded to 200 entries")
-@Test("Recent command IDs are bounded to 512 entries")
-@Test("Saving does not serialize history")
-@Test("A failed markSaved revision leaves session state unchanged")
-```
-
-The duplicate-ID test creates a new session from the resulting document and proves the same command ID is allowed after reopen when its base revision is current.
-
-- [ ] **Step 4: Run session RED tests**
+- [ ] Run session tests and confirm RED.
 
 ```bash
 swift test --filter ProjectEditingSessionTests
 ```
 
-Expected: FAIL because the current controller accepts a persisted snapshot and the document stores command IDs.
-
-- [ ] **Step 5: Implement canonical model removal**
-
-Change `MediaLocator` to:
+- [ ] Replace canonical media location with:
 
 ```swift
 public struct MediaLocator: Codable, Equatable, Sendable {
@@ -250,13 +216,9 @@ public struct MediaLocator: Codable, Equatable, Sendable {
 }
 ```
 
-Remove `ProjectDocument.appliedCommandIDs`, `ProjectDocument.legacyRenderSettings`, deprecated writable constructors, and the `renderSettings` compatibility setter. Keep legacy decoding out of this file.
+Remove canonical `appliedCommandIDs`, persisted history snapshots, deprecated writable compatibility constructors, and any compatibility field whose only purpose is the old persistence dialect. On Phase 5, retain genuine Phase 5 render product data; do not add Phase 6 compositions yet.
 
-On the corrected Phase 5 branch, keep its current canonical schema number and render values required by Phase 5; do not add Phase 6 composition fields here. The Phase 6 merge task upgrades the canonical model to Schema 2.
-
-- [ ] **Step 6: Implement request, mutation, transition, and session types**
-
-`ProjectCommandPayload` carries desired state, not historical `before` values. Include the Phase 5 cases explicitly:
+- [ ] Implement exact Phase 5 desired-state payloads.
 
 ```swift
 public enum ProjectCommandPayload: Equatable, Sendable {
@@ -265,7 +227,6 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case removeMedia(id: VertexID)
     case relinkMedia(id: VertexID, locator: MediaLocator)
     case setEmbeddedPath(id: VertexID, path: String?)
-    case selectMedia(VertexID?)
     case setRenderParameter(ProjectRenderParameter, value: Double)
     case setRenderBoolean(ProjectRenderBooleanParameter, value: Bool)
     case setOutputDimensions(width: Int, height: Int)
@@ -273,21 +234,19 @@ public enum ProjectCommandPayload: Equatable, Sendable {
 }
 ```
 
-`ProjectCommandEngine.prepare(_:for:)` reads the current document, validates preconditions, and returns a transition containing exact forward and inverse `ProjectMutation` values. `apply(_:to:)` validates project identity and base revision, applies only the forward mutation, increments revision once, and never writes command IDs into the document.
+Selection is not a payload. `setSelectedMedia` validates, updates convenience state, increments revision, marks unsaved, and leaves Undo and Redo unchanged.
 
-- [ ] **Step 7: Implement session-only coalescing**
+- [ ] Implement `ProjectMutation` with exact previous/next values for every payload. `ProjectCommandEngine.prepare(_:for:)` reads the current document and derives both mutations. `apply(_:to:)` validates identity and base revision, applies one mutation, increments revision once, and never stores command IDs in the document.
 
-Coalesce only when merge key, payload family, target identity, and elapsed time are compatible. Preserve the first inverse and newest forward value. Do not coalesce register, remove, or selection commands. Store no `Codable` history snapshot type.
+- [ ] Implement session coalescing. Compatible continuous edits keep the earliest inverse and newest forward mutation. Structural edits never coalesce. Opening a new session always creates empty history and an empty recent-ID set.
 
-- [ ] **Step 8: Run model and session GREEN tests**
+- [ ] Run GREEN tests.
 
 ```bash
 swift test --filter VertexProjectTests
 ```
 
-Expected: all VertexProject tests pass with no persisted history or command IDs.
-
-- [ ] **Step 9: Commit**
+- [ ] Commit.
 
 ```bash
 git add Sources/VertexProject Tests/VertexProjectTests
@@ -296,7 +255,7 @@ git commit -m "refactor: make project history session-local"
 
 ---
 
-### Task 2: Introduce `VertexProjectPersistence` and the package allowlist
+### Task 2: Create `VertexProjectPersistence` and enforce the package allowlist
 
 **Files:**
 - Modify: `Package.swift`
@@ -307,84 +266,60 @@ git commit -m "refactor: make project history session-local"
 - Create: `Tests/VertexProjectPersistenceTests/PackageLayoutTests.swift`
 - Create: `Tests/VertexProjectPersistenceTests/DurableFileIOTests.swift`
 
-**Interfaces:**
-- Consumes: canonical `ProjectDocument`, Foundation `URL`, `FileManager`.
-- Produces:
+**Produces:**
 
 ```swift
+public enum ProjectPersistenceError: Error, Equatable, Sendable {
+    case unsupportedPackageExtension(found: String)
+    case forbiddenPackageEntry(String)
+    case invalidManifest(String)
+    case checksumMismatch(expected: String, actual: String)
+    case pendingSnapshotCorrupt(String)
+    case pendingSnapshotOlderThanCurrent(pending: UInt64, current: UInt64)
+    case atomicReplacementFailed(String)
+    case autosaveVerificationFailed(String)
+    case bookmarkMissing(VertexID)
+    case bookmarkStale(VertexID)
+    case embeddedMediaMismatch(VertexID)
+    case legacyJournalCorrupt(sequence: UInt64?)
+    case legacyImportIncomplete(stage: String)
+    case concurrentRequestSuperseded
+}
+
 public struct VertexProjectPackageLayout: Equatable, Sendable {
     public static let requiredExtension = "vertexproject"
     public let root: URL
     public init(root: URL) throws
-    public var projectURL: URL { get }
-    public var manifestURL: URL { get }
-    public var journalDirectoryURL: URL { get }
-    public var pendingSaveURL: URL { get }
-    public var autosavesDirectoryURL: URL { get }
-    public var bookmarksDirectoryURL: URL { get }
-    public var mediaDirectoryURL: URL { get }
     public func createRequiredDirectories(fileManager: FileManager) throws
     public func validateAllowlist(fileManager: FileManager, mode: PackageValidationMode) throws
 }
 ```
 
-- [ ] **Step 1: Write RED package-layout tests**
+- [ ] Write RED tests asserting exact required directories `Journal`, `Autosaves`, `Bookmarks`, `Media`; exact steady-state root entries; rejection of `.aeproject`, unknown root entries, old history/WAL/backup/autosave/proxy/thumbnail/recovery/quarantine entries; and rejection of unknown `.tmp` names.
 
-Assert exact root entries after directory creation:
-
-```swift
-#expect(Set(entries) == ["Journal", "Autosaves", "Bookmarks", "Media"])
-```
-
-Add tests that `.aeproject`, ordinary directories, `history.json`, `journal/operations.log`, `project.json.backup`, mutable autosaves, proxy, thumbnail, recovery, quarantine, and unknown `.tmp` entries are rejected.
-
-- [ ] **Step 2: Run RED layout tests**
+- [ ] Run RED.
 
 ```bash
 swift test --filter PackageLayoutTests
 ```
 
-Expected: FAIL because only `VertexProjectFoundation` and the old layout exist.
-
-- [ ] **Step 3: Replace package products and targets**
-
-In `Package.swift`:
+- [ ] In `Package.swift`, replace the public product and target with:
 
 ```swift
 .library(name: "VertexProjectPersistence", targets: ["VertexProjectPersistence"])
 ```
 
-Create target dependency `["VertexCore", "VertexMedia", "VertexProject"]` and `VertexProjectPersistenceTests`. Remove the public `VertexProjectFoundation` product and target only after all required legacy readers have equivalents scheduled in Task 6. During Tasks 2–5, no new app code may import the old module.
+Add `VertexProjectPersistenceTests`. Remove the old product and target now. Leave the old source directory uncompiled until Task 6 copies its minimum read-only legacy logic, then delete it.
 
-Update `project.yml` package dependencies and test target names to the new product.
-
-- [ ] **Step 4: Implement stable persistence errors**
-
-Define `ProjectPersistenceError: Error, Equatable, Sendable, LocalizedError` with the exact categories from the spec. Store only package-relative entry names, IDs, revisions, sequences, stages, and checksums in associated values.
-
-- [ ] **Step 5: Implement the exact allowlist and known temporary names**
-
-Steady-state root allowlist:
+- [ ] Implement the exact steady-state allowlist:
 
 ```swift
 ["project.json", "manifest.json", "Journal", "Autosaves", "Bookmarks", "Media"]
 ```
 
-Transaction mode additionally recognizes only:
+Recognize only the transaction temporary names specified in the design.
 
-```swift
-project.json.tmp
-manifest.json.tmp
-Journal/pending-save.json
-Journal/pending-save.json.tmp
-Autosaves/<sequence>-<checksum>.json.tmp
-Bookmarks/<mediaID>.bookmark.tmp
-Media/<mediaID>-<filename>.tmp
-```
-
-Do not create backup, proxy, thumbnail, recovery, or quarantine directories.
-
-- [ ] **Step 6: Implement durable file primitives with failure injection**
+- [ ] Implement package-private durable I/O:
 
 ```swift
 package enum DurableFileFailurePoint: Sendable {
@@ -402,9 +337,9 @@ package struct DurableFileIO: Sendable {
 }
 ```
 
-Use `fsync`/`F_FULLFSYNC` where available and `rename` for same-volume promotion. Map failures to `ProjectPersistenceError.atomicReplacementFailed`.
+Use same-volume `rename`, file synchronization, and directory synchronization. Do not create backup files.
 
-- [ ] **Step 7: Run GREEN tests and static product check**
+- [ ] Run GREEN and product checks.
 
 ```bash
 swift test --filter VertexProjectPersistenceTests
@@ -412,9 +347,7 @@ swift package dump-package | grep -q 'VertexProjectPersistence'
 ! swift package dump-package | grep -q 'VertexProjectFoundation'
 ```
 
-Expected: layout and durable-I/O tests pass; the old public product is absent.
-
-- [ ] **Step 8: Commit**
+- [ ] Commit.
 
 ```bash
 git add Package.swift project.yml Sources/VertexProjectPersistence Tests/VertexProjectPersistenceTests
@@ -423,18 +356,16 @@ git commit -m "feat: add canonical vertex project package"
 
 ---
 
-### Task 3: Implement full pending-snapshot save and recovery
+### Task 3: Implement full pending-save transactions and recovery
 
 **Files:**
 - Create: `Sources/VertexProjectPersistence/VertexProjectManifest.swift`
 - Create: `Sources/VertexProjectPersistence/PendingSaveEnvelope.swift`
 - Create: `Sources/VertexProjectPersistence/VertexProjectPackageStore.swift`
-- Create: `Tests/VertexProjectPersistenceTests/PendingSaveTransactionTests.swift`
 - Create: `Tests/VertexProjectPersistenceTests/PackageStoreTests.swift`
+- Create: `Tests/VertexProjectPersistenceTests/PendingSaveTransactionTests.swift`
 
-**Interfaces:**
-- Consumes: `DeterministicProjectCodec`, `StableProjectSHA256`, `DurableFileIO`, `VertexProjectPackageLayout`.
-- Produces:
+**Produces:**
 
 ```swift
 public struct VertexProjectManifest: Codable, Equatable, Sendable {
@@ -463,67 +394,41 @@ public struct VertexProjectPackageStore: Sendable {
 }
 ```
 
-- [ ] **Step 1: Write RED deterministic envelope tests**
+- [ ] Write RED envelope tests proving independent project/manifest checksum validation, Base64 round-trip of exact bytes, pair identity/revision/schema agreement, deterministic encoding, and absence of history, commands, bookmarks, and absolute paths.
 
-Create fixed project and manifest bytes and assert decode verifies:
+- [ ] Write RED failure-injection tests at all six required boundaries. On reopen, permit only the last verified pair or complete candidate pair; never expose a mixed pair.
 
-- both Base64 payloads;
-- independent project and manifest SHA-256 values;
-- project ID, schema, revision, and project checksum agreement;
-- no history, command ID, inverse, bookmark, or absolute path fields.
-
-- [ ] **Step 2: Write RED failure-injection matrix**
-
-Use a table of the six required failure points. After each injected failure, reopen and assert exactly one of:
-
-```swift
-.lastVerifiedPair
-.completeCandidatePair
-```
-
-Assert a mixed project/manifest revision is never returned.
-
-- [ ] **Step 3: Run RED transaction tests**
+- [ ] Run RED.
 
 ```bash
 swift test --filter PendingSaveTransactionTests
 ```
 
-Expected: FAIL because no full pending envelope or recovery classifier exists.
+- [ ] Implement sorted-key manifest and envelope codecs with fixed UTC dates. The envelope stores exact canonical project and manifest bytes plus their SHA-256 values.
 
-- [ ] **Step 4: Implement deterministic manifest and pending envelope codecs**
-
-Use sorted keys, fixed UTC fractional-second encoding, and no non-finite floats. The pending envelope stores exact project and manifest bytes as Base64 and checksums those exact bytes.
-
-- [ ] **Step 5: Implement save order exactly**
+- [ ] Implement the exact protocol:
 
 ```text
-validate candidate
-→ encode project and manifest
+capture and validate document
+→ encode project and matching manifest
 → write/sync/promote pending marker
 → write/sync project.tmp and manifest.tmp
-→ atomically replace both canonical files
-→ reopen and verify pair
-→ delete pending and known temp files
+→ replace both canonical files
+→ reopen and verify the pair
+→ remove pending and known temp files
 → sync affected directories
 ```
 
-Do not update a session or delete the pending marker before pair verification succeeds.
+- [ ] Implement open classification. Apply automatically only a proven newer valid candidate or a candidate completing a partial replacement. Return `.pendingDecision` for corrupt, uncertain, or older pending data.
 
-- [ ] **Step 6: Implement open classification**
-
-Return `.opened` only for a fully matched pair. Return `.pendingDecision` for corrupt, uncertain, or older pending data. Automatically complete only a valid candidate with a strictly greater revision or a candidate matching a partially replaced pair.
-
-- [ ] **Step 7: Run GREEN transaction and package tests**
+- [ ] Run GREEN.
 
 ```bash
 swift test --filter PendingSaveTransactionTests
 swift test --filter PackageStoreTests
 ```
 
-Expected: all six failure points recover deterministically and allowlist inspection passes after success.
-
-- [ ] **Step 8: Commit**
+- [ ] Commit.
 
 ```bash
 git add Sources/VertexProjectPersistence Tests/VertexProjectPersistenceTests
@@ -538,9 +443,7 @@ git commit -m "feat: save projects with pending snapshots"
 - Create: `Sources/VertexProjectPersistence/ImmutableAutosaveStore.swift`
 - Create: `Tests/VertexProjectPersistenceTests/ImmutableAutosaveStoreTests.swift`
 
-**Interfaces:**
-- Consumes: package layout, deterministic project codec, durable I/O.
-- Produces:
+**Produces:**
 
 ```swift
 public struct AutosaveRecord: Equatable, Sendable {
@@ -559,42 +462,27 @@ public struct ImmutableAutosaveStore: Sendable {
 }
 ```
 
-- [ ] **Step 1: Write RED autosave tests**
+- [ ] Write RED tests for 20-digit monotonic sequence names, checksum names, malformed-name isolation, sequence exhaustion, immutable existing bytes, duplicate revision/checksum suppression, corruption rejection, and retention of eight newest valid unique records. Assert no history, command, inverse, or bookmark field in autosave JSON.
 
-Cover exact filename, monotonic sequence from valid names, malformed-name isolation, duplicate revision/checksum suppression, immutable existing bytes, sequence exhaustion, corruption rejection, and eight-record retention.
-
-Assert autosave JSON does not contain `undo`, `redo`, `bookmark`, `commandID`, or `inverse`.
-
-- [ ] **Step 2: Run RED tests**
+- [ ] Run RED.
 
 ```bash
 swift test --filter ImmutableAutosaveStoreTests
 ```
 
-Expected: FAIL because the current store rotates mutable current/previous files and persists history.
+- [ ] Implement write to the exact candidate `.tmp`, synchronize, decode, canonical re-encode, verify, promote, then trim. Existing autosave bytes are never overwritten.
 
-- [ ] **Step 3: Implement immutable write and verification**
-
-Write `Autosaves/<20-digit-sequence>-<lowercase-checksum>.json.tmp`, synchronize, decode, re-encode, verify, promote, then delete only excess older valid snapshots. Existing records are never overwritten.
-
-- [ ] **Step 4: Run GREEN tests**
+- [ ] Run GREEN and commit.
 
 ```bash
 swift test --filter ImmutableAutosaveStoreTests
-```
-
-Expected: all autosave contract tests pass.
-
-- [ ] **Step 5: Commit**
-
-```bash
 git add Sources/VertexProjectPersistence/ImmutableAutosaveStore.swift Tests/VertexProjectPersistenceTests/ImmutableAutosaveStoreTests.swift
 git commit -m "feat: add immutable project autosaves"
 ```
 
 ---
 
-### Task 5: Split bookmark sidecars from embedded media
+### Task 5: Split bookmark sidecars and embedded media
 
 **Files:**
 - Create: `Sources/VertexProjectPersistence/BookmarkSidecarStore.swift`
@@ -602,9 +490,7 @@ git commit -m "feat: add immutable project autosaves"
 - Create: `Tests/VertexProjectPersistenceTests/BookmarkSidecarStoreTests.swift`
 - Create: `Tests/VertexProjectPersistenceTests/EmbeddedMediaStoreTests.swift`
 
-**Interfaces:**
-- Consumes: media IDs, media fingerprints, layout, durable I/O.
-- Produces:
+**Produces:**
 
 ```swift
 public struct BookmarkSidecarStore: Sendable {
@@ -625,51 +511,34 @@ public struct EmbeddedMediaStore: Sendable {
 }
 ```
 
-- [ ] **Step 1: Write RED sidecar tests**
+- [ ] Write RED bookmark tests for lowercase ID filename, atomic replacement, missing sidecar isolation, stale refresh, corrupt sidecar isolation, and canonical JSON exclusion.
 
-Assert lowercase canonical ID filename, atomic replacement, missing sidecar returns `nil`, corrupt data does not affect project decoding, stale refresh replaces the same sidecar, and no bookmark bytes appear in canonical project JSON.
+- [ ] Write RED media tests for deterministic `Media/<mediaID>-<sanitized-name>`, `.tmp` copy, pre/post fingerprint verification, collision mismatch, and embedded-media independence from bookmarks.
 
-- [ ] **Step 2: Write RED embedded-media tests**
-
-Assert `.tmp` copy, source and destination fingerprint validation, deterministic `Media/<mediaID>-<sanitized-name>` path, no external bookmark requirement, collision mismatch rejection, and unrelated project data remains readable after one media mismatch.
-
-- [ ] **Step 3: Run RED tests**
+- [ ] Run RED.
 
 ```bash
 swift test --filter BookmarkSidecarStoreTests
 swift test --filter EmbeddedMediaStoreTests
 ```
 
-Expected: FAIL because the old combined media store writes bookmark bytes through `MediaLocator`.
+- [ ] Implement raw sidecar I/O and conditionally compiled Apple bookmark APIs. Unsupported platforms return a structured bookmark error without breaking raw sidecar tests.
 
-- [ ] **Step 4: Implement raw sidecar and conditional Apple adapter**
+- [ ] Implement media promotion only after destination fingerprint verification.
 
-Keep raw sidecar I/O portable across Foundation platforms. Wrap `URL.bookmarkData` and resolution in `#if os(iOS) || os(macOS)`; unsupported platforms return a stable bookmark error without preventing non-bookmark tests.
-
-- [ ] **Step 5: Implement verified embedded media**
-
-Never promote a media file until the destination fingerprint matches the expected fingerprint. Return an updated portable reference containing only `embeddedPath`, fingerprint, and availability.
-
-- [ ] **Step 6: Run GREEN tests and canonical scan**
+- [ ] Run GREEN and commit.
 
 ```bash
 swift test --filter BookmarkSidecarStoreTests
 swift test --filter EmbeddedMediaStoreTests
 ! grep -R "bookmarkData" Sources/VertexProject
-```
-
-Expected: all tests pass and portable sources contain no bookmark payload property.
-
-- [ ] **Step 7: Commit**
-
-```bash
 git add Sources/VertexProjectPersistence Tests/VertexProjectPersistenceTests Sources/VertexProject
 git commit -m "feat: store bookmarks outside project json"
 ```
 
 ---
 
-### Task 6: Add non-destructive legacy `.aeproject` import
+### Task 6: Implement non-destructive legacy `.aeproject` import
 
 **Files:**
 - Create: `Sources/VertexProjectPersistence/LegacyImport/LegacyProjectDTO.swift`
@@ -677,14 +546,12 @@ git commit -m "feat: store bookmarks outside project json"
 - Create: `Sources/VertexProjectPersistence/LegacyImport/LegacyJournalReader.swift`
 - Create: `Sources/VertexProjectPersistence/LegacyImport/LegacySourceTreeDigest.swift`
 - Create: `Sources/VertexProjectPersistence/LegacyImport/LegacyProjectImporter.swift`
-- Move required read-only logic from: `Sources/VertexProject/ProjectJournal.swift`
-- Move required read-only logic from: `Sources/VertexProjectFoundation/ProjectPackageStore.swift`
-- Test: `Tests/VertexProjectPersistenceTests/LegacyJournalReaderTests.swift`
-- Test: `Tests/VertexProjectPersistenceTests/LegacyProjectImporterTests.swift`
+- Read then delete after migration: `Sources/VertexProject/ProjectJournal.swift`
+- Read then delete after migration: `Sources/VertexProjectFoundation/*`
+- Create: `Tests/VertexProjectPersistenceTests/LegacyJournalReaderTests.swift`
+- Create: `Tests/VertexProjectPersistenceTests/LegacyProjectImporterTests.swift`
 
-**Interfaces:**
-- Consumes: old package bytes, old manifest committed sequence, old journal lines, bookmark payloads, embedded media.
-- Produces:
+**Produces:**
 
 ```swift
 public struct LegacyImportInspection: Sendable {
@@ -714,69 +581,37 @@ public struct LegacyProjectImporter: Sendable {
 }
 ```
 
-- [ ] **Step 1: Write RED journal-reader tests**
+- [ ] Write RED journal tests for committed-sequence start, contiguous records, truncated final line, first gap, checksum failure, unknown command, invalid transition, and prohibition of post-failure records.
 
-Cover contiguous replay, committed-sequence start, truncated final line, first sequence gap stop, checksum failure stop, unknown command stop, and invalid transition stop. Assert no record after the first invalid boundary is applied.
+- [ ] Write RED importer tests proving source-tree digest equality before/after; unchanged source bytes; preserved IDs and normalized source timestamps; discarded history, backup, and mutable autosaves; bookmark extraction and per-media failure isolation; verified embedded copy; temporary destination cleanup; and deterministic canonical project bytes across repeated imports.
 
-- [ ] **Step 2: Write RED source-integrity and conversion tests**
-
-Create fixture packages and assert:
-
-- source-tree digest before and after is equal;
-- source bytes are unchanged;
-- IDs and normalized source timestamps are preserved;
-- persistent history, backup, and mutable autosave data are not copied;
-- valid bookmark bytes become sidecars;
-- invalid bookmark bytes mark only that media missing;
-- embedded media is copied only after fingerprint verification;
-- failed import removes `<destination>.tmp` and does not create destination;
-- importing the same source twice produces byte-identical canonical project JSON.
-
-- [ ] **Step 3: Run RED importer tests**
+- [ ] Run RED.
 
 ```bash
 swift test --filter LegacyJournalReaderTests
 swift test --filter LegacyProjectImporterTests
 ```
 
-Expected: FAIL because existing migration writes another `.aeproject` and preserves old persistence structures.
+- [ ] Implement internal/package-only DTOs capable of reading old bookmark payloads, applied IDs, compatibility render values, history, old manifest sequence, and operation records. No legacy DTO is public writable state.
 
-- [ ] **Step 4: Implement internal legacy DTOs**
+- [ ] Implement source digest from sorted normalized relative paths, file lengths, and exact bytes. Exclude permissions and timestamps.
 
-DTOs may decode `bookmarkData`, `appliedCommandIDs`, `legacyRenderSettings`, history files, old manifest journal sequence, and old operation records. Mark all DTOs and codecs `package` or `internal`; expose only inspection and conversion results.
+- [ ] Build `<destination>.tmp`, replay only the valid contiguous WAL prefix, convert old render values once, extract bookmarks, verify embedded media, validate the canonical allowlist, atomically promote, then prove the source digest is unchanged.
 
-- [ ] **Step 5: Implement deterministic source-tree digest**
-
-Hash sorted normalized relative paths followed by exact file lengths and bytes. Exclude filesystem timestamps, permissions, and destination state.
-
-- [ ] **Step 6: Implement import pipeline**
-
-Build `<destination>.tmp` using the canonical store. Apply only valid contiguous journal records. Use source project timestamps for canonical metadata. Extract bookmarks, verify embedded media, validate destination allowlist, then atomically rename the completed temporary package. Recompute the source digest before success.
-
-- [ ] **Step 7: Run GREEN importer tests**
+- [ ] Run GREEN, delete the uncompiled old module and obsolete portable WAL implementation, and commit.
 
 ```bash
 swift test --filter LegacyJournalReaderTests
 swift test --filter LegacyProjectImporterTests
-```
-
-Expected: all legacy conversion and non-destructive integrity tests pass.
-
-- [ ] **Step 8: Remove writable legacy persistence APIs and commit**
-
-Delete or unexport old package create/save, autosave rotation, recovery-copy, and journal append APIs after the importer has its internal readers.
-
-```bash
-git add Sources/VertexProjectPersistence Sources/VertexProject Tests/VertexProjectPersistenceTests
 git rm -r Sources/VertexProjectFoundation Tests/VertexProjectFoundationTests
+git rm Sources/VertexProject/ProjectJournal.swift
+git add Sources/VertexProjectPersistence Tests/VertexProjectPersistenceTests
 git commit -m "feat: import legacy projects non-destructively"
 ```
 
-Expected: no public `VertexProjectFoundation` source remains.
-
 ---
 
-### Task 7: Introduce `ProjectSessionActor` and canonical app flows on Phase 5
+### Task 7: Route the Phase 5 app through `ProjectSessionActor`
 
 **Files:**
 - Create: `App/ProjectDocumentTypes.swift`
@@ -787,12 +622,12 @@ Expected: no public `VertexProjectFoundation` source remains.
 - Modify: `App/ProjectPackageFileDocument.swift`
 - Modify: `App/RootView.swift`
 - Modify: `App/VertexApp.swift`
-- Test: `Tests/VertexCoreTests/StartupReadinessTests.swift`
-- Test: `Tests/VertexProjectTests/ProjectSessionActorContractTests.swift` or app-target tests in `VertexTests`
+- Modify: `project.yml`
+- Create: `Tests/VertexAppTests/ProjectDocumentTypeTests.swift`
+- Create: `Tests/VertexAppTests/ProjectSessionActorTests.swift`
+- Modify: `Tests/VertexCoreTests/StartupReadinessTests.swift`
 
-**Interfaces:**
-- Consumes: `ProjectEditingSession`, canonical package store, autosave, bookmarks, embedded media, legacy importer.
-- Produces:
+**Produces:**
 
 ```swift
 actor ProjectSessionActor {
@@ -801,6 +636,7 @@ actor ProjectSessionActor {
     func inspectLegacy(packageURL: URL) async throws -> LegacyImportInspection
     func importLegacy(sourceURL: URL, destinationURL: URL) async throws -> ProjectSessionSnapshot
     func apply(_ payload: ProjectCommandPayload, mergeKey: String?) async throws -> ProjectSessionSnapshot
+    func setSelectedMedia(_ mediaID: VertexID?) async throws -> ProjectSessionSnapshot
     func undo() async throws -> ProjectSessionSnapshot
     func redo() async throws -> ProjectSessionSnapshot
     func save() async throws -> ProjectSessionSnapshot
@@ -813,59 +649,47 @@ actor ProjectSessionActor {
 
 `ProjectWorkspaceViewModel.OperationState` is exactly `.idle`, `.running(OperationKind)`, `.succeeded(String)`, `.failed(String)`, or `.cancelled`.
 
-- [ ] **Step 1: Write RED document-type tests**
+- [ ] Add `Tests/VertexAppTests` to the Xcode `VertexTests` target in `project.yml`. Do not add it as a SwiftPM test target.
 
-Assert canonical exported UTType identifier `com.maze.vertex.project`, extension `vertexproject`, canonical open/edit, and `.aeproject` import-only behavior. Assert `ProjectPackageFileDocument.readableContentTypes` excludes legacy editing.
+- [ ] Write RED Xcode tests for UTType `com.maze.vertex.project`, extension `vertexproject`, legacy import-only behavior, empty history after reopen, save-failure state preservation, autosave not clearing unsaved state, coalesced equal requests, superseded older requests, close dispositions, and stale completion rejection.
 
-- [ ] **Step 2: Write RED actor-state tests**
-
-Cover session Undo empty after reopen, save failure preserving document/history, autosave not clearing unsaved state, equal revision/checksum request coalescing, newer revision superseding older queued work, close choices, and stale completion rejection.
-
-- [ ] **Step 3: Run RED app-contract tests**
+- [ ] Run RED app tests.
 
 ```bash
-swift test --filter StartupReadinessTests
-swift test --filter ProjectSessionActorContractTests
-```
-
-Expected: FAIL because ViewModel directly writes WAL/history/package state.
-
-- [ ] **Step 4: Implement document types and actor**
-
-Register canonical and legacy UTTypes separately. Keep security-scoped access lifetime around each external URL operation. Capture immutable documents before persistence calls and call `session.markSaved` only after the store returns a verified snapshot.
-
-- [ ] **Step 5: Replace ViewModel persistence fields**
-
-Remove `historyController`, `journalSequence`, `ProjectPackageStore`, rotating autosave, embedded bookmark lookup, and direct package file edits. Store one actor and publish returned snapshots on MainActor.
-
-- [ ] **Step 6: Implement explicit legacy conversion UI**
-
-The view shows all inspection counts, destination selection, progress, cancellation, success, and failure. It never opens a legacy package directly and never registers a temporary destination as recent.
-
-- [ ] **Step 7: Keep startup bounded**
-
-`VertexApp` transitions from splash to workspace after the bounded minimum delay. Project inspection and Metal creation start after workspace presentation. Every guard sets a terminal state before return.
-
-- [ ] **Step 8: Run app and package GREEN tests**
-
-```bash
-swift test
 xcodegen generate
-xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination "generic/platform=iOS" CODE_SIGNING_ALLOWED=NO clean build
+xcodebuild test -project Vertex.xcodeproj -scheme Vertex -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16 Pro' -only-testing:VertexTests/ProjectDocumentTypeTests -only-testing:VertexTests/ProjectSessionActorTests
 ```
 
-Expected: portable tests and iOS Release compilation pass.
+Expected: failures because the app still directly owns WAL/history/package stores.
 
-- [ ] **Step 9: Commit**
+- [ ] Implement canonical and legacy UTTypes separately. Canonical files open/edit; legacy files only launch inspection and conversion.
+
+- [ ] Implement the actor. Capture immutable documents for saves and autosaves. Call `markSaved` only after verified store success. Keep security-scoped access around each external operation. Coalesce equal revision/checksum requests and reject stale completions.
+
+- [ ] Replace ViewModel fields `historyController`, `journalSequence`, direct package store, rotating autosave store, and bookmark-in-model resolution with actor calls and returned snapshots.
+
+- [ ] Implement conversion report, destination selection, cancellation, success, and failure. Never register a temporary destination as recent.
+
+- [ ] Keep startup bounded. Project inspection, pending decisions, Metal creation, and bookmark resolution occur after workspace presentation or in bounded tasks with terminal states.
+
+- [ ] Run GREEN app tests and iOS Release compilation.
 
 ```bash
-git add App Package.swift project.yml Tests
+xcodegen generate
+xcodebuild test -project Vertex.xcodeproj -scheme Vertex -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16 Pro' -only-testing:VertexTests/ProjectDocumentTypeTests -only-testing:VertexTests/ProjectSessionActorTests
+xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO clean build
+```
+
+- [ ] Commit.
+
+```bash
+git add App project.yml Tests/VertexAppTests Tests/VertexCoreTests
 git commit -m "refactor: route projects through a session actor"
 ```
 
 ---
 
-### Task 8: Verify and document corrected Phase 5 foundation
+### Task 8: Verify and document corrected Phase 5
 
 **Files:**
 - Modify: `.github/workflows/phase-build.yml`
@@ -875,11 +699,7 @@ git commit -m "refactor: route projects through a session actor"
 - Modify: `Documentation/HANDOFF.md`
 - Modify: `README.md`
 
-**Interfaces:**
-- Consumes: Tasks 1–7.
-- Produces: a corrected Phase 5 branch that PR #6 can merge without depending on old public persistence APIs.
-
-- [ ] **Step 1: Add static contract checks to CI**
+- [ ] Add exact static CI checks.
 
 ```bash
 ! grep -R "VertexProjectFoundation" Package.swift project.yml App Sources Tests
@@ -890,24 +710,18 @@ git commit -m "refactor: route projects through a session actor"
 ! grep -R "history.json" Sources/VertexProjectPersistence App
 ```
 
-Add a test fixture that creates a canonical package and compares its root entries to the allowlist.
-
-- [ ] **Step 2: Run full Phase 5 correction verification**
+- [ ] Run the complete Phase 5 correction gate.
 
 ```bash
 swift test
-swift test --filter VertexProjectPersistenceTests
 xcodegen generate
-xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination "generic/platform=iOS" CODE_SIGNING_ALLOWED=NO clean build
+xcodebuild test -project Vertex.xcodeproj -scheme Vertex -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16 Pro'
+xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO clean build
 ```
 
-Expected: zero test failures and iOS build exit code 0.
+- [ ] Replace authoritative old persistence documentation. Preserve historical evidence only in sections labeled as superseded.
 
-- [ ] **Step 3: Update architecture and test documentation**
-
-Replace every authoritative description of `.aeproject`, persisted history, WAL, mutable autosave, backup, proxy, thumbnail, recovery, or quarantine behavior. Preserve old evidence only in a clearly labeled superseded-history section.
-
-- [ ] **Step 4: Commit and push corrected Phase 5**
+- [ ] Commit and push.
 
 ```bash
 git add .github/workflows Documentation README.md
@@ -915,57 +729,51 @@ git commit -m "docs: record corrected project persistence"
 git push origin agent/phase-5-project-persistence
 ```
 
-Expected: PR #5 stays Draft, targets Phase 4, and all correction checks pass.
+Expected: PR #5 remains Draft, targets Phase 4, and all correction checks pass.
 
 ---
 
-# Execution Segment B — Reintegrate and Reverify Phase 6
+# Segment B — Reintegrate Phase 6
 
-### Task 9: Merge corrected Phase 5 into Phase 6 and restore canonical Schema 2
+### Task 9: Merge corrected Phase 5 and restore canonical Schema 2
 
 **Files:**
-- Merge branch: `agent/phase-5-project-persistence` into `agent/phase-6-layers-compositions`
+- Merge: `agent/phase-5-project-persistence` into `agent/phase-6-layers-compositions`
 - Modify: `Package.swift`
 - Modify: `project.yml`
 - Modify: `Sources/VertexProject/ProjectSchema.swift`
-- Modify: `Sources/VertexProject/ProjectCommands.swift`
 - Modify: `Sources/VertexProject/ProjectCommandPayload.swift`
-- Modify: `Sources/VertexProject/ProjectTransition.swift`
+- Modify: `Sources/VertexProject/ProjectMutation.swift`
+- Modify: `Sources/VertexProject/ProjectCommands.swift`
 - Modify: `Sources/VertexProject/ProjectEditingSession.swift`
 - Modify: `Sources/VertexProjectPersistence/LegacyImport/LegacyProjectDTO.swift`
 - Modify: `Sources/VertexProjectPersistence/LegacyImport/LegacyProjectImporter.swift`
-- Test: `Tests/VertexProjectTests/ProjectCompositionSchemaTests.swift`
-- Test: `Tests/VertexProjectTests/ProjectLayerCommandTests.swift`
-- Test: `Tests/VertexProjectPersistenceTests/LegacySchema2ImportTests.swift`
+- Modify: `Tests/VertexProjectTests/ProjectCompositionSchemaTests.swift`
+- Modify: `Tests/VertexProjectTests/ProjectLayerCommandTests.swift`
+- Create: `Tests/VertexProjectPersistenceTests/LegacySchema2ImportTests.swift`
 
-**Interfaces:**
-- Consumes: corrected Phase 5 persistence and existing Phase 6 composition/layer types.
-- Produces: final canonical Schema 2 model without legacy or persistence fields.
-
-- [ ] **Step 1: Merge without force-rewriting either draft branch**
+- [ ] Merge and commit the branch integration before additional edits.
 
 ```bash
 git switch agent/phase-6-layers-compositions
 git pull --ff-only origin agent/phase-6-layers-compositions
-git merge --no-ff origin/agent/phase-5-project-persistence -m "merge: integrate corrected Phase 5 persistence"
+git merge --no-ff origin/agent/phase-5-project-persistence
+# resolve conflicts by retaining corrected persistence APIs and Phase 6 product behavior
+git add -A
+git commit -m "merge: integrate corrected Phase 5 persistence"
 ```
 
-Resolve conflicts by keeping corrected persistence APIs and Phase 6 composition/layer product behavior. Do not restore old WAL, history snapshots, bookmark fields, or old module imports.
+Never resolve a conflict by restoring old WAL, history snapshots, bookmark fields, compatibility render fields, or `VertexProjectFoundation` imports.
 
-- [ ] **Step 2: Write RED final-Schema-2 tests**
+- [ ] Write RED final-Schema-2 tests for canonical media/composition/layer registries, valid active composition normalization, invalid selected-layer/media normalization, and continued absence of forbidden fields.
 
-Assert canonical Schema 2 has media, composition, layer, active composition, selected layer, and selected media values while forbidden fields remain absent. Assert normalization chooses a valid active composition and clears invalid selection IDs.
-
-- [ ] **Step 3: Extend payload and mutation cases for Phase 6**
-
-Add exact desired-state payloads:
+- [ ] Extend desired-state payloads with Phase 6 edit cases:
 
 ```swift
 case createComposition(ProjectComposition, ownedLayers: [ProjectLayer], index: Int)
 case removeComposition(id: VertexID)
 case duplicateComposition(sourceID: VertexID, newCompositionID: VertexID, newLayerIDs: [VertexID])
 case renameComposition(id: VertexID, to: String)
-case setActiveComposition(VertexID?)
 case setCompositionDimensions(id: VertexID, width: Int, height: Int)
 case setCompositionDuration(id: VertexID, duration: RationalTime)
 case setCompositionFrameRate(id: VertexID, frameRate: RationalTime)
@@ -975,7 +783,6 @@ case removeLayer(id: VertexID)
 case duplicateLayer(sourceID: VertexID, duplicateID: VertexID, index: Int)
 case renameLayer(id: VertexID, to: String)
 case reorderLayer(compositionID: VertexID, layerID: VertexID, toIndex: Int)
-case setSelectedLayer(VertexID?)
 case setLayerEnabled(id: VertexID, value: Bool)
 case setLayerLocked(id: VertexID, value: Bool)
 case setLayerSolo(id: VertexID, value: Bool)
@@ -986,13 +793,20 @@ case setLayerSource(id: VertexID, value: LayerSource)
 case setLayerOperations(id: VertexID, value: [LayerOperation])
 ```
 
-The engine derives exact inverse mutations from the current document, including registry indices, owned layers, previous order, and prior values.
+Active composition and selected layer are not payloads. Add session navigation methods:
 
-- [ ] **Step 4: Add legacy schema-2 DTO and conversion tests**
+```swift
+public mutating func setActiveComposition(_ compositionID: VertexID?, timestamp: Date) throws
+public mutating func setSelectedLayer(_ layerID: VertexID?, timestamp: Date) throws
+```
 
-Decode the pre-correction Phase 6 `.aeproject` dialect, including legacy Render Lab fields, applied IDs, embedded bookmarks, history, and WAL. Preserve composition, layer, and media IDs and convert to canonical Schema 2.
+They validate and persist convenience state without modifying Undo/Redo or clearing Redo.
 
-- [ ] **Step 5: Run GREEN project and importer tests**
+- [ ] Derive exact inverse mutations from the current document, including registry index, owned layers, previous order, and previous property values.
+
+- [ ] Add import support for the pre-correction Phase 6 Schema 2 `.aeproject` dialect. Preserve composition, layer, and media IDs; discard old persistence state.
+
+- [ ] Run GREEN.
 
 ```bash
 swift test --filter ProjectCompositionSchemaTests
@@ -1000,9 +814,7 @@ swift test --filter ProjectLayerCommandTests
 swift test --filter LegacySchema2ImportTests
 ```
 
-Expected: Schema 2 and all layer command tests pass with no persisted history fields.
-
-- [ ] **Step 6: Commit**
+- [ ] Commit.
 
 ```bash
 git add Package.swift project.yml Sources Tests
@@ -1011,7 +823,7 @@ git commit -m "refactor: apply corrected persistence to schema 2"
 
 ---
 
-### Task 10: Reconnect the Phase 6 composition workspace to the session actor
+### Task 10: Reconnect the Composition workspace to the actor
 
 **Files:**
 - Modify: `App/ProjectSessionActor.swift`
@@ -1022,58 +834,44 @@ git commit -m "refactor: apply corrected persistence to schema 2"
 - Modify: `App/CompositionMediaFrameResolver.swift`
 - Modify: `App/CompositionPreviewController.swift`
 - Modify: `App/ProjectPackageFileDocument.swift`
-- Test: `Tests/VertexCompositionTests/CompositionGraphCompilerTests.swift`
-- Test: `Tests/VertexRenderMetalTests/MetalCompositionPixelTests.swift`
-- Test: app-target `ProjectWorkspacePersistenceTests.swift`
+- Modify: `project.yml`
+- Create: `Tests/VertexAppTests/ProjectWorkspacePersistenceTests.swift`
+- Modify: `Tests/VertexCompositionTests/CompositionGraphCompilerTests.swift`
+- Modify: `Tests/VertexRenderMetalTests/MetalCompositionPixelTests.swift`
 
-**Interfaces:**
-- Consumes: Phase 6 command payloads and corrected persistence actor.
-- Produces: composition and layer UI operations that use one actor and one canonical package.
+- [ ] Write RED Xcode tests for composition/layer create, duplicate, delete, reorder, transform coalescing, navigation without Undo, locked-layer rejection, nested-cycle rejection, save/reopen with empty history, missing bookmark isolation, embedded resolution, and legacy conversion report.
 
-- [ ] **Step 1: Write RED workspace persistence tests**
-
-Cover create, duplicate, delete, reorder, transform coalescing, locked-layer rejection, nested-cycle rejection, save, reopen with empty Undo/Redo, missing bookmark isolation, embedded media resolution, and legacy import conversion report.
-
-- [ ] **Step 2: Run RED workspace tests**
+- [ ] Run RED.
 
 ```bash
-swift test --filter ProjectWorkspacePersistenceTests
+xcodegen generate
+xcodebuild test -project Vertex.xcodeproj -scheme Vertex -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16 Pro' -only-testing:VertexTests/ProjectWorkspacePersistenceTests
 ```
 
-Expected: FAIL while Phase 6 helpers still call the old ViewModel operation/WAL path.
+- [ ] Route every edit through actor desired-state payloads. Route active composition, selected layer, and selected media through non-history navigation methods. Remove all app references to `ProjectCommandRecord`, `ProjectJournalRecord`, direct history controllers, and direct package writes.
 
-- [ ] **Step 3: Route every composition and layer edit through actor payloads**
+- [ ] Preserve media resolution order: verified embedded media, then bookmark sidecar, then Missing. One media error cannot block project open or unrelated layers.
 
-Remove direct `ProjectCommandRecord`, `ProjectJournalRecord`, package store, and history-controller access from app files. Continuous inspector gestures pass stable merge keys and gesture IDs; reorders and structural edits pass no merge key.
+- [ ] Preserve one render path: the same `CompositionRenderRequest`, compiler, Metal backend, and canonical pixel bytes feed preview and PNG.
 
-- [ ] **Step 4: Resolve frames through corrected media stores**
-
-Resolution order remains embedded media first, then bookmark sidecar, then Missing. A bookmark or one media error does not block project open or unrelated layers.
-
-- [ ] **Step 5: Preserve preview and PNG parity**
-
-Do not create a second render path. Continue compiling the same `CompositionRenderRequest` and using the same returned canonical pixel bytes for preview and PNG export.
-
-- [ ] **Step 6: Run GREEN workspace and rendering tests**
+- [ ] Run GREEN app, compiler, and Metal tests.
 
 ```bash
-swift test --filter ProjectWorkspacePersistenceTests
+xcodebuild test -project Vertex.xcodeproj -scheme Vertex -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16 Pro' -only-testing:VertexTests/ProjectWorkspacePersistenceTests
 swift test --filter VertexCompositionTests
 swift test --filter VertexRenderMetalTests
 ```
 
-Expected: workspace persistence, compiler, blend, adjustment, nested composition, and pixel tests pass.
-
-- [ ] **Step 7: Commit**
+- [ ] Commit.
 
 ```bash
-git add App Tests
+git add App project.yml Tests
 git commit -m "refactor: persist compositions through project sessions"
 ```
 
 ---
 
-### Task 11: Add end-to-end package, startup, and failure-path tests
+### Task 11: Add end-to-end failure and rendering regressions
 
 **Files:**
 - Create: `Tests/VertexProjectPersistenceTests/CanonicalPackageIntegrationTests.swift`
@@ -1082,29 +880,13 @@ git commit -m "refactor: persist compositions through project sessions"
 - Modify: `Tests/VertexCoreTests/StartupReadinessTests.swift`
 - Create: `Tests/VertexRenderMetalTests/PersistenceRenderRegressionTests.swift`
 
-**Interfaces:**
-- Consumes: final Schema 2, session actor, package store, autosave, importer, compiler, Metal backend.
-- Produces: evidence that persistence correction does not weaken rendering or startup.
+- [ ] Write a package integration test containing two media layers, one adjustment layer, and one nested composition. Save, assert allowlist, reopen, assert canonical project byte equality, assert empty history through the session API, render, and compare pixels.
 
-- [ ] **Step 1: Write complete package integration test**
+- [ ] Write concurrency tests proving equal request coalescing, newer-revision supersession, stale-completion rejection, Save and Close waiting for verified save, and Discard preserving verified autosaves.
 
-Create a project with two media layers, one adjustment layer, and one nested composition; save to `.vertexproject`; assert allowlist; reopen; assert identical canonical project bytes; assert empty Undo/Redo; render and compare expected pixels.
+- [ ] Write startup tests injecting project inspection, pending decision, Metal initialization, and bookmark failures separately. Each test must reach workspace and show only a scoped terminal error.
 
-- [ ] **Step 2: Write concurrency tests**
-
-Use controllable persistence suspension points to prove:
-
-- equal revision/checksum save requests coalesce;
-- newer queued revision supersedes older queued autosave;
-- stale completion cannot replace current ViewModel state;
-- close with Save and Close waits for verified save;
-- Discard Session Changes leaves verified autosaves untouched.
-
-- [ ] **Step 3: Write startup failure tests**
-
-Inject project inspection, pending decision, Metal initialization, and bookmark errors separately. Assert startup reaches workspace and only the affected surface shows a terminal error.
-
-- [ ] **Step 4: Run RED then GREEN integration suite**
+- [ ] Run the complete new suite.
 
 ```bash
 swift test --filter CanonicalPackageIntegrationTests
@@ -1114,9 +896,9 @@ swift test --filter StartupReadinessTests
 swift test --filter PersistenceRenderRegressionTests
 ```
 
-Expected after implementation: all pass with no indefinite state and no rendering change.
+Expected: zero failures.
 
-- [ ] **Step 5: Commit**
+- [ ] Commit.
 
 ```bash
 git add Tests
@@ -1125,7 +907,7 @@ git commit -m "test: cover corrected project persistence end to end"
 
 ---
 
-### Task 12: Final static checks, CI, and replacement 6.0 IPA
+### Task 12: Produce and inspect the replacement 6.0 IPA
 
 **Files:**
 - Modify: `.github/workflows/phase-build.yml`
@@ -1140,11 +922,7 @@ git commit -m "test: cover corrected project persistence end to end"
 - Modify: `Documentation/HANDOFF.md`
 - Modify: `README.md`
 
-**Interfaces:**
-- Consumes: all preceding tasks.
-- Produces: verified replacement `After-Effects-6.0.0-unsigned.ipa` and durable evidence.
-
-- [ ] **Step 1: Add exact static CI gates**
+- [ ] Add exact static gates.
 
 ```bash
 set -euo pipefail
@@ -1157,24 +935,18 @@ set -euo pipefail
 ! grep -R 'appendingPathExtension("aeproject")' App Sources/VertexProjectPersistence --exclude-dir=LegacyImport
 ```
 
-Add an executable test utility that creates a canonical package and fails unless the root allowlist and forbidden-entry checks match the spec.
-
-- [ ] **Step 2: Run full Linux and macOS suites**
+- [ ] Run all portable, persistence, composition, Metal, and app tests.
 
 ```bash
 swift test
-swift test --filter VertexProjectPersistenceTests
-swift test --filter VertexCompositionTests
-swift test --filter VertexRenderMetalTests
+xcodegen generate
+xcodebuild test -project Vertex.xcodeproj -scheme Vertex -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16 Pro'
 ```
 
-Expected: zero failures.
-
-- [ ] **Step 3: Build iOS Release and package unsigned IPA**
+- [ ] Build Release and package.
 
 ```bash
-xcodegen generate
-xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination "generic/platform=iOS" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
+xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
 rm -rf Payload artifacts
 mkdir -p Payload artifacts
 cp -R DerivedData/Build/Products/Release-iphoneos/AfterEffects.app Payload/AfterEffects.app
@@ -1182,19 +954,13 @@ zip -qry artifacts/After-Effects-6.0.0-unsigned.ipa Payload
 shasum -a 256 artifacts/After-Effects-6.0.0-unsigned.ipa > artifacts/After-Effects-6.0.0-unsigned.ipa.sha256
 ```
 
-- [ ] **Step 4: Inspect the downloaded artifact, not only the runner copy**
+- [ ] Download the uploaded artifact and independently inspect display name, bundle name, bundle ID, `6.0.0 (6)`, iOS 17.0 minimum, arm64 executable, `Assets.car`, `default.metallib`, ZIP digest, IPA digest, size, executable path, and resource sizes.
 
-Verify display name, bundle name, identifier, version `6.0.0 (6)`, minimum iOS 17.0, arm64 executable, `Assets.car`, `default.metallib`, and exact IPA SHA-256. Record workflow run ID, artifact ID, artifact ZIP digest, IPA digest, size, executable path, and resource sizes.
+- [ ] Update all architecture, completion, versioning, work-log, and handoff documents. Record any manual-device tests not performed. State that this replacement artifact is the only allowed Phase 7 base.
 
-- [ ] **Step 5: Update completion and handoff documents**
+- [ ] Remove the temporary PR workflow trigger only after the successful product artifact run. Documentation-only commits must not regenerate the recorded artifact.
 
-State that previous 6.0 artifacts are superseded. Record that the replacement artifact is the only permitted Phase 7 base. Document any manual device tests not performed.
-
-- [ ] **Step 6: Remove temporary PR workflow trigger after final artifact run**
-
-Keep normal `push` and `workflow_dispatch` behavior. Documentation-only commits must not rebuild the already recorded artifact.
-
-- [ ] **Step 7: Commit final documentation and push**
+- [ ] Commit and push final documentation.
 
 ```bash
 git add .github/workflows Documentation README.md
@@ -1202,36 +968,30 @@ git commit -m "docs: complete corrected Phase 6 persistence"
 git push origin agent/phase-6-layers-compositions
 ```
 
-Expected: PR #6 remains Draft and unmerged; final documentation HEAD may follow the recorded product/CI source HEAD.
+Expected: PR #6 remains Draft and unmerged. The recorded product/CI source HEAD may precede the final documentation HEAD.
 
 ---
 
-### Task 13: Phase 7 creation gate
+### Task 13: Enforce the Phase 7 creation gate
 
 **Files:**
 - Read: `Documentation/PHASE_6_COMPLETION.md`
 - Read: `Documentation/VERSIONING_AND_ARTIFACTS.md`
 - Read: `Documentation/HANDOFF.md`
-- No Phase 7 source files are created in this task.
+- Create no Phase 7 source file in this task.
 
-**Interfaces:**
-- Consumes: successful Task 12 evidence.
-- Produces: authorization to begin a separate Motion Engine design cycle.
+- [ ] Verify that product HEAD, successful CI run, artifact ID, downloaded ZIP digest, IPA digest, bundle metadata, package allowlist evidence, startup evidence, and forbidden-field scans are recorded.
 
-- [ ] **Step 1: Verify every gate from Task 12 is recorded**
-
-Confirm product source HEAD, successful CI run, artifact ID, downloaded artifact ZIP digest, IPA digest, bundle metadata, package allowlist evidence, startup test, and forbidden-field scans.
-
-- [ ] **Step 2: Verify draft stack state**
+- [ ] Verify the corrected Phase 5 branch is an ancestor of Phase 6.
 
 ```bash
 git fetch origin
 git merge-base --is-ancestor origin/agent/phase-5-project-persistence origin/agent/phase-6-layers-compositions
 ```
 
-Expected: exit code 0; PR #5 and PR #6 remain Draft and unmerged.
+Expected: exit code 0. PR #5 and PR #6 remain Draft and unmerged.
 
-- [ ] **Step 3: Create Phase 7 branch only after the gate passes**
+- [ ] Only after the gate passes, create the Phase 7 branch.
 
 ```bash
 git switch agent/phase-6-layers-compositions
@@ -1240,18 +1000,14 @@ git switch -c agent/phase-7-motion-engine
 git push -u origin agent/phase-7-motion-engine
 ```
 
-Do not write Phase 7 implementation code. Start a new brainstorming and design-spec cycle for generic animation channels, interpolation, parenting, and motion blur.
-
----
+Do not write Motion Engine code in this task. Begin a separate brainstorming, design-spec, user-review, and implementation-plan cycle for animation channels, interpolation, parenting, and motion blur.
 
 ## Plan Completion Criteria
 
-The plan is complete only when:
-
-1. PR #5 exposes `VertexProjectPersistence`, `.vertexproject`, session-only history, pending snapshots, immutable autosaves, sidecar bookmarks, and non-destructive legacy import.
-2. PR #6 contains canonical Schema 2 layers and compositions on top of that corrected foundation.
+1. PR #5 exposes `.vertexproject`, `VertexProjectPersistence`, session-only history, full pending snapshots, immutable autosaves, bookmark sidecars, verified embedded media, and non-destructive legacy import.
+2. PR #6 restores canonical Schema 2 layers and compositions on that corrected foundation.
 3. No public or app source imports `VertexProjectFoundation`.
-4. No canonical JSON or autosave contains bookmark bytes, applied command IDs, legacy render settings, Undo/Redo, or inverses.
-5. No canonical package creates or accepts history, WAL, backup, proxy, thumbnail, recovery, or quarantine entries.
-6. Startup cannot remain indefinitely on the splash screen because of phase, project, Metal, media, bookmark, or recovery checks.
-7. The replacement 6.0.0 IPA passes downloaded-artifact inspection and is explicitly recorded as the only Phase 7 base.
+4. Canonical JSON and autosaves contain no bookmark bytes, applied IDs, compatibility render field, history, inverse, or WAL.
+5. Canonical packages create and accept no old history, WAL, backup, proxy, thumbnail, recovery, or quarantine entries.
+6. Startup cannot remain indefinitely blocked by phase, project, pending recovery, Metal, media, or bookmark checks.
+7. The downloaded replacement 6.0 IPA passes inspection and is explicitly the only Phase 7 base.
