@@ -32,7 +32,7 @@ targets:
       - package: Vertex
         product: VertexProject
       - package: Vertex
-        product: VertexProjectFoundation
+        product: VertexProjectPersistence
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
@@ -67,7 +67,7 @@ targets:
       - path: Tests/VertexRenderTests
       - path: Tests/VertexRenderMetalTests
       - path: Tests/VertexProjectTests
-      - path: Tests/VertexProjectFoundationTests
+      - path: Tests/VertexProjectPersistenceTests
     dependencies:
       - target: Vertex
       - package: Vertex
@@ -81,7 +81,7 @@ targets:
       - package: Vertex
         product: VertexProject
       - package: Vertex
-        product: VertexProjectFoundation
+        product: VertexProjectPersistence
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
