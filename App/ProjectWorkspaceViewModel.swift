@@ -61,6 +61,19 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     var canRedo: Bool { historyController?.canRedo == true }
     var renderSettings: ProjectRenderSettings { project?.renderSettings ?? ProjectRenderSettings() }
     var revisionText: String { project.map { "Revision \($0.revision) · Schema \($0.schemaVersion)" } ?? "No project" }
+    var packageLocation: URL? { packageURL }
+    var activeComposition: ProjectComposition? {
+        guard let project, let id = project.activeCompositionID else { return nil }
+        return project.composition(id: id)
+    }
+    var selectedLayer: ProjectLayer? {
+        guard let project, let id = project.selectedLayerID else { return nil }
+        return project.layer(id: id)
+    }
+    var orderedLayers: [ProjectLayer] {
+        guard let project, let id = project.activeCompositionID else { return [] }
+        return project.layers(in: id)
+    }
 
     var selectedMedia: MediaReference? {
         guard let project, let selectedID = project.selectedMediaID else { return nil }
@@ -77,7 +90,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             }
             let loaded = try packageStore.create(at: url, document: document)
             try install(loaded, packageURL: url)
-            status = .ready("New recoverable project created")
+            status = .ready("New schema 2 project created")
         } catch {
             status = .failed(error.localizedDescription)
         }
@@ -87,7 +100,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         guard let current = project?.metadata.name else { return }
         let next = projectNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !next.isEmpty, next != current else { return }
-        performDurable(.renameProject(before: current, after: next))
+        applyProjectOperation(.renameProject(before: current, after: next))
     }
 
     func openProject(from externalURL: URL) {
@@ -101,9 +114,21 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             try FileManager.default.copyItem(at: externalURL, to: destination)
 
             do {
-                let loaded = try packageStore.load(from: destination)
-                try install(loaded, packageURL: destination)
-                status = .ready("Project package opened")
+                let result = try ProjectPackageOpeningService().open(packageURL: destination) { [self] in
+                    try projectsRootURL()
+                        .appendingPathComponent("Migrated-\(UUID().uuidString.lowercased())")
+                        .appendingPathExtension("aeproject")
+                }
+                switch result {
+                case .opened(let loaded):
+                    try install(loaded, packageURL: destination)
+                    status = .ready("Schema 2 project package opened")
+                case .migrated(let migration):
+                    try install(migration.loadResult, packageURL: migration.migratedPackageURL)
+                    status = .ready("Schema 1 project migrated non-destructively to schema 2")
+                }
+            } catch ProjectError.unsupportedSchema {
+                throw ProjectError.unsupportedSchema(found: 99, supported: ProjectDocument.currentSchemaVersion)
             } catch {
                 recoveryInspection = try ProjectRecoveryEngine().inspect(packageURL: destination)
                 packageURL = destination
@@ -120,7 +145,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             let recoveredURL = try ProjectRecoveryEngine().recover(candidate, from: inspection)
             let loaded = try packageStore.load(from: recoveredURL)
             try install(loaded, packageURL: recoveredURL)
-            status = .ready("Recovered project opened as a new package")
+            status = .ready("Recovered schema 2 project opened as a new package")
         } catch {
             status = .failed(error.localizedDescription)
         }
@@ -137,9 +162,21 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 let reference = try await Task.detached(priority: .utility) {
                     try ProjectMediaIdentityReader.makeReference(for: url)
                 }.value
-                self.performDurable(.registerMedia(reference))
-                if self.project?.mediaRegistry.contains(where: { $0.id == reference.id }) == true {
-                    self.performDurable(.selectMedia(before: self.project?.selectedMediaID, after: reference.id))
+                self.applyProjectOperation(.registerMedia(reference))
+                self.applyProjectOperation(.selectMedia(before: self.project?.selectedMediaID, after: reference.id))
+                if let composition = self.activeComposition {
+                    let layer = ProjectLayer(
+                        compositionID: composition.id,
+                        name: reference.displayName,
+                        source: .media(mediaID: reference.id, sourceStartTime: .zero),
+                        timing: LayerTiming(
+                            startTime: .zero,
+                            inPoint: .zero,
+                            outPoint: composition.duration
+                        )
+                    )
+                    self.applyProjectOperation(.insertLayer(layer, compositionID: composition.id, index: 0))
+                    self.applyProjectOperation(.setSelectedLayer(before: self.project?.selectedLayerID, after: layer.id))
                 }
                 self.refreshMediaAvailability()
             } catch {
@@ -150,31 +187,31 @@ final class ProjectWorkspaceViewModel: ObservableObject {
 
     func setRenderParameter(_ parameter: ProjectRenderParameter, to value: Double) {
         guard let old = project?.renderSettings.value(for: parameter), old != value else { return }
-        performDurable(
+        applyProjectOperation(
             .setRenderParameter(parameter, before: old, after: value),
-            mergeKey: "render.\(parameter.rawValue)"
+            mergeKey: "legacy.render.\(parameter.rawValue)"
         )
     }
 
     func setInverted(_ value: Bool) {
         guard let old = project?.renderSettings.inverted, old != value else { return }
-        performDurable(
+        applyProjectOperation(
             .setRenderBoolean(.inverted, before: old, after: value),
-            mergeKey: "render.inverted"
+            mergeKey: "legacy.render.inverted"
         )
     }
 
     func setOutputDimensions(width: Int, height: Int) {
         guard let settings = project?.renderSettings,
               settings.outputWidth != width || settings.outputHeight != height else { return }
-        performDurable(
+        applyProjectOperation(
             .setOutputDimensions(
                 beforeWidth: settings.outputWidth,
                 beforeHeight: settings.outputHeight,
                 afterWidth: width,
                 afterHeight: height
             ),
-            mergeKey: "render.output"
+            mergeKey: "legacy.render.output"
         )
     }
 
@@ -227,7 +264,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 committedJournalSequence: journalSequence
             )
             try install(loaded, packageURL: packageURL)
-            status = .ready("Project saved atomically")
+            status = .ready("Schema 2 project saved atomically")
         } catch {
             status = .failed(error.localizedDescription)
         }
@@ -251,12 +288,8 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             }
             let hasScope = sourceURL.startAccessingSecurityScopedResource()
             defer { if hasScope { sourceURL.stopAccessingSecurityScopedResource() } }
-            let embedded = try mediaStore.embed(
-                reference: reference,
-                sourceURL: sourceURL,
-                packageURL: packageURL
-            )
-            performDurable(.setEmbeddedPath(
+            let embedded = try mediaStore.embed(reference: reference, sourceURL: sourceURL, packageURL: packageURL)
+            applyProjectOperation(.setEmbeddedPath(
                 mediaID: reference.id,
                 before: reference.locator.embeddedPath,
                 after: embedded.locator.embeddedPath
@@ -290,7 +323,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 bookmarkData: bookmark,
                 embeddedPath: reference.locator.embeddedPath
             )
-            performDurable(.relinkMedia(mediaID: reference.id, before: reference.locator, after: nextLocator))
+            applyProjectOperation(.relinkMedia(mediaID: reference.id, before: reference.locator, after: nextLocator))
             refreshMediaAvailability()
         } catch {
             status = .failed(error.localizedDescription)
@@ -302,14 +335,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         performAutosave()
     }
 
-    private func performDurable(_ operation: ProjectOperation, mergeKey: String? = nil) {
+    func applyProjectOperation(_ operation: ProjectOperation, mergeKey: String? = nil) {
         guard let controller = historyController, let packageURL else { return }
         do {
-            let record = ProjectCommandRecord(
-                project: controller.project,
-                operation: operation,
-                mergeKey: mergeKey
-            )
+            let record = ProjectCommandRecord(project: controller.project, operation: operation, mergeKey: mergeKey)
             _ = try ProjectCommandEngine().apply(record, to: controller.project)
             let sequence = journalSequence + 1
             try packageStore.appendJournal(
@@ -320,11 +349,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             journalSequence = sequence
             uncommittedCommandCount += 1
             publishControllerProject()
-            if uncommittedCommandCount >= 20 {
-                performAutosave()
-            } else {
-                scheduleAutosave()
-            }
+            if uncommittedCommandCount >= 20 { performAutosave() } else { scheduleAutosave() }
         } catch {
             status = .failed(error.localizedDescription)
         }
@@ -338,11 +363,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private func scheduleAutosave() {
         autosaveTask?.cancel()
         autosaveTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .seconds(2))
-            } catch {
-                return
-            }
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
             guard !Task.isCancelled else { return }
             self?.performAutosave()
         }
@@ -351,11 +372,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private func performAutosave() {
         guard let controller = historyController, let packageURL else { return }
         do {
-            try autosaveStore.rotate(
-                document: controller.project,
-                history: controller.snapshot,
-                in: packageURL
-            )
+            try autosaveStore.rotate(document: controller.project, history: controller.snapshot, in: packageURL)
             uncommittedCommandCount = 0
             status = .autosaved
         } catch {
@@ -372,10 +389,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             onto: loaded.document,
             startingAfter: loaded.manifest.committedJournalSequence
         )
-        historyController = try ProjectHistoryController(
-            project: replay.project,
-            snapshot: loaded.history
-        )
+        historyController = try ProjectHistoryController(project: replay.project, snapshot: loaded.history)
         project = replay.project
         self.packageURL = packageURL
         journalSequence = replay.lastSequence
@@ -393,17 +407,12 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         }
         var missing = Set<VertexID>()
         for reference in project.mediaRegistry {
-            if (try? mediaStore.resolveEmbedded(reference: reference, packageURL: packageURL)) != nil {
-                continue
-            }
+            if (try? mediaStore.resolveEmbedded(reference: reference, packageURL: packageURL)) != nil { continue }
             do {
-                if let external = try resolveExternal(reference),
-                   FileManager.default.fileExists(atPath: external.path) {
+                if let external = try resolveExternal(reference), FileManager.default.fileExists(atPath: external.path) {
                     continue
                 }
-            } catch {
-                // A failed bookmark is treated as unavailable and exposed through the relink flow.
-            }
+            } catch {}
             missing.insert(reference.id)
         }
         missingMediaIDs = missing
@@ -415,10 +424,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     private func projectsRootURL() throws -> URL {
-        guard let applicationSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
+        guard let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw ProjectError.packageCorruption("Application Support directory is unavailable.")
         }
         let root = applicationSupport.appendingPathComponent("After Effects/Projects", isDirectory: true)
@@ -427,8 +433,6 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     private func localPackageURL(for projectID: VertexID) throws -> URL {
-        try projectsRootURL()
-            .appendingPathComponent(projectID.rawValue)
-            .appendingPathExtension("aeproject")
+        try projectsRootURL().appendingPathComponent(projectID.rawValue).appendingPathExtension("aeproject")
     }
 }
