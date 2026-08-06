@@ -57,7 +57,7 @@ struct RenderLabView: View {
             viewModel.attach(projectWorkspace)
             viewModel.start()
         }
-        .onChange(of: projectWorkspace.project?.projectID.rawValue) { _, _ in
+        .onChange(of: projectWorkspace.project?.revision) { _, _ in
             viewModel.attach(projectWorkspace)
         }
         .fileExporter(
