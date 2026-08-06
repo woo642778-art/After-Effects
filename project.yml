@@ -25,12 +25,16 @@ targets:
         product: VertexMedia
       - package: Vertex
         product: VertexMediaAVFoundation
+      - package: Vertex
+        product: VertexRender
+      - package: Vertex
+        product: VertexRenderMetal
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
-        MARKETING_VERSION: 3.0.0
-        CURRENT_PROJECT_VERSION: 3
+        MARKETING_VERSION: 4.0.0
+        CURRENT_PROJECT_VERSION: 4
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: After Effects
@@ -56,12 +60,18 @@ targets:
     sources:
       - path: Tests/VertexCoreTests
       - path: Tests/VertexMediaTests
+      - path: Tests/VertexRenderTests
+      - path: Tests/VertexRenderMetalTests
     dependencies:
       - target: Vertex
       - package: Vertex
         product: VertexCore
       - package: Vertex
         product: VertexMedia
+      - package: Vertex
+        product: VertexRender
+      - package: Vertex
+        product: VertexRenderMetal
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
