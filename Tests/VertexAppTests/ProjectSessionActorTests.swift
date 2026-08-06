@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import VertexCore
 import VertexProject
+import VertexProjectPersistence
 @testable import Vertex
 
 private func actorPackageURL(_ name: String = UUID().uuidString) -> URL {
@@ -94,7 +95,12 @@ func legacyPackageIsImportOnly() async throws {
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
 
     let actor = ProjectSessionActor()
-    await #expect(throws: ProjectPersistenceError.self) {
-        try await actor.openCanonical(packageURL: url)
+    do {
+        _ = try await actor.openCanonical(packageURL: url)
+        Issue.record("A legacy package must not open as an editable canonical package.")
+    } catch is ProjectPersistenceError {
+        // Expected import-only rejection.
+    } catch {
+        Issue.record("Unexpected error type: \(error)")
     }
 }
