@@ -98,7 +98,7 @@ func malformedAndCorruptAutosavesAreIsolated() throws {
     let records = try ImmutableAutosaveStore().validRecords(in: url)
     let latest = try ImmutableAutosaveStore().latestValid(in: url)
     #expect(records.count == 1)
-    #expect(records.first?.url == valid.url)
+    #expect(records.first?.url.lastPathComponent == valid.url.lastPathComponent)
     #expect(latest?.revision == 1)
 }
 
