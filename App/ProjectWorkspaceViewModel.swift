@@ -1,33 +1,8 @@
 import Foundation
 import SwiftUI
 import VertexCore
-import VertexMedia
 import VertexProject
 import VertexProjectPersistence
-
-private enum ProjectMediaIdentityReader {
-    static func makeReference(for url: URL) throws -> MediaReference {
-        let hasScope = url.startAccessingSecurityScopedResource()
-        defer { if hasScope { url.stopAccessingSecurityScopedResource() } }
-
-        let store = ProjectMediaStore()
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-        let modificationDate = attributes[.modificationDate] as? Date
-        let fingerprint = try store.fingerprint(of: url)
-        let bookmark = try? store.createSecurityScopedBookmark(for: url)
-        return MediaReference(
-            displayName: url.lastPathComponent,
-            originalFilename: url.lastPathComponent,
-            fileSize: fileSize,
-            modificationDate: modificationDate,
-            contentFingerprint: fingerprint,
-            locator: MediaLocator(relativeHint: url.lastPathComponent, bookmarkData: bookmark),
-            kind: .video,
-            availabilityStatus: .external
-        )
-    }
-}
 
 @MainActor
 final class ProjectWorkspaceViewModel: ObservableObject {
@@ -36,7 +11,8 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         case ready(String)
         case saving
         case autosaved
-        case recoveryRequired
+        case legacyImportReady
+        case pendingSaveDecision
         case failed(String)
     }
 
@@ -46,21 +22,27 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     @Published private(set) var status: Status = .idle
     @Published private(set) var lastSavedAt: Date?
     @Published private(set) var missingMediaIDs: Set<VertexID> = []
-    @Published private(set) var recoveryInspection: ProjectRecoveryInspection?
+    @Published private(set) var canUndo = false
+    @Published private(set) var canRedo = false
+    @Published private(set) var hasUnsavedChanges = false
+    @Published private(set) var legacyInspection: LegacyImportInspection?
+    @Published private(set) var pendingDecision: PendingSnapshotDecisionContext?
     @Published var exportDocument: ProjectPackageFileDocument?
 
-    private var historyController: ProjectHistoryController?
-    private var journalSequence: UInt64 = 0
-    private var uncommittedCommandCount = 0
+    private let sessionActor = ProjectSessionActor()
+    private var legacySourceURL: URL?
     private var autosaveTask: Task<Void, Never>?
-    private let packageStore = ProjectPackageStore()
-    private let autosaveStore = ProjectAutosaveStore()
-    private let mediaStore = ProjectMediaStore()
+    private var commandCountSinceAutosave = 0
+    private var latestPublicationToken = 0
 
-    var canUndo: Bool { historyController?.canUndo == true }
-    var canRedo: Bool { historyController?.canRedo == true }
-    var renderSettings: ProjectRenderSettings { project?.renderSettings ?? ProjectRenderSettings() }
-    var revisionText: String { project.map { "Revision \($0.revision) · Schema \($0.schemaVersion)" } ?? "No project" }
+    var renderSettings: ProjectRenderSettings {
+        project?.renderSettings ?? ProjectRenderSettings()
+    }
+
+    var revisionText: String {
+        guard let project else { return "No project" }
+        return "Revision \(project.revision) · Schema \(project.schemaVersion)"
+    }
 
     var selectedMedia: MediaReference? {
         guard let project, let selectedID = project.selectedMediaID else { return nil }
@@ -68,18 +50,27 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func createProject(named name: String? = nil) {
-        do {
-            let requested = (name ?? projectNameInput).trimmingCharacters(in: .whitespacesAndNewlines)
-            let document = try ProjectDocument.makeNew(name: requested.isEmpty ? "Untitled Project" : requested)
-            let url = try localPackageURL(for: document.projectID)
-            if FileManager.default.fileExists(atPath: url.path) {
-                try FileManager.default.removeItem(at: url)
+        let token = beginPublishedOperation()
+        let requested = (name ?? projectNameInput)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        status = .saving
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let projectID = VertexID()
+                let url = try self.localPackageURL(for: projectID)
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try FileManager.default.removeItem(at: url)
+                }
+                let snapshot = try await self.sessionActor.create(
+                    name: requested.isEmpty ? "Untitled Project" : requested,
+                    packageURL: url
+                )
+                self.publish(snapshot, token: token, message: "New .vertexproject created")
+            } catch {
+                self.publish(error, token: token)
             }
-            let loaded = try packageStore.create(at: url, document: document)
-            try install(loaded, packageURL: url)
-            status = .ready("New recoverable project created")
-        } catch {
-            status = .failed(error.localizedDescription)
         }
     }
 
@@ -87,79 +78,120 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         guard let current = project?.metadata.name else { return }
         let next = projectNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !next.isEmpty, next != current else { return }
-        performDurable(.renameProject(before: current, after: next))
+        perform(.renameProject(to: next), mergeKey: nil)
     }
 
     func openProject(from externalURL: URL) {
-        do {
-            let hasScope = externalURL.startAccessingSecurityScopedResource()
-            defer { if hasScope { externalURL.stopAccessingSecurityScopedResource() } }
-
-            let destination = try projectsRootURL()
-                .appendingPathComponent("Imported-\(UUID().uuidString.lowercased())")
-                .appendingPathExtension("aeproject")
-            try FileManager.default.copyItem(at: externalURL, to: destination)
-
-            do {
-                let loaded = try packageStore.load(from: destination)
-                try install(loaded, packageURL: destination)
-                status = .ready("Project package opened")
-            } catch {
-                recoveryInspection = try ProjectRecoveryEngine().inspect(packageURL: destination)
-                packageURL = destination
-                status = .recoveryRequired
-            }
-        } catch {
-            status = .failed(error.localizedDescription)
+        switch externalURL.pathExtension.lowercased() {
+        case ProjectDocumentTypes.canonicalExtension:
+            openCanonicalProject(from: externalURL)
+        case ProjectDocumentTypes.legacyExtension:
+            inspectLegacyProject(from: externalURL)
+        default:
+            status = .failed("Only .vertexproject packages and import-only .aeproject packages are supported.")
         }
     }
 
-    func recover(using candidate: ProjectRecoveryCandidate) {
-        guard let inspection = recoveryInspection else { return }
-        do {
-            let recoveredURL = try ProjectRecoveryEngine().recover(candidate, from: inspection)
-            let loaded = try packageStore.load(from: recoveredURL)
-            try install(loaded, packageURL: recoveredURL)
-            status = .ready("Recovered project opened as a new package")
-        } catch {
-            status = .failed(error.localizedDescription)
+    func confirmLegacyImport() {
+        guard let sourceURL = legacySourceURL else { return }
+        let token = beginPublishedOperation()
+        status = .saving
+
+        Task { [weak self] in
+            guard let self else { return }
+            let hasScope = sourceURL.startAccessingSecurityScopedResource()
+            defer { if hasScope { sourceURL.stopAccessingSecurityScopedResource() } }
+            do {
+                let destination = try self.uniqueImportedPackageURL(
+                    baseName: sourceURL.deletingPathExtension().lastPathComponent
+                )
+                let snapshot = try await self.sessionActor.importLegacy(
+                    sourceURL: sourceURL,
+                    destinationURL: destination
+                )
+                self.legacySourceURL = nil
+                self.legacyInspection = nil
+                self.publish(snapshot, token: token, message: "Legacy project converted non-destructively")
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    func cancelLegacyImport() {
+        legacySourceURL = nil
+        legacyInspection = nil
+        status = project == nil ? .idle : .ready("Legacy import cancelled")
+    }
+
+    func applyPendingSnapshot() {
+        guard let context = pendingDecision else { return }
+        let token = beginPublishedOperation()
+        status = .saving
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.applyPendingAndOpen(
+                    packageURL: context.packageURL
+                )
+                self.pendingDecision = nil
+                self.publish(snapshot, token: token, message: "Pending snapshot applied")
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    func discardPendingSnapshot() {
+        guard let context = pendingDecision else { return }
+        let token = beginPublishedOperation()
+        status = .saving
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.discardPendingAndOpen(
+                    packageURL: context.packageURL
+                )
+                self.pendingDecision = nil
+                self.publish(snapshot, token: token, message: "Pending snapshot discarded")
+            } catch {
+                self.publish(error, token: token)
+            }
         }
     }
 
     func registerImportedMedia(from url: URL) {
-        if project == nil { createProject() }
-        guard project != nil else { return }
+        if project == nil {
+            status = .failed("Create or open a project before importing media.")
+            return
+        }
+        let token = beginPublishedOperation()
         status = .ready("Analyzing media identity")
-
         Task { [weak self] in
             guard let self else { return }
             do {
-                let reference = try await Task.detached(priority: .utility) {
-                    try ProjectMediaIdentityReader.makeReference(for: url)
-                }.value
-                self.performDurable(.registerMedia(reference))
-                if self.project?.mediaRegistry.contains(where: { $0.id == reference.id }) == true {
-                    self.performDurable(.selectMedia(before: self.project?.selectedMediaID, after: reference.id))
-                }
-                self.refreshMediaAvailability()
+                let snapshot = try await self.sessionActor.registerExternalMedia(from: url)
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "External media registered")
+                self.scheduleAutosaveOrFlush()
             } catch {
-                self.status = .failed(error.localizedDescription)
+                self.publish(error, token: token)
             }
         }
     }
 
     func setRenderParameter(_ parameter: ProjectRenderParameter, to value: Double) {
-        guard let old = project?.renderSettings.value(for: parameter), old != value else { return }
-        performDurable(
-            .setRenderParameter(parameter, before: old, after: value),
+        guard project?.renderSettings.value(for: parameter) != value else { return }
+        perform(
+            .setRenderParameter(parameter, value: value),
             mergeKey: "render.\(parameter.rawValue)"
         )
     }
 
     func setInverted(_ value: Bool) {
-        guard let old = project?.renderSettings.inverted, old != value else { return }
-        performDurable(
-            .setRenderBoolean(.inverted, before: old, after: value),
+        guard project?.renderSettings.inverted != value else { return }
+        perform(
+            .setRenderBoolean(.inverted, value: value),
             mergeKey: "render.inverted"
         )
     }
@@ -167,251 +199,249 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     func setOutputDimensions(width: Int, height: Int) {
         guard let settings = project?.renderSettings,
               settings.outputWidth != width || settings.outputHeight != height else { return }
-        performDurable(
-            .setOutputDimensions(
-                beforeWidth: settings.outputWidth,
-                beforeHeight: settings.outputHeight,
-                afterWidth: width,
-                afterHeight: height
-            ),
+        perform(
+            .setOutputDimensions(width: width, height: height),
             mergeKey: "render.output"
         )
     }
 
     func undo() {
-        guard let controller = historyController, let packageURL else { return }
-        do {
-            let sequence = journalSequence + 1
-            _ = try controller.undo { transition in
-                try packageStore.appendJournal(
-                    try ProjectJournalRecord(sequence: sequence, command: transition),
-                    to: packageURL
-                )
+        let token = beginPublishedOperation()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.undo()
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "Undo applied")
+                self.scheduleAutosaveOrFlush()
+            } catch {
+                self.publish(error, token: token)
             }
-            journalSequence = sequence
-            uncommittedCommandCount += 1
-            publishControllerProject()
-            scheduleAutosave()
-        } catch {
-            status = .failed(error.localizedDescription)
         }
     }
 
     func redo() {
-        guard let controller = historyController, let packageURL else { return }
-        do {
-            let sequence = journalSequence + 1
-            _ = try controller.redo { transition in
-                try packageStore.appendJournal(
-                    try ProjectJournalRecord(sequence: sequence, command: transition),
-                    to: packageURL
-                )
+        let token = beginPublishedOperation()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.redo()
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "Redo applied")
+                self.scheduleAutosaveOrFlush()
+            } catch {
+                self.publish(error, token: token)
             }
-            journalSequence = sequence
-            uncommittedCommandCount += 1
-            publishControllerProject()
-            scheduleAutosave()
-        } catch {
-            status = .failed(error.localizedDescription)
         }
     }
 
     func saveNow() {
-        guard let controller = historyController, let packageURL else { return }
+        let token = beginPublishedOperation()
         status = .saving
-        do {
-            let loaded = try packageStore.save(
-                controller.project,
-                history: controller.snapshot,
-                to: packageURL,
-                committedJournalSequence: journalSequence
-            )
-            try install(loaded, packageURL: packageURL)
-            status = .ready("Project saved atomically")
-        } catch {
-            status = .failed(error.localizedDescription)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.save()
+                self.commandCountSinceAutosave = 0
+                self.publish(snapshot, token: token, message: "Project saved atomically")
+            } catch {
+                self.publish(error, token: token)
+            }
         }
     }
 
     func prepareExport() {
-        saveNow()
-        guard case .ready = status, let packageURL else { return }
-        do {
-            exportDocument = try ProjectPackageFileDocument(packageURL: packageURL)
-        } catch {
-            status = .failed(error.localizedDescription)
+        let token = beginPublishedOperation()
+        status = .saving
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.save()
+                let document = try ProjectPackageFileDocument(packageURL: snapshot.packageURL)
+                guard token == self.latestPublicationToken else { return }
+                self.commandCountSinceAutosave = 0
+                self.apply(snapshot)
+                self.exportDocument = document
+                self.status = .ready("Verified project package ready to export")
+            } catch {
+                self.publish(error, token: token)
+            }
         }
     }
 
     func embedSelectedMedia() {
-        guard let reference = selectedMedia, let packageURL else { return }
-        do {
-            guard let sourceURL = try resolveExternal(reference) else {
-                throw ProjectError.missingMedia("The external media must be relinked before embedding.")
+        guard let mediaID = selectedMedia?.id else { return }
+        let token = beginPublishedOperation()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard let sourceURL = try await self.sessionActor.resolveExternalMedia(mediaID) else {
+                    throw ProjectError.missingMedia("Relink the media before embedding it.")
+                }
+                let snapshot = try await self.sessionActor.embed(mediaID: mediaID, from: sourceURL)
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "Media embedded and verified")
+                self.scheduleAutosaveOrFlush()
+            } catch {
+                self.publish(error, token: token)
             }
-            let hasScope = sourceURL.startAccessingSecurityScopedResource()
-            defer { if hasScope { sourceURL.stopAccessingSecurityScopedResource() } }
-            let embedded = try mediaStore.embed(
-                reference: reference,
-                sourceURL: sourceURL,
-                packageURL: packageURL
-            )
-            performDurable(.setEmbeddedPath(
-                mediaID: reference.id,
-                before: reference.locator.embeddedPath,
-                after: embedded.locator.embeddedPath
-            ))
-            refreshMediaAvailability()
-        } catch {
-            status = .failed(error.localizedDescription)
         }
     }
 
     func relinkSelectedMedia(to url: URL) {
-        guard let reference = selectedMedia else { return }
-        do {
-            let hasScope = url.startAccessingSecurityScopedResource()
-            defer { if hasScope { url.stopAccessingSecurityScopedResource() } }
-            let fingerprint = try mediaStore.fingerprint(of: url)
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            let candidate = MediaRelinkCandidate(
-                displayName: url.lastPathComponent,
-                fileSize: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
-                modificationDate: attributes[.modificationDate] as? Date,
-                fingerprint: fingerprint,
-                locatorToken: url.lastPathComponent
-            )
-            guard MediaRelinker().decide(reference: reference, candidates: [candidate]) == .automatic(candidate) else {
-                throw ProjectError.relinkMismatch("The selected file does not strongly match the missing media fingerprint.")
+        guard let mediaID = selectedMedia?.id else { return }
+        let token = beginPublishedOperation()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.relink(mediaID: mediaID, to: url)
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "Media bookmark sidecar replaced")
+                self.scheduleAutosaveOrFlush()
+            } catch {
+                self.publish(error, token: token)
             }
-            let bookmark = try mediaStore.createSecurityScopedBookmark(for: url)
-            let nextLocator = MediaLocator(
-                relativeHint: url.lastPathComponent,
-                bookmarkData: bookmark,
-                embeddedPath: reference.locator.embeddedPath
-            )
-            performDurable(.relinkMedia(mediaID: reference.id, before: reference.locator, after: nextLocator))
-            refreshMediaAvailability()
-        } catch {
-            status = .failed(error.localizedDescription)
         }
     }
 
     func flushAutosave() {
         autosaveTask?.cancel()
-        performAutosave()
-    }
-
-    private func performDurable(_ operation: ProjectOperation, mergeKey: String? = nil) {
-        guard let controller = historyController, let packageURL else { return }
-        do {
-            let record = ProjectCommandRecord(
-                project: controller.project,
-                operation: operation,
-                mergeKey: mergeKey
-            )
-            _ = try ProjectCommandEngine().apply(record, to: controller.project)
-            let sequence = journalSequence + 1
-            try packageStore.appendJournal(
-                try ProjectJournalRecord(sequence: sequence, command: record),
-                to: packageURL
-            )
-            try controller.perform(record)
-            journalSequence = sequence
-            uncommittedCommandCount += 1
-            publishControllerProject()
-            if uncommittedCommandCount >= 20 {
-                performAutosave()
-            } else {
-                scheduleAutosave()
+        autosaveTask = nil
+        Task { [weak self] in
+            guard let self, self.project != nil else { return }
+            do {
+                if try await self.sessionActor.autosave(reason: .manualFlush) != nil {
+                    self.commandCountSinceAutosave = 0
+                    self.status = .autosaved
+                }
+            } catch {
+                self.status = .failed(error.localizedDescription)
             }
-        } catch {
-            status = .failed(error.localizedDescription)
         }
     }
 
-    private func publishControllerProject() {
-        project = historyController?.project
-        if let project { projectNameInput = project.metadata.name }
+    private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
+        let token = beginPublishedOperation()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.apply(payload, mergeKey: mergeKey)
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "Session change applied")
+                self.scheduleAutosaveOrFlush()
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
     }
 
-    private func scheduleAutosave() {
+    private func openCanonicalProject(from externalURL: URL) {
+        let token = beginPublishedOperation()
+        status = .saving
+        Task { [weak self] in
+            guard let self else { return }
+            let hasScope = externalURL.startAccessingSecurityScopedResource()
+            defer { if hasScope { externalURL.stopAccessingSecurityScopedResource() } }
+            do {
+                let destination = try self.copyCanonicalIntoWorkspace(externalURL)
+                switch try await self.sessionActor.openCanonical(packageURL: destination) {
+                case .opened(let snapshot):
+                    self.publish(snapshot, token: token, message: "Canonical project opened")
+                case .pendingDecision(let context):
+                    guard token == self.latestPublicationToken else { return }
+                    self.pendingDecision = context
+                    self.status = .pendingSaveDecision
+                }
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    private func inspectLegacyProject(from externalURL: URL) {
+        let token = beginPublishedOperation()
+        status = .saving
+        Task { [weak self] in
+            guard let self else { return }
+            let hasScope = externalURL.startAccessingSecurityScopedResource()
+            defer { if hasScope { externalURL.stopAccessingSecurityScopedResource() } }
+            do {
+                let inspection = try await self.sessionActor.inspectLegacy(packageURL: externalURL)
+                guard token == self.latestPublicationToken else { return }
+                self.legacySourceURL = externalURL
+                self.legacyInspection = inspection
+                self.status = .legacyImportReady
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    private func scheduleAutosaveOrFlush() {
         autosaveTask?.cancel()
+        if commandCountSinceAutosave >= 20 {
+            autosaveTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    if try await self.sessionActor.autosave(reason: .commandThreshold) != nil {
+                        self.commandCountSinceAutosave = 0
+                        self.status = .autosaved
+                    }
+                } catch {
+                    self.status = .failed(error.localizedDescription)
+                }
+            }
+            return
+        }
+
         autosaveTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .seconds(2))
             } catch {
                 return
             }
-            guard !Task.isCancelled else { return }
-            self?.performAutosave()
-        }
-    }
-
-    private func performAutosave() {
-        guard let controller = historyController, let packageURL else { return }
-        do {
-            try autosaveStore.rotate(
-                document: controller.project,
-                history: controller.snapshot,
-                in: packageURL
-            )
-            uncommittedCommandCount = 0
-            status = .autosaved
-        } catch {
-            status = .failed(error.localizedDescription)
-        }
-    }
-
-    private func install(_ loaded: ProjectPackageLoadResult, packageURL: URL) throws {
-        let pending = loaded.journalAnalysis.validRecords.filter {
-            $0.sequence > loaded.manifest.committedJournalSequence
-        }
-        let replay = try ProjectJournalReplayer().replay(
-            pending,
-            onto: loaded.document,
-            startingAfter: loaded.manifest.committedJournalSequence
-        )
-        historyController = try ProjectHistoryController(
-            project: replay.project,
-            snapshot: loaded.history
-        )
-        project = replay.project
-        self.packageURL = packageURL
-        journalSequence = replay.lastSequence
-        lastSavedAt = loaded.manifest.lastSuccessfulSave
-        projectNameInput = replay.project.metadata.name
-        uncommittedCommandCount = replay.appliedCount
-        recoveryInspection = nil
-        refreshMediaAvailability()
-    }
-
-    private func refreshMediaAvailability() {
-        guard let project, let packageURL else {
-            missingMediaIDs = []
-            return
-        }
-        var missing = Set<VertexID>()
-        for reference in project.mediaRegistry {
-            if (try? mediaStore.resolveEmbedded(reference: reference, packageURL: packageURL)) != nil {
-                continue
-            }
+            guard let self, !Task.isCancelled else { return }
             do {
-                if let external = try resolveExternal(reference),
-                   FileManager.default.fileExists(atPath: external.path) {
-                    continue
+                if try await self.sessionActor.autosave(reason: .idleDelay) != nil {
+                    self.commandCountSinceAutosave = 0
+                    self.status = .autosaved
                 }
             } catch {
-                // A failed bookmark is treated as unavailable and exposed through the relink flow.
+                self.status = .failed(error.localizedDescription)
             }
-            missing.insert(reference.id)
         }
-        missingMediaIDs = missing
     }
 
-    private func resolveExternal(_ reference: MediaReference) throws -> URL? {
-        guard let bookmark = reference.locator.bookmarkData else { return nil }
-        return try mediaStore.resolveSecurityScopedBookmark(bookmark).url
+    private func beginPublishedOperation() -> Int {
+        latestPublicationToken += 1
+        return latestPublicationToken
+    }
+
+    private func publish(
+        _ snapshot: ProjectSessionSnapshot,
+        token: Int,
+        message: String
+    ) {
+        guard token == latestPublicationToken else { return }
+        apply(snapshot)
+        status = .ready(message)
+    }
+
+    private func publish(_ error: Error, token: Int) {
+        guard token == latestPublicationToken else { return }
+        status = .failed(error.localizedDescription)
+    }
+
+    private func apply(_ snapshot: ProjectSessionSnapshot) {
+        project = snapshot.document
+        packageURL = snapshot.packageURL
+        projectNameInput = snapshot.document.metadata.name
+        lastSavedAt = snapshot.lastSavedAt
+        missingMediaIDs = snapshot.missingMediaIDs
+        canUndo = snapshot.canUndo
+        canRedo = snapshot.canRedo
+        hasUnsavedChanges = snapshot.hasUnsavedChanges
+        pendingDecision = nil
     }
 
     private func projectsRootURL() throws -> URL {
@@ -429,6 +459,23 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private func localPackageURL(for projectID: VertexID) throws -> URL {
         try projectsRootURL()
             .appendingPathComponent(projectID.rawValue)
-            .appendingPathExtension("aeproject")
+            .appendingPathExtension(ProjectDocumentTypes.canonicalExtension)
+    }
+
+    private func uniqueImportedPackageURL(baseName: String) throws -> URL {
+        let safe = baseName
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+        return try projectsRootURL()
+            .appendingPathComponent("\(safe)-\(UUID().uuidString.lowercased())")
+            .appendingPathExtension(ProjectDocumentTypes.canonicalExtension)
+    }
+
+    private func copyCanonicalIntoWorkspace(_ sourceURL: URL) throws -> URL {
+        let destination = try uniqueImportedPackageURL(
+            baseName: sourceURL.deletingPathExtension().lastPathComponent
+        )
+        try FileManager.default.copyItem(at: sourceURL, to: destination)
+        return destination
     }
 }
