@@ -34,16 +34,18 @@ func autosaveNamesAreCanonical() throws {
     try createAutosavePackage(url)
 
     let store = ImmutableAutosaveStore()
-    let first = try #require(store.write(
-        document: try autosaveDocument(revision: 1),
+    let firstOptional = try store.write(
+        document: autosaveDocument(revision: 1),
         in: url,
         createdAt: Date(timeIntervalSince1970: 1_700_000_001)
-    ))
-    let second = try #require(store.write(
-        document: try autosaveDocument(revision: 2),
+    )
+    let first = try #require(firstOptional)
+    let secondOptional = try store.write(
+        document: autosaveDocument(revision: 2),
         in: url,
         createdAt: Date(timeIntervalSince1970: 1_700_000_002)
-    ))
+    )
+    let second = try #require(secondOptional)
 
     #expect(first.sequence == 1)
     #expect(second.sequence == 2)
@@ -59,11 +61,12 @@ func duplicateAutosaveIsSuppressed() throws {
 
     let store = ImmutableAutosaveStore()
     let document = try autosaveDocument(revision: 1)
-    let first = try #require(store.write(
+    let firstOptional = try store.write(
         document: document,
         in: url,
         createdAt: Date(timeIntervalSince1970: 1_700_000_001)
-    ))
+    )
+    let first = try #require(firstOptional)
     let bytes = try Data(contentsOf: first.url)
 
     let duplicate = try store.write(
@@ -82,19 +85,21 @@ func malformedAndCorruptAutosavesAreIsolated() throws {
     try createAutosavePackage(url)
     let layout = try VertexProjectPackageLayout(root: url)
 
-    let valid = try #require(ImmutableAutosaveStore().write(
-        document: try autosaveDocument(revision: 1),
+    let validOptional = try ImmutableAutosaveStore().write(
+        document: autosaveDocument(revision: 1),
         in: url,
         createdAt: Date(timeIntervalSince1970: 1_700_000_001)
-    ))
+    )
+    let valid = try #require(validOptional)
     try Data("malformed".utf8).write(to: layout.autosavesDirectoryURL.appendingPathComponent("bad-name.json"))
     let corruptName = String(format: "%020llu-%@.json", 2, String(repeating: "a", count: 64))
     try Data("corrupt".utf8).write(to: layout.autosavesDirectoryURL.appendingPathComponent(corruptName))
 
     let records = try ImmutableAutosaveStore().validRecords(in: url)
+    let latest = try ImmutableAutosaveStore().latestValid(in: url)
     #expect(records.count == 1)
     #expect(records.first?.url == valid.url)
-    #expect(try ImmutableAutosaveStore().latestValid(in: url)?.revision == 1)
+    #expect(latest?.revision == 1)
 }
 
 @Test("Autosave retention keeps the eight newest valid unique snapshots")
@@ -106,7 +111,7 @@ func autosaveRetentionKeepsEight() throws {
     let store = ImmutableAutosaveStore()
     for revision in 1...12 {
         _ = try store.write(
-            document: try autosaveDocument(revision: UInt64(revision), name: "Autosave \(revision)"),
+            document: autosaveDocument(revision: UInt64(revision), name: "Autosave \(revision)"),
             in: url,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(revision))
         )
@@ -123,11 +128,12 @@ func autosaveJSONIsCanonical() throws {
     defer { try? FileManager.default.removeItem(at: url) }
     try createAutosavePackage(url)
 
-    let record = try #require(ImmutableAutosaveStore().write(
-        document: try autosaveDocument(revision: 1),
+    let recordOptional = try ImmutableAutosaveStore().write(
+        document: autosaveDocument(revision: 1),
         in: url,
         createdAt: Date(timeIntervalSince1970: 1_700_000_001)
-    ))
+    )
+    let record = try #require(recordOptional)
     let json = String(decoding: try Data(contentsOf: record.url), as: UTF8.self)
     for forbidden in ["bookmarkData", "appliedCommandIDs", "legacyRenderSettings", "inverseOperation", "history", "undo", "redo"] {
         #expect(!json.contains(forbidden))
