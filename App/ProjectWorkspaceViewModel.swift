@@ -3,7 +3,7 @@ import SwiftUI
 import VertexCore
 import VertexMedia
 import VertexProject
-import VertexProjectFoundation
+import VertexProjectPersistence
 
 private enum ProjectMediaIdentityReader {
     static func makeReference(for url: URL) throws -> MediaReference {
