@@ -33,6 +33,8 @@ targets:
         product: VertexProject
       - package: Vertex
         product: VertexProjectFoundation
+      - package: Vertex
+        product: VertexComposition
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
@@ -68,6 +70,7 @@ targets:
       - path: Tests/VertexRenderMetalTests
       - path: Tests/VertexProjectTests
       - path: Tests/VertexProjectFoundationTests
+      - path: Tests/VertexCompositionTests
     dependencies:
       - target: Vertex
       - package: Vertex
@@ -82,6 +85,8 @@ targets:
         product: VertexProject
       - package: Vertex
         product: VertexProjectFoundation
+      - package: Vertex
+        product: VertexComposition
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
