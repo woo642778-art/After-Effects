@@ -51,7 +51,7 @@ func pendingEnvelopeRoundTripsExactBytes() throws {
     for forbidden in ["bookmarkData", "appliedCommandIDs", "legacyRenderSettings", "inverseOperation", "history", "undo", "redo"] {
         #expect(!projectJSON.contains(forbidden))
     }
-    #expect(!projectJSON.contains(FileManager.default.homeDirectoryForCurrentUser.path))
+    #expect(!projectJSON.contains(NSHomeDirectory()))
 }
 
 @Test("Pending envelope rejects independently corrupted payloads")
