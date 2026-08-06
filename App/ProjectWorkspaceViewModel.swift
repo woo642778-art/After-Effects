@@ -5,6 +5,30 @@ import VertexMedia
 import VertexProject
 import VertexProjectFoundation
 
+private enum ProjectMediaIdentityReader {
+    static func makeReference(for url: URL) throws -> MediaReference {
+        let hasScope = url.startAccessingSecurityScopedResource()
+        defer { if hasScope { url.stopAccessingSecurityScopedResource() } }
+
+        let store = ProjectMediaStore()
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        let modificationDate = attributes[.modificationDate] as? Date
+        let fingerprint = try store.fingerprint(of: url)
+        let bookmark = try? store.createSecurityScopedBookmark(for: url)
+        return MediaReference(
+            displayName: url.lastPathComponent,
+            originalFilename: url.lastPathComponent,
+            fileSize: fileSize,
+            modificationDate: modificationDate,
+            contentFingerprint: fingerprint,
+            locator: MediaLocator(relativeHint: url.lastPathComponent, bookmarkData: bookmark),
+            kind: .video,
+            availabilityStatus: .external
+        )
+    }
+}
+
 @MainActor
 final class ProjectWorkspaceViewModel: ObservableObject {
     enum Status: Equatable {
@@ -33,30 +57,26 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private let autosaveStore = ProjectAutosaveStore()
     private let mediaStore = ProjectMediaStore()
 
-    deinit {
-        autosaveTask?.cancel()
-    }
-
     var canUndo: Bool { historyController?.canUndo == true }
     var canRedo: Bool { historyController?.canRedo == true }
+    var renderSettings: ProjectRenderSettings { project?.renderSettings ?? ProjectRenderSettings() }
+    var revisionText: String { project.map { "Revision \($0.revision) · Schema \($0.schemaVersion)" } ?? "No project" }
+
     var selectedMedia: MediaReference? {
         guard let project, let selectedID = project.selectedMediaID else { return nil }
         return project.mediaRegistry.first { $0.id == selectedID }
     }
-    var renderSettings: ProjectRenderSettings { project?.renderSettings ?? ProjectRenderSettings() }
-    var revisionText: String { project.map { "Revision \($0.revision) · Schema \($0.schemaVersion)" } ?? "No project" }
 
     func createProject(named name: String? = nil) {
         do {
-            let resolvedName = (name ?? projectNameInput).trimmingCharacters(in: .whitespacesAndNewlines)
-            let document = try ProjectDocument.makeNew(name: resolvedName.isEmpty ? "Untitled Project" : resolvedName)
+            let requested = (name ?? projectNameInput).trimmingCharacters(in: .whitespacesAndNewlines)
+            let document = try ProjectDocument.makeNew(name: requested.isEmpty ? "Untitled Project" : requested)
             let url = try localPackageURL(for: document.projectID)
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
             }
             let loaded = try packageStore.create(at: url, document: document)
             try install(loaded, packageURL: url)
-            projectNameInput = loaded.document.metadata.name
             status = .ready("New recoverable project created")
         } catch {
             status = .failed(error.localizedDescription)
@@ -75,8 +95,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             let hasScope = externalURL.startAccessingSecurityScopedResource()
             defer { if hasScope { externalURL.stopAccessingSecurityScopedResource() } }
 
-            let destinationRoot = try projectsRootURL()
-            let destination = destinationRoot
+            let destination = try projectsRootURL()
                 .appendingPathComponent("Imported-\(UUID().uuidString.lowercased())")
                 .appendingPathExtension("aeproject")
             try FileManager.default.copyItem(at: externalURL, to: destination)
@@ -86,8 +105,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 try install(loaded, packageURL: destination)
                 status = .ready("Project package opened")
             } catch {
-                let inspection = try ProjectRecoveryEngine().inspect(packageURL: destination)
-                recoveryInspection = inspection
+                recoveryInspection = try ProjectRecoveryEngine().inspect(packageURL: destination)
                 packageURL = destination
                 status = .recoveryRequired
             }
@@ -102,7 +120,6 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             let recoveredURL = try ProjectRecoveryEngine().recover(candidate, from: inspection)
             let loaded = try packageStore.load(from: recoveredURL)
             try install(loaded, packageURL: recoveredURL)
-            recoveryInspection = nil
             status = .ready("Recovered project opened as a new package")
         } catch {
             status = .failed(error.localizedDescription)
@@ -118,26 +135,8 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             guard let self else { return }
             do {
                 let reference = try await Task.detached(priority: .utility) {
-                    let hasScope = url.startAccessingSecurityScopedResource()
-                    defer { if hasScope { url.stopAccessingSecurityScopedResource() } }
-                    let store = ProjectMediaStore()
-                    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                    let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-                    let modificationDate = attributes[.modificationDate] as? Date
-                    let fingerprint = try store.fingerprint(of: url)
-                    let bookmark = try? store.createSecurityScopedBookmark(for: url)
-                    return MediaReference(
-                        displayName: url.lastPathComponent,
-                        originalFilename: url.lastPathComponent,
-                        fileSize: fileSize,
-                        modificationDate: modificationDate,
-                        contentFingerprint: fingerprint,
-                        locator: MediaLocator(relativeHint: url.lastPathComponent, bookmarkData: bookmark),
-                        kind: .video,
-                        availabilityStatus: .external
-                    )
+                    try ProjectMediaIdentityReader.makeReference(for: url)
                 }.value
-
                 self.performDurable(.registerMedia(reference))
                 if self.project?.mediaRegistry.contains(where: { $0.id == reference.id }) == true {
                     self.performDurable(.selectMedia(before: self.project?.selectedMediaID, after: reference.id))
@@ -168,12 +167,15 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     func setOutputDimensions(width: Int, height: Int) {
         guard let settings = project?.renderSettings,
               settings.outputWidth != width || settings.outputHeight != height else { return }
-        performDurable(.setOutputDimensions(
-            beforeWidth: settings.outputWidth,
-            beforeHeight: settings.outputHeight,
-            afterWidth: width,
-            afterHeight: height
-        ), mergeKey: "render.output")
+        performDurable(
+            .setOutputDimensions(
+                beforeWidth: settings.outputWidth,
+                beforeHeight: settings.outputHeight,
+                afterWidth: width,
+                afterHeight: height
+            ),
+            mergeKey: "render.output"
+        )
     }
 
     func undo() {
@@ -181,7 +183,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         do {
             let transition = try controller.undo()
             let sequence = journalSequence + 1
-            try packageStore.appendJournal(try ProjectJournalRecord(sequence: sequence, command: transition), to: packageURL)
+            try packageStore.appendJournal(
+                try ProjectJournalRecord(sequence: sequence, command: transition),
+                to: packageURL
+            )
             journalSequence = sequence
             publishControllerProject()
             scheduleAutosave()
@@ -195,7 +200,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         do {
             let transition = try controller.redo()
             let sequence = journalSequence + 1
-            try packageStore.appendJournal(try ProjectJournalRecord(sequence: sequence, command: transition), to: packageURL)
+            try packageStore.appendJournal(
+                try ProjectJournalRecord(sequence: sequence, command: transition),
+                to: packageURL
+            )
             journalSequence = sequence
             publishControllerProject()
             scheduleAutosave()
@@ -239,7 +247,11 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             }
             let hasScope = sourceURL.startAccessingSecurityScopedResource()
             defer { if hasScope { sourceURL.stopAccessingSecurityScopedResource() } }
-            let embedded = try mediaStore.embed(reference: reference, sourceURL: sourceURL, packageURL: packageURL)
+            let embedded = try mediaStore.embed(
+                reference: reference,
+                sourceURL: sourceURL,
+                packageURL: packageURL
+            )
             performDurable(.setEmbeddedPath(
                 mediaID: reference.id,
                 before: reference.locator.embeddedPath,
@@ -289,11 +301,17 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private func performDurable(_ operation: ProjectOperation, mergeKey: String? = nil) {
         guard let controller = historyController, let packageURL else { return }
         do {
-            let record = ProjectCommandRecord(project: controller.project, operation: operation, mergeKey: mergeKey)
+            let record = ProjectCommandRecord(
+                project: controller.project,
+                operation: operation,
+                mergeKey: mergeKey
+            )
             _ = try ProjectCommandEngine().apply(record, to: controller.project)
             let sequence = journalSequence + 1
-            let journalRecord = try ProjectJournalRecord(sequence: sequence, command: record)
-            try packageStore.appendJournal(journalRecord, to: packageURL)
+            try packageStore.appendJournal(
+                try ProjectJournalRecord(sequence: sequence, command: record),
+                to: packageURL
+            )
             try controller.perform(record)
             journalSequence = sequence
             uncommittedCommandCount += 1
@@ -311,7 +329,6 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private func publishControllerProject() {
         project = historyController?.project
         if let project { projectNameInput = project.metadata.name }
-        objectWillChange.send()
     }
 
     private func scheduleAutosave() {
@@ -351,7 +368,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             onto: loaded.document,
             startingAfter: loaded.manifest.committedJournalSequence
         )
-        historyController = try ProjectHistoryController(project: replay.project, snapshot: loaded.history)
+        historyController = try ProjectHistoryController(
+            project: replay.project,
+            snapshot: loaded.history
+        )
         project = replay.project
         self.packageURL = packageURL
         journalSequence = replay.lastSequence
@@ -372,10 +392,13 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             if (try? mediaStore.resolveEmbedded(reference: reference, packageURL: packageURL)) != nil {
                 continue
             }
-            if let external = try? resolveExternal(reference),
-               let external,
-               FileManager.default.fileExists(atPath: external.path) {
-                continue
+            do {
+                if let external = try resolveExternal(reference),
+                   FileManager.default.fileExists(atPath: external.path) {
+                    continue
+                }
+            } catch {
+                // A failed bookmark is treated as unavailable and exposed through the relink flow.
             }
             missing.insert(reference.id)
         }
@@ -388,7 +411,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     private func projectsRootURL() throws -> URL {
-        guard let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+        guard let applicationSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
             throw ProjectError.packageCorruption("Application Support directory is unavailable.")
         }
         let root = applicationSupport.appendingPathComponent("After Effects/Projects", isDirectory: true)
