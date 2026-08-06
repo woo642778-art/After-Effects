@@ -75,6 +75,8 @@ func selectionIsNotUndoHistory() async throws {
         displayName: "clip.mov",
         originalFilename: "clip.mov",
         fileSize: 1,
+        modificationDate: nil,
+        contentFingerprint: nil,
         kind: .video,
         availabilityStatus: .missing
     )
