@@ -3,7 +3,7 @@ import Testing
 @testable import VertexProject
 import VertexCore
 
-@Test("Journal records are independently checksummed and replay idempotently")
+@Test("Journal records are independently checksummed and replay idempotently by committed sequence")
 func journalReplayIsIdempotent() throws {
     let project = try ProjectDocument.makeNew(
         id: VertexID(rawValue: "50000000-0000-0000-0000-000000000030"),
@@ -21,10 +21,35 @@ func journalReplayIsIdempotent() throws {
     let line = try ProjectJournalCodec().encodeLine(record)
     let decoded = try ProjectJournalCodec().decodeLine(line)
     #expect(decoded.checksum == record.checksum)
+
     let once = try ProjectJournalReplayer().replay([decoded], onto: project)
-    let twice = try ProjectJournalReplayer().replay([decoded], onto: once.project)
+    let twice = try ProjectJournalReplayer().replay(
+        [decoded],
+        onto: once.project,
+        startingAfter: once.lastSequence
+    )
+
     #expect(twice.project == once.project)
     #expect(twice.appliedCount == 0)
+    #expect(twice.lastSequence == once.lastSequence)
+}
+
+@Test("Records at or below the committed journal sequence are validated and skipped")
+func committedJournalRecordsAreSkipped() throws {
+    let project = try ProjectDocument.makeNew(
+        id: VertexID(rawValue: "50000000-0000-0000-0000-000000000030"),
+        name: "Committed",
+        timestamp: Date(timeIntervalSince1970: 10)
+    )
+    let record = try ProjectJournalRecord.fixture(sequence: 1)
+    let result = try ProjectJournalReplayer().replay(
+        [record],
+        onto: project,
+        startingAfter: 1
+    )
+    #expect(result.project == project)
+    #expect(result.appliedCount == 0)
+    #expect(result.lastSequence == 1)
 }
 
 @Test("A corrupt final journal line is excluded but a sequence gap stops replay")
