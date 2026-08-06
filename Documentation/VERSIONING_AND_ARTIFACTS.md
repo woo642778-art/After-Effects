@@ -42,14 +42,15 @@ Documentation-only commits are excluded from the product-build trigger so final 
 - Product and CI source HEAD: `e68ffde2eebcdb58becc9d3d1ecaf195f1861e76`
 - Workflow run: `31069517329`
 - Artifact ID: `8955148634`
-- Artifact API digest: `sha256:f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- IPA SHA-256: `395e67c262fa24cb7f9b75f459ced1bf4673d6edbdc24d622d1456342f18d366`
+- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
+- IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
+- IPA size: 884,969 bytes
 - Executable: `Payload/AfterEffects.app/AfterEffects`, Mach-O 64-bit arm64
 - Display name: `After Effects`
 - Bundle identifier: `com.woo642778.aftereffects`
 - Version: `5.0.0 (5)`
 - Minimum OS: iOS 17.0
-- Compiled asset catalog: `Assets.car`
+- Compiled asset catalog: `Assets.car`, 152,879 bytes
 - Compiled Metal resource: `Vertex_VertexRenderMetal.bundle/default.metallib`, 6,996 bytes
 
 ## Previous verified artifact
