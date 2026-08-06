@@ -77,8 +77,12 @@ public final class ProjectHistoryController {
     }
 
     @discardableResult
-    public func undo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws -> ProjectCommandRecord {
-        guard let original = undoStack.popLast() else {
+    public func undo(
+        timestamp: Date = Date(),
+        commandID: VertexID = VertexID(),
+        prepare: (ProjectCommandRecord) throws -> Void = { _ in }
+    ) throws -> ProjectCommandRecord {
+        guard let original = undoStack.last else {
             throw ProjectError.invalidOperation("There is no command to undo.")
         }
         let transition = ProjectCommandRecord(
@@ -90,20 +94,23 @@ public final class ProjectHistoryController {
             forwardOperation: original.inverseOperation,
             inverseOperation: original.forwardOperation
         )
-        do {
-            project = try engine.apply(transition, to: project)
-            redoStack.append(original)
-            trimHistories()
-            return transition
-        } catch {
-            undoStack.append(original)
-            throw error
-        }
+
+        try prepare(transition)
+        let changed = try engine.apply(transition, to: project)
+        project = changed
+        _ = undoStack.popLast()
+        redoStack.append(original)
+        trimHistories()
+        return transition
     }
 
     @discardableResult
-    public func redo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws -> ProjectCommandRecord {
-        guard let original = redoStack.popLast() else {
+    public func redo(
+        timestamp: Date = Date(),
+        commandID: VertexID = VertexID(),
+        prepare: (ProjectCommandRecord) throws -> Void = { _ in }
+    ) throws -> ProjectCommandRecord {
+        guard let original = redoStack.last else {
             throw ProjectError.invalidOperation("There is no command to redo.")
         }
         let transition = ProjectCommandRecord(
@@ -115,15 +122,14 @@ public final class ProjectHistoryController {
             forwardOperation: original.forwardOperation,
             inverseOperation: original.inverseOperation
         )
-        do {
-            project = try engine.apply(transition, to: project)
-            undoStack.append(original)
-            trimHistories()
-            return transition
-        } catch {
-            redoStack.append(original)
-            throw error
-        }
+
+        try prepare(transition)
+        let changed = try engine.apply(transition, to: project)
+        project = changed
+        _ = redoStack.popLast()
+        undoStack.append(original)
+        trimHistories()
+        return transition
     }
 
     private func coalesced(_ previous: ProjectCommandRecord, with current: ProjectCommandRecord) -> ProjectCommandRecord? {
