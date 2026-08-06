@@ -181,13 +181,15 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     func undo() {
         guard let controller = historyController, let packageURL else { return }
         do {
-            let transition = try controller.undo()
             let sequence = journalSequence + 1
-            try packageStore.appendJournal(
-                try ProjectJournalRecord(sequence: sequence, command: transition),
-                to: packageURL
-            )
+            _ = try controller.undo { transition in
+                try packageStore.appendJournal(
+                    try ProjectJournalRecord(sequence: sequence, command: transition),
+                    to: packageURL
+                )
+            }
             journalSequence = sequence
+            uncommittedCommandCount += 1
             publishControllerProject()
             scheduleAutosave()
         } catch {
@@ -198,13 +200,15 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     func redo() {
         guard let controller = historyController, let packageURL else { return }
         do {
-            let transition = try controller.redo()
             let sequence = journalSequence + 1
-            try packageStore.appendJournal(
-                try ProjectJournalRecord(sequence: sequence, command: transition),
-                to: packageURL
-            )
+            _ = try controller.redo { transition in
+                try packageStore.appendJournal(
+                    try ProjectJournalRecord(sequence: sequence, command: transition),
+                    to: packageURL
+                )
+            }
             journalSequence = sequence
+            uncommittedCommandCount += 1
             publishControllerProject()
             scheduleAutosave()
         } catch {
