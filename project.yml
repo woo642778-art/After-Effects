@@ -39,8 +39,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
-        MARKETING_VERSION: 5.0.0
-        CURRENT_PROJECT_VERSION: 5
+        MARKETING_VERSION: 6.0.0
+        CURRENT_PROJECT_VERSION: 6
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: After Effects
