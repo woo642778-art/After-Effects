@@ -17,12 +17,12 @@ struct ProjectWorkspaceView: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AfterEffectsTheme.accent)
                         .tracking(0.8)
-                    Text("Atomic saves · journal · recovery")
+                    Text(".vertexproject · atomic snapshot · session Undo")
                         .font(.headline)
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                Text("SCHEMA 1")
+                Text("SCHEMA \(workspace.project?.schemaVersion ?? ProjectDocument.currentSchemaVersion)")
                     .font(.caption2.monospaced().weight(.bold))
                     .foregroundStyle(AfterEffectsTheme.secondaryText)
             }
@@ -47,7 +47,7 @@ struct ProjectWorkspaceView: View {
                 Button {
                     isProjectImporterPresented = true
                 } label: {
-                    Label("Open", systemImage: "folder")
+                    Label("Open / Import", systemImage: "folder")
                 }
                 .buttonStyle(.bordered)
 
@@ -57,11 +57,10 @@ struct ProjectWorkspaceView: View {
                     Label("Save", systemImage: "externaldrive")
                 }
                 .buttonStyle(.bordered)
-                .disabled(workspace.project == nil)
+                .disabled(workspace.project == nil || !workspace.hasUnsavedChanges)
 
                 Button {
                     workspace.prepareExport()
-                    isProjectExporterPresented = workspace.exportDocument != nil
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
@@ -113,6 +112,7 @@ struct ProjectWorkspaceView: View {
                     Spacer()
                     Button("Embed") { workspace.embedSelectedMedia() }
                         .buttonStyle(.bordered)
+                        .disabled(workspace.missingMediaIDs.contains(media.id))
                     if workspace.missingMediaIDs.contains(media.id) {
                         Button("Relink") { isRelinkImporterPresented = true }
                             .buttonStyle(.borderedProminent)
@@ -123,21 +123,30 @@ struct ProjectWorkspaceView: View {
 
             statusView
 
-            if let inspection = workspace.recoveryInspection {
-                recoveryChoices(inspection)
+            if let inspection = workspace.legacyInspection {
+                LegacyProjectImportView(
+                    inspection: inspection,
+                    confirm: workspace.confirmLegacyImport,
+                    cancel: workspace.cancelLegacyImport
+                )
+            }
+
+            if let pending = workspace.pendingDecision {
+                pendingDecisionView(pending)
             }
         }
         .afterEffectsCard()
         .fileImporter(
             isPresented: $isProjectImporterPresented,
-            allowedContentTypes: [.afterEffectsProject, .package],
+            allowedContentTypes: [.vertexProject, .legacyAEProject],
             allowsMultipleSelection: false
         ) { result in
             switch result {
             case .success(let urls):
                 if let url = urls.first { workspace.openProject(from: url) }
-            case .failure:
-                break
+            case .failure(let error):
+                workspace.cancelLegacyImport()
+                _ = error
             }
         }
         .fileImporter(
@@ -150,12 +159,22 @@ struct ProjectWorkspaceView: View {
             }
         }
         .fileExporter(
-            isPresented: $isProjectExporterPresented,
+            isPresented: Binding(
+                get: { workspace.exportDocument != nil || isProjectExporterPresented },
+                set: { isPresented in
+                    isProjectExporterPresented = isPresented
+                    if !isPresented { workspace.exportDocument = nil }
+                }
+            ),
             document: workspace.exportDocument,
-            contentType: .afterEffectsProject,
-            defaultFilename: workspace.project?.metadata.name ?? "After-Effects-Project"
+            contentType: .vertexProject,
+            defaultFilename: workspace.project?.metadata.name ?? "Vertex-Project"
         ) { _ in
             workspace.exportDocument = nil
+            isProjectExporterPresented = false
+        }
+        .onChange(of: workspace.exportDocument != nil) { _, isReady in
+            isProjectExporterPresented = isReady
         }
     }
 
@@ -163,7 +182,7 @@ struct ProjectWorkspaceView: View {
     private var statusView: some View {
         switch workspace.status {
         case .idle:
-            Text("Create or open a project package before editing persistent settings.")
+            Text("Create a .vertexproject or import an existing package.")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
         case .ready(let message):
@@ -171,15 +190,19 @@ struct ProjectWorkspaceView: View {
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
         case .saving:
-            Label("Writing temporary files and verifying checksums", systemImage: "arrow.triangle.2.circlepath")
+            Label("Writing and verifying a full pending snapshot", systemImage: "arrow.triangle.2.circlepath")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
         case .autosaved:
-            Label("Recovery snapshot updated", systemImage: "clock.arrow.circlepath")
+            Label("Immutable recovery snapshot created", systemImage: "clock.arrow.circlepath")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
-        case .recoveryRequired:
-            Label("The current project is damaged. Select a verified recovery candidate.", systemImage: "exclamationmark.shield.fill")
+        case .legacyImportReady:
+            Label("Review the non-destructive legacy conversion below.", systemImage: "doc.badge.arrow.up")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        case .pendingSaveDecision:
+            Label("A pending save needs an explicit recovery decision.", systemImage: "exclamationmark.shield.fill")
                 .font(.caption)
                 .foregroundStyle(.orange)
         case .failed(let message):
@@ -189,25 +212,31 @@ struct ProjectWorkspaceView: View {
         }
     }
 
-    private func recoveryChoices(_ inspection: ProjectRecoveryInspection) -> some View {
+    private func pendingDecisionView(_ context: PendingSnapshotDecisionContext) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("RECOVERY CANDIDATES")
+            Text("PENDING SAVE DECISION")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.orange)
-            ForEach(Array(inspection.candidates.enumerated()), id: \.offset) { _, candidate in
-                Button {
-                    workspace.recover(using: candidate)
-                } label: {
-                    HStack {
-                        Image(systemName: candidate.isValid ? "checkmark.shield" : "xmark.shield")
-                        Text(candidate.source.rawValue)
-                        Spacer()
-                        Text(candidate.document.map { "r\($0.revision)" } ?? "invalid")
-                            .font(.caption.monospaced())
-                    }
+            Text(context.reason.localizedDescription)
+                .font(.caption)
+                .foregroundStyle(AfterEffectsTheme.secondaryText)
+            if let revision = context.pendingRevision {
+                Text("Pending revision \(revision)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.white)
+            }
+            HStack {
+                Button("Discard Pending") {
+                    workspace.discardPendingSnapshot()
                 }
                 .buttonStyle(.bordered)
-                .disabled(!candidate.isValid)
+
+                Button("Apply Pending") {
+                    workspace.applyPendingSnapshot()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .disabled(context.pendingRevision == nil)
             }
         }
         .padding(10)
