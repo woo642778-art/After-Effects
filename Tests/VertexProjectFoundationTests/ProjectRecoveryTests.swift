@@ -68,6 +68,35 @@ func backupRecoveryCreatesCopy() throws {
     #expect(try ProjectPackageStore().load(from: recoveredURL).document.metadata.name == "Original")
 }
 
+@Test("Backup recovery does not reuse history from a newer project revision")
+func backupHistoryIsIsolated() throws {
+    let url = recoveryTemporaryPackageURL("BackupHistory")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let original = try ProjectDocument.makeNew(name: "Backup", timestamp: Date(timeIntervalSince1970: 100))
+    _ = try ProjectPackageStore().create(at: url, document: original)
+    let controller = try ProjectHistoryController(project: original)
+    try controller.perform(
+        .setRenderParameter(.exposure, before: 0, after: 1),
+        timestamp: Date(timeIntervalSince1970: 101),
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000051")
+    )
+    _ = try ProjectPackageStore().save(
+        controller.project,
+        history: controller.snapshot,
+        to: url,
+        committedJournalSequence: 0
+    )
+
+    let layout = try ProjectPackageLayout(root: url)
+    try Data("corrupt".utf8).write(to: layout.projectURL)
+    let inspection = try ProjectRecoveryEngine().inspect(packageURL: url)
+    let backup = try #require(inspection.candidates.first { $0.source == .backup && $0.isValid })
+    #expect(backup.document?.renderSettings.exposure == 0)
+    #expect(backup.history.undo.isEmpty)
+    #expect(backup.history.redo.isEmpty)
+}
+
 @Test("Media embedding verifies fingerprint and works without external original")
 func embeddedMediaIsSelfContained() throws {
     let packageURL = recoveryTemporaryPackageURL("Embedded")
