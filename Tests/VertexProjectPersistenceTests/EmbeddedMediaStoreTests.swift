@@ -49,7 +49,7 @@ private func externalReference(sourceURL: URL, fingerprint: String?) throws -> M
 }
 
 @Test("Embedded media uses deterministic sanitized names and survives source removal")
-func embeddedMediaIsSelfContained() throws {
+func canonicalEmbeddedMediaIsSelfContained() throws {
     let packageURL = embeddedPackageURL("SelfContained")
     let sourceURL = try sourceFile()
     defer {
@@ -68,13 +68,17 @@ func embeddedMediaIsSelfContained() throws {
     #expect(embedded.contentFingerprint == fingerprint)
 
     let layout = try VertexProjectPackageLayout(root: packageURL)
-    let destination = layout.root.appendingPathComponent(try #require(embedded.locator.embeddedPath))
+    let relativePathOptional = embedded.locator.embeddedPath
+    let relativePath = try #require(relativePathOptional)
+    let destination = layout.root.appendingPathComponent(relativePath)
     #expect(FileManager.default.fileExists(atPath: destination.path))
     #expect(!FileManager.default.fileExists(atPath: destination.appendingPathExtension("tmp").path))
-    #expect(try BookmarkSidecarStore().read(mediaID: embeddedMediaID, in: packageURL) == nil)
+    let bookmark = try BookmarkSidecarStore().read(mediaID: embeddedMediaID, in: packageURL)
+    #expect(bookmark == nil)
 
     try FileManager.default.removeItem(at: sourceURL)
-    #expect(try store.resolve(reference: embedded, packageURL: packageURL) == destination)
+    let resolved = try store.resolve(reference: embedded, packageURL: packageURL)
+    #expect(resolved == destination)
 }
 
 @Test("Embedding rejects a source whose fingerprint differs from the reference")
@@ -100,7 +104,8 @@ func embeddedMediaRejectsPreCopyMismatch() throws {
     }
 
     let layout = try VertexProjectPackageLayout(root: packageURL)
-    #expect(try FileManager.default.contentsOfDirectory(atPath: layout.mediaDirectoryURL.path).isEmpty)
+    let entries = try FileManager.default.contentsOfDirectory(atPath: layout.mediaDirectoryURL.path)
+    #expect(entries.isEmpty)
 }
 
 @Test("An existing embedded collision with different bytes is never overwritten")
@@ -114,17 +119,21 @@ func embeddedMediaRejectsCollisionMismatch() throws {
     try createEmbeddedPackage(packageURL)
 
     let store = EmbeddedMediaStore()
-    let reference = try externalReference(sourceURL: sourceURL, fingerprint: store.fingerprint(of: sourceURL))
+    let fingerprint = try store.fingerprint(of: sourceURL)
+    let reference = try externalReference(sourceURL: sourceURL, fingerprint: fingerprint)
     let embedded = try store.embed(reference: reference, sourceURL: sourceURL, packageURL: packageURL)
-    let relativePath = try #require(embedded.locator.embeddedPath)
-    let destination = try VertexProjectPackageLayout(root: packageURL).root.appendingPathComponent(relativePath)
+    let relativePathOptional = embedded.locator.embeddedPath
+    let relativePath = try #require(relativePathOptional)
+    let layout = try VertexProjectPackageLayout(root: packageURL)
+    let destination = layout.root.appendingPathComponent(relativePath)
     let collisionBytes = Data("different-collision".utf8)
     try collisionBytes.write(to: destination)
 
     #expect(throws: ProjectPersistenceError.self) {
         try store.embed(reference: reference, sourceURL: sourceURL, packageURL: packageURL)
     }
-    #expect(try Data(contentsOf: destination) == collisionBytes)
+    let retainedBytes = try Data(contentsOf: destination)
+    #expect(retainedBytes == collisionBytes)
 }
 
 @Test("Resolve rejects tampered embedded bytes")
@@ -138,10 +147,13 @@ func embeddedResolveRejectsPostCopyMismatch() throws {
     try createEmbeddedPackage(packageURL)
 
     let store = EmbeddedMediaStore()
-    let reference = try externalReference(sourceURL: sourceURL, fingerprint: store.fingerprint(of: sourceURL))
+    let fingerprint = try store.fingerprint(of: sourceURL)
+    let reference = try externalReference(sourceURL: sourceURL, fingerprint: fingerprint)
     let embedded = try store.embed(reference: reference, sourceURL: sourceURL, packageURL: packageURL)
-    let relativePath = try #require(embedded.locator.embeddedPath)
-    let destination = try VertexProjectPackageLayout(root: packageURL).root.appendingPathComponent(relativePath)
+    let relativePathOptional = embedded.locator.embeddedPath
+    let relativePath = try #require(relativePathOptional)
+    let layout = try VertexProjectPackageLayout(root: packageURL)
+    let destination = layout.root.appendingPathComponent(relativePath)
     try Data("tampered".utf8).write(to: destination)
 
     #expect(throws: ProjectPersistenceError.self) {
@@ -160,9 +172,11 @@ func embeddedMediaSanitizesTraversalName() throws {
     try createEmbeddedPackage(packageURL)
 
     let store = EmbeddedMediaStore()
-    let reference = try externalReference(sourceURL: sourceURL, fingerprint: store.fingerprint(of: sourceURL))
+    let fingerprint = try store.fingerprint(of: sourceURL)
+    let reference = try externalReference(sourceURL: sourceURL, fingerprint: fingerprint)
     let embedded = try store.embed(reference: reference, sourceURL: sourceURL, packageURL: packageURL)
-    let relativePath = try #require(embedded.locator.embeddedPath)
+    let relativePathOptional = embedded.locator.embeddedPath
+    let relativePath = try #require(relativePathOptional)
 
     #expect(relativePath.hasPrefix("Media/55000000-0000-0000-0000-000000000001-"))
     #expect(!relativePath.contains(".."))
