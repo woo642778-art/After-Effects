@@ -36,13 +36,13 @@ A new session must read, in order:
 
 ## Final Phase 3 verification record
 
-- Final product source and CI HEAD: `42c9fbb252a1185658d967fac62cb30b698762f5`.
-- Successful workflow run: `31057238294`.
-- Portable tests: 20 passed.
-- Artifact ID: `8950765514`.
+- Final product source and CI HEAD: `ed2997a0f76004829590e823976eaae611af70d7`.
+- Successful workflow run: `31058027136`.
+- Portable tests: 21 passed.
+- Artifact ID: `8951042390`.
 - Artifact name: `After-Effects-3.0.0-unsigned-ipa`.
-- Artifact archive digest: `sha256:5a793e1c4d729a79392338d1bb56d0319cb4b08a9316df2e018da9c47d8bfa50`.
-- Extracted IPA SHA-256: `05f89e8fde5b7494bdb1638e5a863e2e74c6faacf5ac0cb105d3eb67ec402d19`.
+- Artifact archive digest: `sha256:85be5d0ffdead43b6a1d4e75adcf9a31b3f91dee22133838fbd13640146ae06f`.
+- Extracted IPA SHA-256: `60fe59d769c1c73d6737dce3df404b6d3e56f661530d6edf83516964b049a6e1`.
 - Executable: `Payload/AfterEffects.app/AfterEffects`, 64-bit arm64 Mach-O.
 - Verified display name: `After Effects`.
 - Verified bundle identifier: `com.woo642778.aftereffects`.
@@ -68,7 +68,7 @@ A new session must read, in order:
 - portable PNG/JPEG image and decoded-frame values;
 - normalized peak/RMS waveform values;
 - provider protocols, cancellation, back-pressure policy, validation, and `MediaError`;
-- bounded streaming waveform accumulation.
+- bounded streaming waveform accumulation with codec-padding tolerance.
 
 ### VertexMediaAVFoundation
 
@@ -78,7 +78,7 @@ A new session must read, in order:
 - conservative VFR classification;
 - color primaries, transfer, matrix, HDR, and alpha mapping;
 - requested-time thumbnail decoding;
-- PCM extraction and waveform generation.
+- PCM extraction and full-duration waveform generation.
 
 ## Product identity retained
 
@@ -99,14 +99,14 @@ A new session must read, in order:
 - MiniCut remains GPL behavioral reference only.
 - Preview and export must share the same semantic render graph.
 - Exact time, explicit color metadata, recoverable persistence, license traceability, and honest feature status cannot be weakened.
-- Documentation-only commits do not trigger a new IPA build.
+- The final workflow uses push/manual execution and ignores documentation-only push changes to prevent checksum loops.
 
 ## Pull request stack
 
 - PR #1: Phase 1 foundation, base `main`.
 - PR #2: Phase 2 core architecture and identity, base `agent/phase-1-source-audit`.
 - PR #3: Phase 3 media I/O and version 3.0.0, base `agent/phase-2-core-architecture-branding`.
-- Merge in numeric order. Rebase or retarget each stacked PR after its base is merged and rerun the final checks before merging.
+- Merge in numeric order. Rebase or retarget each stacked PR after its base is merged and rerun final checks before merging.
 
 ## Immediate Phase 4 actions
 
