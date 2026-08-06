@@ -13,7 +13,7 @@ package enum DurableFileFailurePoint: String, CaseIterable, Sendable {
     case afterDirectorySync
 }
 
-package struct DurableFileIO: Sendable {
+package struct DurableFileIO {
     package let failurePoint: DurableFileFailurePoint?
     private let fileManager: FileManager
 
