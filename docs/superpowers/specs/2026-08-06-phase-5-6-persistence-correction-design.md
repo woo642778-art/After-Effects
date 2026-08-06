@@ -2,49 +2,47 @@
 
 **Status:** Approved design; implementation has not started.
 
-**Product version after correction:** `6.0.0 (6)`
+**Corrected product version:** `6.0.0 (6)`
 
 **Canonical project extension:** `.vertexproject`
 
 **Legacy import extension:** `.aeproject`
 
-**Implementation gate:** Phase 7 may not branch from or depend on the current persistence implementation. Phase 5 and Phase 6 must first be corrected, reverified, and produce a replacement 6.0.0 artifact.
+**Implementation gate:** Phase 7 may not branch from the current persistence implementation. Phase 5 and Phase 6 must first be corrected, reverified, and produce a replacement 6.0.0 artifact.
 
-## 1. Purpose
+## 1. Purpose and scope
 
-The current Phase 5 and Phase 6 drafts implement a persistence dialect that diverges from the approved architecture. It persists Undo and Redo history, appends an operation write-ahead log, rotates mutable autosave files, stores Apple bookmark bytes inside canonical project JSON, and creates authoritative backup, proxy, thumbnail, recovery, and quarantine locations.
+The current Phase 5 and Phase 6 drafts persist Undo and Redo history, append an operation write-ahead log, rotate mutable autosave files, store Apple bookmark bytes inside canonical project JSON, and create backup, proxy, thumbnail, recovery, and quarantine locations. Those behaviors diverge from the approved architecture.
 
-This correction replaces that dialect with a small, deterministic, recoverable package based on full pending snapshots. It preserves valid project, composition, layer, and media data while removing persistence state from the portable model.
+This correction replaces that dialect with a deterministic `.vertexproject` package based on one full pending-save snapshot. It preserves valid project, composition, layer, and media data while removing persistence implementation state from the portable model.
 
-The correction is not a new feature phase. The app remains `6.0.0 (6)` until the corrected package, app flows, tests, iOS build, and downloaded IPA inspection all pass.
+This is not a new feature phase. It does not implement keyframes, interpolation, parenting, motion blur, playback, retiming, video export, masks, tracking, AI, text, shapes, audio, color, particles, nodes, or 3D. The product remains `6.0.0 (6)` until the corrected package, app flows, tests, iOS build, and downloaded IPA inspection pass.
 
-## 2. Non-negotiable outcomes
+Non-negotiable outcomes:
 
-The corrected system must satisfy all of the following:
+- new projects use `.vertexproject`;
+- `VertexProject` remains platform-neutral;
+- public file-system APIs move to `VertexProjectPersistence`;
+- Undo and Redo are session-only;
+- canonical projects have no durable command WAL;
+- a save uses `Journal/pending-save.json` containing a complete candidate snapshot;
+- autosaves are immutable, checksummed full-document snapshots;
+- Apple bookmark bytes exist only in `Bookmarks/<mediaID>.bookmark`;
+- `.aeproject` packages are import-only and never modified;
+- no project, media, Metal, bookmark, or recovery error can leave the app in indefinite loading;
+- existing Phase 6 layer and composition rendering remains intact;
+- every earlier 6.0 IPA is marked as a superseded draft artifact.
 
-- New projects use the `.vertexproject` extension.
-- `VertexProject` remains platform-neutral.
-- File-system behavior is owned by a public `VertexProjectPersistence` module.
-- Undo and Redo exist only in the active editing session.
-- No durable operation WAL is used for new projects.
-- A save uses one full `Journal/pending-save.json` transaction.
-- Autosaves are immutable full-document snapshots identified by sequence and checksum.
-- Apple bookmark data is stored only in `Bookmarks/<mediaID>.bookmark` sidecars.
-- Existing `.aeproject` packages are imported into a separate `.vertexproject` package and are never modified in place.
-- A project, media, Metal, recovery, or bookmark error cannot leave the app on an indefinite loading screen.
-- Existing layer and composition rendering behavior remains unchanged unless required to consume the corrected canonical model.
-- All existing 6.0 artifacts are marked as superseded draft artifacts and are not valid Phase 7 bases.
+## 2. Canonical package contract
 
-## 3. Canonical package contract
-
-A normal project package has the following allowlisted structure:
+Normal package layout:
 
 ```text
 Project.vertexproject/
 ├── project.json
 ├── manifest.json
 ├── Journal/
-│   └── pending-save.json       # exists only during an incomplete save
+│   └── pending-save.json       # only while a save is incomplete
 ├── Autosaves/
 │   └── <sequence>-<checksum>.json
 ├── Bookmarks/
@@ -53,9 +51,22 @@ Project.vertexproject/
     └── <mediaID>-<sanitized-filename>
 ```
 
-`Journal/`, `Autosaves/`, `Bookmarks/`, and `Media/` are created as package directories. They may be empty. Temporary files may exist during a transaction but must be removed after a successful operation or a completed recovery.
+`Journal/`, `Autosaves/`, `Bookmarks/`, and `Media/` are created as package directories and may be empty.
 
-The following entries are forbidden in a canonical package:
+The only transaction-temporary package entries permitted are:
+
+```text
+project.json.tmp
+manifest.json.tmp
+Journal/pending-save.json.tmp
+Autosaves/<sequence>-<checksum>.json.tmp
+Bookmarks/<mediaID>.bookmark.tmp
+Media/<mediaID>-<filename>.tmp
+```
+
+A loader checks for and classifies pending transactions before enforcing the steady-state allowlist. Unknown `.tmp` names are not accepted. Successful save, recovery, autosave, relink, or embedding operations remove their temporary files before reporting success.
+
+Forbidden canonical entries include:
 
 ```text
 history.json
@@ -63,96 +74,85 @@ journal/operations.log
 project.json.backup
 snapshot-current.json
 snapshot-previous.json
-Proxies/
-proxies/
-Thumbnails/
-thumbnails/
-Recovery/
-recovery/
-Quarantine/
-quarantine/
+Proxies/ or proxies/
+Thumbnails/ or thumbnails/
+Recovery/ or recovery/
+Quarantine/ or quarantine/
 ```
 
-Unknown root entries are rejected unless a future package version explicitly adds them to the allowlist. Renaming an arbitrary folder or ZIP archive to `.vertexproject` does not make it valid.
+Unknown root entries are rejected unless a future package-format version explicitly adds them to the allowlist. An ordinary folder, malformed package, renamed ZIP, or writable `.aeproject` is not accepted as a canonical project.
 
-## 4. Canonical project model
+## 3. Canonical Schema 2 model
 
-The canonical Schema 2 document contains product data, not persistence implementation state.
+The canonical project contains product state, not persistence machinery.
 
-The following fields are removed from canonical encoding:
+The canonical encoder never emits:
 
-- `MediaLocator.bookmarkData`
-- `ProjectDocument.appliedCommandIDs`
-- `ProjectDocument.legacyRenderSettings`
+- `MediaLocator.bookmarkData`;
+- `ProjectDocument.appliedCommandIDs`;
+- `ProjectDocument.legacyRenderSettings`.
 
-`MediaReference` retains only portable identity and location hints:
+A legacy DTO may decode those fields solely during `.aeproject` import. They are never exposed as canonical writable properties.
+
+`MediaReference` retains only portable values:
 
 - stable media ID;
 - display and original filename;
-- media kind and availability state;
+- kind and availability status;
 - file size and modification metadata where available;
 - content fingerprint;
 - optional package-relative embedded path;
 - optional non-authoritative relative path hint.
 
-Apple bookmark bytes never enter `project.json`, autosaves, command payloads, diagnostics, or logs.
+`activeCompositionID`, `selectedLayerID`, and `selectedMediaID` may be persisted as workspace convenience state. They never enter Undo history. Validation rules are explicit:
 
-Legacy Render Lab values are read only by a legacy DTO. During import they are converted once into the appropriate composition dimensions, layer transform, opacity, and operation values. They are not carried into the canonical document as a compatibility field.
+- an invalid active composition normalizes to the first canonical composition;
+- an invalid selected layer normalizes to `nil`;
+- an invalid selected media ID normalizes to `nil`.
 
-Duplicate-command protection is session-local. Canonical project bytes do not contain applied command IDs.
+Legacy Render Lab values are converted once during import into actual composition dimensions, layer transform, opacity, and operations. No compatibility Render Lab field remains in the canonical document.
 
-`activeCompositionID` and `selectedLayerID` may be persisted as workspace convenience state. Changes to these values do not create Undo entries. They must always be validated against the current composition and layer registries; invalid values normalize to a valid active composition and no selected layer.
+Duplicate-command protection uses a session-local recent-command set and is not serialized. The corrected dialect remains Project Schema 2; the package extension, manifest package-format version, and decoder boundary distinguish legacy `.aeproject` from canonical `.vertexproject`. This correction does not consume Schema 3.
 
-The corrected canonical dialect remains Schema 2. The package contract and decoder boundary distinguish the legacy `.aeproject` dialect from the canonical `.vertexproject` dialect. This correction does not consume Schema 3.
+## 4. Module boundaries
 
-## 5. Module boundaries
+### 4.1 `VertexProject`
 
-### 5.1 VertexProject
+Portable responsibilities:
 
-`VertexProject` owns portable data and editing semantics:
-
-- canonical Schema 2 project, composition, layer, and media models;
-- deterministic canonical JSON and project checksums;
+- canonical project, composition, layer, and media models;
+- deterministic JSON and project checksum;
 - project validation and nested-composition cycle checks;
-- command request and inverse calculation;
-- the in-memory editing session;
-- bounded Undo and Redo stacks;
+- command requests and inverse calculation;
+- in-memory editing session;
+- bounded Undo and Redo;
 - command coalescing;
-- structured portable project errors.
+- portable structured errors.
 
-It must not expose Foundation file URLs, Apple bookmarks, file descriptors, AVFoundation, Metal, UIKit, SwiftUI, or absolute sandbox paths.
+It may not expose file URLs, Apple bookmarks, security-scoped access objects, file descriptors, AVFoundation, Metal, UIKit, SwiftUI, or absolute sandbox paths.
 
-### 5.2 VertexProjectPersistence
+### 4.2 `VertexProjectPersistence`
 
-`VertexProjectPersistence` owns platform and file-system behavior:
+Platform and file-system responsibilities:
 
-- `.vertexproject` layout and package allowlist validation;
-- durable temporary writes and directory synchronization;
+- `.vertexproject` layout and allowlist validation;
+- durable temporary writes, file synchronization, and directory synchronization;
 - pending-snapshot save and recovery;
-- immutable autosave creation, verification, retention, and selection;
-- bookmark sidecar creation, replacement, resolution, and stale handling;
-- embedded-media copy, checksum verification, and resolution;
-- legacy `.aeproject` inspection and non-destructive import;
+- immutable autosave creation, validation, retention, and selection;
+- bookmark sidecar creation, replacement, resolution, and stale refresh;
+- embedded-media copy and fingerprint validation;
+- legacy `.aeproject` inspection and non-destructive conversion;
 - package-level structured errors.
 
-The public `VertexProjectFoundation` product is removed. New app and test code may not import it. Minimal legacy readers may live under `VertexProjectPersistence/LegacyImport`, but they are internal compatibility code and cannot be used to create or save new packages.
+The public `VertexProjectFoundation` product is removed. New source and tests may not import it. Minimum legacy readers may live under `VertexProjectPersistence/LegacyImport`, remain internal, and cannot create or save new packages.
 
-### 5.3 Application layer
+### 4.3 Application layer
 
-The app owns:
+The app owns Files document pickers, UTType registration, recent-project registration, user-facing conversion and recovery decisions, security-scoped access lifetime, UI operation states, and startup presentation. It accesses project persistence through one `ProjectSessionActor` and does not edit package files directly.
 
-- Files document pickers and UTType registration;
-- user-facing conversion and recovery decisions;
-- recent-project registration;
-- security-scoped access lifetime;
-- UI state for save, autosave, import, relink, and recovery;
-- startup state and error presentation.
+## 5. Editing session and Undo/Redo
 
-The app talks to project persistence through one `ProjectSessionActor` and never edits package files directly.
-
-## 6. Editing session and Undo/Redo
-
-An open project is represented by:
+Session state:
 
 ```text
 ProjectEditingSession
@@ -166,115 +166,119 @@ ProjectEditingSession
 └── activeTransaction
 ```
 
-Definitions:
+- **Loaded snapshot:** the validated document read when the session opened.
+- **Working document:** the current editable in-memory document.
+- **Durable saved snapshot:** the latest full transaction that completed and was reverified.
 
-- **Loaded snapshot:** the last validated document loaded from disk.
-- **Working document:** the current in-memory editable document.
-- **Durable saved snapshot:** the latest document whose full save transaction completed and was reverified.
+Rules:
 
-Undo and Redo rules:
+- Undo and Redo start empty whenever a project opens and are discarded on close or process termination.
+- They are absent from project JSON, manifest, pending snapshot, autosaves, and bookmark sidecars.
+- A successful command calculates its inverse from the current document, pushes that inverse to Undo, and clears Redo.
+- Undo pushes the corresponding forward transition onto Redo.
+- Redo validates against the current state, recalculates the inverse, and pushes it to Undo.
+- Each history stack holds at most 200 user edits, dropping the oldest first.
+- `recentCommandIDs` holds the most recent 512 IDs for the active session; it is cleared on open and close and never persisted.
+- Continuous edits coalesce only when command type, merge key, target identity, and editing gesture match.
+- Create, delete, duplicate, and reorder commands never coalesce.
+- Selection and active-composition navigation do not create Undo entries.
+- Locked layers reject mutation except explicit unlock.
+- Invalid references and nested-composition cycles fail before the document or history stacks change.
 
-- both stacks start empty whenever a project is opened;
-- both stacks are discarded when the project is closed or the app session ends;
-- they are not encoded in project JSON, manifest, pending snapshot, autosave, or bookmark sidecars;
-- a successful new command pushes its calculated inverse onto Undo and clears Redo;
-- Undo pushes the original transition onto Redo;
-- Redo recalculates the inverse from the current valid state and pushes it onto Undo;
-- stacks contain at most 200 user edits, dropping the oldest entry first;
-- continuous controls coalesce only when command type, merge key, target layer, and editing gesture match;
-- create, delete, duplicate, and reorder commands never coalesce;
-- selection and active-composition navigation do not enter edit history;
-- locked layers reject mutating commands except the explicit unlock command;
-- a command that would introduce an invalid reference or nested-composition cycle fails before changing the document or either history stack.
+A command request contains command ID, expected base revision, timestamp, optional merge key, and payload. Historical inverses are never written to disk.
 
-A command request contains a command ID, expected base revision, timestamp, optional merge key, and payload. The engine derives the inverse from the current document. Neither the request nor the canonical project persists a historical inverse.
+## 6. Full pending-snapshot save
 
-## 7. Save transaction
+### 6.1 Exact pending format
 
-A durable explicit save uses one full pending snapshot.
+`Journal/pending-save.json` is a deterministic JSON envelope containing:
 
-### 7.1 Pending snapshot contents
-
-`Journal/pending-save.json` contains enough information to complete or classify the candidate save without consulting session history:
-
-- package format version;
+- package-format version;
+- transaction ID;
 - project ID;
-- candidate project revision;
-- canonical candidate `project.json` bytes or an encoded lossless representation of them;
-- candidate project checksum;
-- candidate manifest bytes or complete manifest fields;
-- transaction ID and creation timestamp.
+- candidate revision;
+- creation timestamp;
+- exact canonical `project.json` bytes as Base64;
+- SHA-256 of those exact project bytes;
+- exact canonical `manifest.json` bytes as Base64;
+- SHA-256 of those exact manifest bytes.
 
-It contains no Undo, Redo, command log, bookmark bytes, or external absolute paths.
+The decoder verifies both Base64 payloads, both checksums, project-to-manifest identity, schema, revision, and project checksum before treating the envelope as a recovery candidate. It contains no Undo, Redo, command log, bookmark bytes, or external absolute paths.
 
-### 7.2 Save protocol
+### 6.2 Save protocol
 
-1. Serialize all session mutations through `ProjectSessionActor`.
-2. Validate the current working document.
-3. Canonically encode the document and calculate its checksum.
-4. Construct and validate the matching manifest.
-5. Durably write and synchronize `Journal/pending-save.json`.
-6. Durably write `project.json.tmp` and `manifest.json.tmp` in the package volume.
-7. Atomically replace `project.json` and `manifest.json` with the candidate files.
-8. Reopen both canonical files and verify project ID, schema, revision, checksum, and canonical re-encoding.
-9. Delete `pending-save.json` and synchronize the Journal directory.
-10. Update `savedRevision` and clear `hasUnsavedChanges` only after step 9 succeeds.
+1. Serialize the request through `ProjectSessionActor`.
+2. Capture an immutable working document value.
+3. Validate and canonically encode the project.
+4. Calculate the project checksum and construct the matching manifest.
+5. Canonically encode and validate the pending envelope.
+6. Durably write `Journal/pending-save.json.tmp`, synchronize it, atomically promote it to `pending-save.json`, and synchronize `Journal/`.
+7. Durably write `project.json.tmp` and `manifest.json.tmp`.
+8. Atomically replace `project.json` and `manifest.json`.
+9. Reopen both files and verify project ID, schema, revision, project checksum, manifest checksum, and canonical re-encoding.
+10. Delete `pending-save.json`, remove remaining known transaction temporary files, and synchronize affected directories.
+11. Only then update `savedRevision` and clear `hasUnsavedChanges`.
 
-There is no `history.json`, operation log, or project backup file.
+There is no `history.json`, operation log, or backup project file.
 
-### 7.3 Failure semantics
+### 6.3 Failure semantics
 
-A save function must not mutate the working document or Undo/Redo stacks as a side effect of file I/O. On failure:
+File I/O does not mutate the working document or session history. On failure:
 
 - the working document remains available;
 - Undo and Redo remain available;
 - `hasUnsavedChanges` remains true;
-- the last fully verified durable snapshot remains a valid recovery candidate;
-- the UI exits its progress state and shows a structured error and retry action.
+- the UI reaches an explicit failure state with retry;
+- the last complete durable pair and any valid pending candidate remain classifiable on next open.
 
-The phrase “restore original state” refers to preventing partial file-system operations from corrupting session state. It does not mean discarding the user’s unsaved edits.
+“Restore original state” means no partial persistence operation corrupts session state. It does not mean discarding unsaved user edits.
 
-## 8. Pending-snapshot recovery
+## 7. Pending recovery
 
-Package open inspects `pending-save.json` before exposing a project document.
+Package open classifies known temporary files and `pending-save.json` before returning a document.
 
-Classification rules:
+- If current project and manifest are valid and exactly match the pending candidate, delete the redundant pending marker and known candidate temporary files.
+- If a valid pending candidate has a greater revision than the current valid pair, complete both replacements and reverify.
+- If project and manifest are mixed because only one replacement completed, a valid matching pending candidate completes both before exposure.
+- If the pending candidate is corrupt, internally inconsistent, or cannot be proven newer, do not apply or delete it automatically.
+- If the pending candidate is older than a valid current pair, return `pendingSnapshotOlderThanCurrent`; the app asks whether to discard it.
+- Uncertain pending data is not moved to a hidden quarantine directory. It remains until explicit discard or diagnostic export.
 
-- If current project and manifest are valid and exactly match the pending candidate, remove the redundant pending marker.
-- If the pending candidate is valid, newer than the current valid snapshot, and internally consistent, complete both canonical replacements and reverify them.
-- If one canonical file was replaced and the other was not, a valid pending candidate is used to complete both files before the project is exposed.
-- If the pending snapshot is corrupt, internally inconsistent, or cannot be proven newer, do not apply it automatically.
-- If the pending snapshot is older than a valid current snapshot, report `pendingSnapshotOlderThanCurrent`; the app asks whether to discard the marker.
-- Uncertain pending data is not moved into a quarantine directory. It remains untouched until the user explicitly chooses to discard it or export diagnostics.
+Only a fully matched project and manifest pair is returned. A mixed-revision pair is never exposed to the app.
 
-After recovery, only a fully matched project and manifest pair may be returned. A mixed-revision pair is never exposed to the app.
+## 8. Immutable autosaves
 
-## 9. Immutable autosaves
-
-Autosaves are complete canonical project snapshots with a small autosave envelope containing creation metadata. They contain no editing history or bookmark bytes.
-
-Filename format:
+Autosave filename:
 
 ```text
 Autosaves/<zero-padded-sequence>-<project-checksum>.json
 ```
 
-Rules:
+The autosave envelope contains creation timestamp, project ID, revision, exact canonical project payload, and checksum. It contains no Undo, Redo, command IDs, or bookmark bytes.
 
-- sequence numbers increase monotonically within a package;
-- an existing autosave is never overwritten;
-- the new file is durably written, decoded, canonically re-encoded, and checksum-verified before retention cleanup;
-- a duplicate revision and checksum does not create another autosave;
-- the eight newest valid unique snapshots are retained;
-- invalid or corrupt autosaves are never selected as recovery candidates;
-- deleting older autosaves occurs only after the new snapshot has been fully verified;
-- autosave success does not mark the explicit project save as complete and does not clear `hasUnsavedChanges`.
+Sequence rules:
 
-Autosave requests occur after two seconds of edit inactivity, after twenty unsaved commands, on app backgrounding, and before opening another project. The actor coalesces requests for the same revision and checksum.
+- read valid canonical autosave filenames;
+- select the greatest valid sequence;
+- next sequence is greatest plus one, beginning at `00000001`;
+- malformed filenames do not influence the sequence and are reported as invalid entries;
+- sequence exhaustion is a structured error rather than wraparound.
 
-## 10. Bookmark sidecars and media
+Behavior:
 
-External access data is stored at:
+- existing autosave bytes are never overwritten;
+- write to the exact candidate `.tmp`, synchronize, decode, canonically re-encode, and verify checksum before promotion;
+- suppress duplicate revision-and-checksum snapshots;
+- retain the eight newest valid unique snapshots;
+- delete old snapshots only after the new one is fully verified;
+- corrupt snapshots are never selected for recovery;
+- autosave success does not clear `hasUnsavedChanges`.
+
+Autosave requests occur two seconds after the latest edit, after twenty unsaved commands, on backgrounding, and before opening another project. Requests for an equal revision and checksum coalesce.
+
+## 9. Bookmark sidecars and media
+
+External bookmark path:
 
 ```text
 Bookmarks/<mediaID>.bookmark
@@ -282,76 +286,59 @@ Bookmarks/<mediaID>.bookmark
 
 Rules:
 
-- sidecar filenames use the canonical media ID exactly;
-- bookmark creation and replacement are atomic;
-- a stale bookmark is refreshed after successful resolution when the platform permits it;
-- a missing, stale, or unreadable bookmark does not prevent the project from opening;
-- only the affected media is marked missing and offered for Relink;
-- a successful Relink updates the portable metadata and atomically replaces the sidecar;
+- the filename is the lowercase canonical media ID plus `.bookmark`;
+- bookmark writes use `<mediaID>.bookmark.tmp`, synchronization, validation where supported, and atomic replacement;
+- stale bookmarks are refreshed after successful resolution when the platform permits;
+- missing, stale, or unreadable bookmarks do not prevent project open;
+- only affected media becomes Missing and receives a Relink action;
+- successful Relink updates portable metadata and atomically replaces the sidecar;
 - embedded media does not require an external bookmark;
-- embedded files are stored under `Media/` and are verified against the reference fingerprint before use;
-- an embedded checksum mismatch marks that media missing and emits a warning without corrupting the rest of the project.
+- embedded media is copied through a `.tmp` destination and promoted only after fingerprint verification;
+- embedded checksum mismatch isolates that media and emits a warning without failing unrelated project data.
 
-Security-scoped access starts and stops in the application or persistence adapter. It is not represented in portable models.
+Security-scoped access starts and stops in the application or persistence adapter and is never represented in portable models.
 
-## 11. Legacy `.aeproject` import
+## 10. Non-destructive `.aeproject` import
 
-A legacy package is import-only. It is never opened for direct editing and never modified.
-
-User flow:
+Legacy projects are import-only and never directly edited.
 
 ```text
 Select .aeproject
-→ inspect legacy package
+→ inspect
 → show conversion report
 → choose destination
-→ build <name>.vertexproject.tmp
-→ verify complete canonical package
+→ construct <name>.vertexproject.tmp
+→ verify canonical package
 → atomically promote destination
 → open new project
 ```
 
-The conversion report includes:
+The report shows composition, layer, and media counts; embedded media eligible for verified copy; bookmark extraction successes and failures; discarded persistent Undo/Redo, backup, and mutable autosave data; valid WAL records applied; and truncated, corrupt, unknown, or post-gap records ignored.
 
-- composition count;
-- layer count;
-- media count;
-- embedded media eligible for verified copy;
-- bookmark sidecars successfully extracted or failed;
-- discarded persistent Undo and Redo entries;
-- discarded legacy autosave and backup candidates;
-- valid WAL records applied;
-- truncated, corrupt, or post-gap WAL records ignored.
+Import algorithm:
 
-Import rules:
-
-1. Calculate and retain a whole-package fingerprint or equivalent evidence proving the source did not change.
+1. Calculate a deterministic source-tree digest from sorted relative paths and file bytes. Filesystem timestamps and permissions are excluded.
 2. Inspect legacy project and manifest before decoding as writable state.
-3. Replay only complete, checksummed, contiguous WAL records after the committed sequence.
-4. Accept complete records before a truncated final record.
+3. Replay only complete, checksummed, contiguous WAL records after the manifest’s committed sequence.
+4. Accept valid complete records before a truncated final record.
 5. Stop at the first sequence gap, checksum failure, unknown command, or invalid transition.
 6. Preserve project, composition, layer, and media IDs.
-7. Convert legacy Render Lab values into canonical composition or layer properties once.
-8. Discard legacy persistent Undo/Redo history, backup files, and mutable autosaves.
-9. Copy embedded media only after fingerprint verification and verify the destination copy.
-10. Extract valid bookmark bytes into sidecars; invalid bookmark bytes produce missing-media status rather than total import failure.
-11. Encode the canonical project without legacy-only fields.
-12. Verify the entire destination package and allowlist before promotion.
-13. Confirm the source package evidence is unchanged after import.
+7. Convert legacy Render Lab data once into canonical composition and layer values.
+8. Discard persistent history, backup files, and legacy mutable autosaves.
+9. Copy embedded media only after source fingerprint verification and verify destination bytes.
+10. Extract valid bookmark bytes into sidecars; invalid bookmark data changes only that media to Missing.
+11. Use the legacy project’s normalized creation and modification timestamps in canonical project metadata. The wall-clock import time is not written into canonical `project.json`.
+12. Encode canonical Schema 2 without legacy-only fields.
+13. Verify destination allowlist, project, manifest, media, and sidecars before promotion.
+14. Recalculate the source-tree digest and require an exact match before reporting success.
 
-If any mandatory step fails:
+The original `.aeproject` remains unchanged. On failure, remove the incomplete `.vertexproject.tmp`, do not register it as recent, and show the precise failing stage.
 
-- the original `.aeproject` remains unchanged;
-- the temporary destination is removed;
-- no incomplete project is registered as recent;
-- the app displays the precise import stage and error;
-- a retry starts from a new temporary destination.
+Importing the same unchanged source twice under the same importer version produces identical canonical `project.json` bytes. Destination manifest transaction metadata, bookmark binary representation, filesystem timestamps, and package placement are excluded from that equality guarantee.
 
-Importing the same unchanged source twice with the same canonical import policy produces identical canonical `project.json` bytes. Autosave sequence values, sidecar bytes, and filesystem timestamps are not part of this canonical-byte equality requirement.
+## 11. App document types, startup, and concurrency
 
-## 12. App document types and startup
-
-Canonical UTType:
+Canonical document type:
 
 ```text
 Identifier: com.maze.vertex.project
@@ -359,16 +346,14 @@ Extension: vertexproject
 Mode: open and edit
 ```
 
-Legacy type:
+Legacy document type:
 
 ```text
 Extension: aeproject
 Mode: import and convert only
 ```
 
-The app rejects ordinary folders, malformed packages, and renamed ZIP archives after structure and manifest inspection.
-
-Startup is independent of project recovery and release phase numbers:
+Startup state:
 
 ```text
 StartupState
@@ -377,20 +362,16 @@ StartupState
 └── fatalConfigurationError
 ```
 
-The splash has a bounded minimum display time and always transitions to the workspace unless the app bundle is so incomplete that the root UI cannot be constructed. Recent-project inspection, pending recovery, Metal initialization, media relinking, and bookmark resolution occur after workspace entry or within bounded tasks.
-
-Specific failure behavior:
+The splash has a bounded minimum display time and transitions to the workspace unless the app bundle cannot construct its root UI. Recent-project inspection, pending recovery, Metal initialization, media access, and bookmark resolution run after workspace entry or within bounded tasks.
 
 - project inspection failure opens an empty workspace and presents recovery choices;
-- Metal initialization failure affects only preview and export surfaces;
-- bookmark failure affects only the referenced media;
-- cancelled or superseded startup tasks cannot overwrite newer UI state;
-- every async operation has explicit success, failure, and cancellation terminal states;
-- no `ProgressView` may remain indefinitely because an internal guard returned without completing its state transition.
+- Metal failure affects only preview and export surfaces;
+- bookmark failure affects only its media reference;
+- cancelled or superseded tasks cannot overwrite newer UI state;
+- every operation has explicit success, failure, and cancellation terminal states;
+- an internal guard may not return while leaving a loading state active.
 
-## 13. Concurrency
-
-All project mutation and persistence requests are serialized by one actor:
+All project mutation and persistence is serialized by:
 
 ```text
 ProjectSessionActor
@@ -404,19 +385,21 @@ ProjectSessionActor
 └── close()
 ```
 
-Rules:
+Save and autosave operate on immutable captured documents. A newer revision supersedes an older queued request. Equal revision and checksum requests coalesce. Stale completions cannot overwrite current UI state.
 
-- save and autosave operate on immutable captured document values;
-- a newer revision supersedes an older queued request;
-- equal revision and checksum requests coalesce;
-- stale completion callbacks cannot overwrite current UI state;
-- opening another project first resolves the current close decision;
-- close with unsaved changes offers exactly `Save and Close`, `Discard Session Changes`, and `Cancel`;
-- discard removes session edits and history but does not delete verified autosaves without a separate user action.
+Closing with unsaved changes offers exactly:
 
-## 14. Structured errors
+```text
+Save and Close
+Discard Session Changes
+Cancel
+```
 
-`ProjectPersistenceError` provides stable categories:
+Discard clears session edits and history but does not silently delete verified autosaves.
+
+## 12. Structured errors
+
+`ProjectPersistenceError` has stable categories:
 
 - `unsupportedPackageExtension`
 - `forbiddenPackageEntry`
@@ -433,85 +416,97 @@ Rules:
 - `legacyImportIncomplete`
 - `concurrentRequestSuperseded`
 
-Errors include safe context such as package entry, project ID, media ID, expected and actual checksum, revision, sequence, or import stage. They do not include bookmark bytes or unrestricted absolute paths in persisted diagnostics.
+Errors may include safe project ID, media ID, package-relative entry, revision, sequence, import stage, and expected or actual checksum. Persisted diagnostics do not contain bookmark bytes or unrestricted absolute paths.
 
-Error isolation principles:
+Package integrity and media availability are isolated. One bookmark failure cannot fail a project. Checksum disagreement cannot cause an unverified overwrite. Uncertain pending state requires explicit user action. Failure and cancellation always end progress UI.
 
-- package integrity errors and media availability errors are separate;
-- one failed bookmark cannot fail the whole project;
-- checksum disagreement cannot trigger an unverified overwrite;
-- unresolved pending state requires an explicit user decision;
-- all UI operations leave progress state on failure or cancellation.
+## 13. TDD and verification
 
-## 15. TDD and failure-injection coverage
+### Package and model
 
-### 15.1 Package allowlist
+- new-package allowlist test;
+- forbidden legacy entry tests;
+- known temporary-file classification tests;
+- canonical JSON excludes `bookmarkData`, `appliedCommandIDs`, and `legacyRenderSettings`;
+- public package products and imports contain no `VertexProjectFoundation`;
+- writable document extension is exactly `.vertexproject`.
 
-Tests create a new project and assert that only the canonical root files and directories exist. Any legacy history, WAL, backup, mutable autosave, proxy, thumbnail, recovery, or quarantine entry fails the test.
+### Pending save failure injection
 
-### 15.2 Pending save
-
-Failure injection covers:
+Inject failure:
 
 1. before pending write;
-2. after pending fsync;
+2. after pending synchronization;
 3. after project temporary write;
-4. after project replacement but before manifest replacement;
-5. after both replacements but before verification;
-6. after verification but before pending deletion.
+4. after project replacement and before manifest replacement;
+5. after both replacements and before verification;
+6. after verification and before pending deletion.
 
-Opening the package after each injected failure must produce either the last complete snapshot or the complete candidate snapshot. It must never expose mixed project and manifest revisions.
+Each reopened package produces either the last complete pair or the complete candidate pair. No mixed revision is exposed.
 
-### 15.3 Autosave
+### Autosave
 
-Tests verify immutable bytes, sequence and checksum filenames, duplicate suppression, eight-snapshot retention, corrupt candidate rejection, and absence of Undo, Redo, command IDs, and bookmark data.
+- immutable existing bytes;
+- sequence and checksum filename;
+- deterministic next-sequence calculation;
+- duplicate suppression;
+- eight-snapshot retention;
+- corruption rejection;
+- no history, command IDs, or bookmark payload.
 
-### 15.4 Bookmark sidecars
+### Bookmark and media
 
-Tests verify sidecar naming, canonical JSON exclusion, atomic replacement, stale refresh, missing-bookmark isolation, Relink behavior, and embedded-media independence.
+- canonical sidecar name;
+- atomic replacement;
+- stale refresh;
+- missing-bookmark media isolation;
+- Relink sidecar replacement;
+- embedded-media independence and fingerprint verification.
 
-### 15.5 Legacy import
+### Legacy import
 
-Tests verify source-package byte or tree evidence is unchanged; contiguous WAL replay; truncated-final-record handling; sequence-gap stopping; history and mutable-autosave discard; stable ID preservation; bookmark extraction; embedded-media verification; temporary cleanup; deterministic canonical project bytes; and no recent-project registration on failure.
+- source-tree digest unchanged before and after;
+- contiguous WAL replay and first-gap stop;
+- truncated-final-record handling;
+- history, backup, and mutable-autosave discard;
+- stable identity preservation;
+- deterministic timestamp policy and canonical bytes;
+- bookmark extraction and failure isolation;
+- embedded-media verification;
+- temporary destination cleanup and recent-project invariance on failure.
 
-### 15.6 Session and startup
+### Session, startup, and regressions
 
-Tests verify empty Undo/Redo after reopen, 200-entry bounds, coalescing rules, save-failure session preservation, save/autosave race handling, splash completion across future phase numbers, and isolation of project, Metal, and bookmark failures from workspace entry.
+- Undo/Redo empty after reopen;
+- 200-entry history bounds and 512 command-ID bounds;
+- command coalescing rules;
+- save-failure preservation of working document and history;
+- save/autosave race handling;
+- splash completion across later phase numbers;
+- project, Metal, and bookmark failures do not block workspace entry;
+- all existing Phase 6 schema, command, compiler, Metal pixel, adjustment, blend, nested-composition, preview, PNG, relink, and embed tests remain active.
 
-### 15.7 Regression coverage
+## 14. CI, branches, and artifact gate
 
-All Phase 6 schema, command, compiler, Metal pixel, adjustment-layer, blend-mode, nested-composition, preview, PNG, relink, and embedded-media tests remain active after adaptation to the canonical package.
-
-## 16. CI and release gate
-
-The corrected 6.0 release requires:
+Required CI evidence:
 
 - Linux portable tests;
 - macOS persistence failure-injection tests;
 - macOS legacy import tests;
-- Metal shader and pixel regression tests;
+- Metal shader and pixel tests;
 - composition compiler tests;
-- iOS 17 arm64 Release compilation;
-- app startup regression test;
+- iOS 17 arm64 Release build;
+- startup regression test;
 - package allowlist inspection;
-- static checks confirming the public `VertexProjectFoundation` product is absent;
-- static checks confirming canonical JSON has no `bookmarkData`, `appliedCommandIDs`, or `legacyRenderSettings`;
+- static forbidden-module, extension, entry, and canonical-field checks;
 - downloaded IPA inspection;
 - artifact ZIP and IPA SHA-256 recording.
 
-The workflow must fail if new code imports `VertexProjectFoundation`, uses `.aeproject` as a writable type, emits forbidden package entries, or serializes forbidden canonical fields.
+Branch sequence:
 
-## 17. Branch and artifact sequence
-
-1. Correct the Phase 5 persistence implementation and PR #5 to expose `VertexProjectPersistence` and the canonical package contract.
-2. Adapt and rebase or retarget Phase 6 onto the corrected Phase 5 state without weakening the existing layer and composition behavior.
-3. Verify the corrected Phase 6 source and produce a replacement `After-Effects-6.0.0-unsigned.ipa`.
-4. Record the corrected product HEAD, CI run, artifact ID, ZIP checksum, IPA checksum, bundle metadata, and package contract evidence.
-5. Mark every earlier 6.0 IPA as `Superseded draft artifact — do not use as the Phase 7 base`.
-6. Only after the correction gate passes, create `agent/phase-7-motion-engine` and begin a separate Phase 7 design, plan, and TDD implementation cycle.
-
-## 18. Deliberate exclusions
-
-This correction does not implement Phase 7 animation channels, keyframes, interpolation, parenting, or motion blur. It also does not add continuous playback, a full NLE timeline, retiming, advanced pre-composition, camera or light rendering, video export, masks, tracking, AI, shapes, text, professional color or audio, particles, node compositing, or 3D.
-
-Those features remain governed by their roadmap phases. The only product artifact produced by this correction is the verified replacement 6.0.0 unsigned IPA.
+1. Correct Phase 5 and PR #5 with `VertexProjectPersistence` and the canonical package contract.
+2. Rebase or retarget Phase 6 onto the corrected Phase 5 state and adapt the app without weakening layers and compositions.
+3. Produce and inspect the replacement `After-Effects-6.0.0-unsigned.ipa`.
+4. Record product HEAD, CI run, artifact ID, checksums, bundle metadata, and package evidence.
+5. Mark every previous 6.0 artifact: `Superseded draft artifact — do not use as the Phase 7 base`.
+6. Only then create `agent/phase-7-motion-engine` and begin a separate Phase 7 design and implementation cycle.
