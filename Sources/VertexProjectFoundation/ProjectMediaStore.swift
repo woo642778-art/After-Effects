@@ -73,39 +73,51 @@ public struct ProjectMediaStore {
         let url = try layout.embeddedMediaURL(relativePath: embeddedPath)
         guard fileManager.fileExists(atPath: url.path) else { return nil }
         if let expected = reference.contentFingerprint {
-            guard try fingerprint(of: url).lowercased() == expected.lowercased() else {
-                throw ProjectError.checksumMismatch(
-                    expected: expected,
-                    actual: try fingerprint(of: url)
-                )
+            let actual = try fingerprint(of: url)
+            guard actual.lowercased() == expected.lowercased() else {
+                throw ProjectError.checksumMismatch(expected: expected, actual: actual)
             }
         }
         return url
     }
 
     public func createSecurityScopedBookmark(for url: URL) throws -> Data {
+        #if os(macOS)
+        let options: URL.BookmarkCreationOptions = [.withSecurityScope]
+        #elseif os(iOS)
+        let options: URL.BookmarkCreationOptions = [.minimalBookmark]
+        #else
+        throw ProjectError.bookmarkFailure("Security-scoped bookmarks are unavailable on this platform.")
+        #endif
+
         #if os(iOS) || os(macOS)
         do {
             return try url.bookmarkData(
-                options: [.withSecurityScope],
+                options: options,
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
         } catch {
             throw ProjectError.bookmarkFailure("Security-scoped bookmark creation failed: \(error.localizedDescription)")
         }
-        #else
-        throw ProjectError.bookmarkFailure("Security-scoped bookmarks are unavailable on this platform.")
         #endif
     }
 
     public func resolveSecurityScopedBookmark(_ data: Data) throws -> (url: URL, isStale: Bool) {
+        #if os(macOS)
+        let options: URL.BookmarkResolutionOptions = [.withSecurityScope, .withoutUI]
+        #elseif os(iOS)
+        let options: URL.BookmarkResolutionOptions = [.withoutUI]
+        #else
+        throw ProjectError.bookmarkFailure("Security-scoped bookmarks are unavailable on this platform.")
+        #endif
+
         #if os(iOS) || os(macOS)
         var isStale = false
         do {
             let url = try URL(
                 resolvingBookmarkData: data,
-                options: [.withSecurityScope, .withoutUI],
+                options: options,
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )
@@ -113,8 +125,6 @@ public struct ProjectMediaStore {
         } catch {
             throw ProjectError.bookmarkFailure("Security-scoped bookmark resolution failed: \(error.localizedDescription)")
         }
-        #else
-        throw ProjectError.bookmarkFailure("Security-scoped bookmarks are unavailable on this platform.")
         #endif
     }
 
