@@ -2,39 +2,42 @@
 
 After Effects is a long-term iOS-first professional motion-design, compositing, editing, color, audio, 3D, tracking, and AI production system made by Maze. Internal engine modules retain the `Vertex` namespace.
 
-The product target is not a cosmetic clone. The project is intended to remove major workflow and architecture limitations found in mobile editors while approaching the control, fidelity, and extensibility associated with professional desktop motion and post-production systems.
+The product target is not a cosmetic clone. Features are considered implemented only when their engine behavior, tests, documentation, and reproducible build evidence exist.
 
 ## Current status
 
-**Phase 5 of 28: Project Persistence and Recovery**
+**Corrected Phase 5 of 28: Project Persistence and Recovery**
 
 Current product version: **5.0.0 (5)**
 
 Implemented:
 
-- exact rational time, stable identity, explicit coordinates and color metadata
-- structured dependency and error contracts
-- After Effects identity, supplied Ae icon, startup loading, and `Made by Maze`
-- once-per-installation Telegram promotion for `https://t.me/aemotionios`
-- platform-neutral media descriptors and isolated AVFoundation inspection, thumbnail decoding, and waveform extraction
-- real Files-based movie selection and media presentation
-- platform-neutral `VertexRender` semantic graph and isolated native Metal compute backend
-- GPU translation, scale, exposure, saturation, inversion, opacity, resizing, metrics, and byte-identical PNG output
-- schema-versioned `.aeproject` packages
-- deterministic project JSON and checksums
-- command-based Undo and Redo with coalescing
-- checksummed write-ahead journal and replay
-- atomic save, backup, autosave rotation, and non-destructive recovery
-- future-schema inspection and migration contracts
-- missing-media detection, fingerprint relinking, and optional media embedding
-- real project create, open, save, export, recovery, Undo, Redo, embed, and relink application flows
-- reproducible unsigned `After-Effects-5.0.0-unsigned.ipa`
+- exact rational time, stable identity, explicit coordinates and color metadata;
+- After Effects identity, supplied Ae icon, startup loading, `Made by Maze`, and one-time Telegram promotion;
+- portable media contracts with isolated AVFoundation inspection, thumbnails, and waveform extraction;
+- portable `VertexRender` graph with isolated native Metal compute backend;
+- GPU transform, exposure, saturation, inversion, opacity, resize, timing metrics, and byte-identical PNG output;
+- canonical schema-versioned `.vertexproject` packages;
+- deterministic project JSON, matching manifests, and full pending-save transactions;
+- session-only bounded Undo/Redo and recent command identity tracking;
+- immutable full-document autosaves retaining eight valid unique snapshots;
+- bookmark sidecars, fingerprint relinking, and verified optional media embedding;
+- non-destructive legacy `.aeproject` inspection and conversion;
+- serial app project ownership through `ProjectSessionActor`;
+- real create, open, save, export, recovery-decision, legacy-import, Undo, Redo, autosave, embed, and relink flows;
+- reproducible unsigned `After-Effects-5.0.0-unsigned.ipa`.
+
+Next required gate:
+
+- reintegrate corrected persistence into Phase 6;
+- restore schema 2 Layers, Compositions, compiler, Metal composition, preview, and PNG parity;
+- inspect a replacement `After-Effects-6.0.0-unsigned.ipa` before Phase 7 begins.
 
 Not implemented yet:
 
-- continuous video playback or timeline editing
-- real multilayer composition or video-file export
-- general effect stacks, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, node compositing, or 3D
+- continuous playback or a full NLE timeline;
+- video-file export;
+- motion keyframes, parenting, motion blur, retiming, masks, tracking, AI cutout, shape/text animation, professional color/audio, particles, nodes, or 3D.
 
 ## Build
 
@@ -46,7 +49,7 @@ xcodegen generate
 open Vertex.xcodeproj
 ```
 
-Every successful phase publishes an **unsigned IPA** through GitHub Actions. Starting with Phase 3, the phase number is the major product version. Installation requires valid signing credentials supplied by the repository owner.
+Every successful phase publishes an unsigned IPA through GitHub Actions. Installation requires signing credentials supplied by the repository owner.
 
 ## Canonical documents
 
@@ -56,19 +59,14 @@ Every successful phase publishes an **unsigned IPA** through GitHub Actions. Sta
 - `Documentation/SOURCE_ADOPTION_MATRIX.md`
 - `Documentation/CORE_ARCHITECTURE.md`
 - `Documentation/MEDIA_IO_ARCHITECTURE.md`
-- `Documentation/MEDIA_SOURCE_AUDIT.md`
-- `Documentation/MEDIA_TEST_MATRIX.md`
 - `Documentation/GPU_RENDER_GRAPH_ARCHITECTURE.md`
-- `Documentation/GPU_SOURCE_AUDIT.md`
-- `Documentation/GPU_TEST_MATRIX.md`
 - `Documentation/PROJECT_PERSISTENCE_ARCHITECTURE.md`
 - `Documentation/PROJECT_TEST_MATRIX.md`
 - `Documentation/PHASE_5_COMPLETION.md`
+- `Documentation/PHASE_5_WORK_LOG.md`
 - `Documentation/VERSIONING_AND_ARTIFACTS.md`
-- `Documentation/BRANDING_AND_FIRST_RUN.md`
-- `Documentation/WORK_LOG.md`
 - `Documentation/HANDOFF.md`
 
 ## Development rule
 
-A feature is not complete because its UI exists. It is complete only when the underlying behavior, tests, appropriate performance evidence, documentation, and a reproducible build artifact are present.
+A feature is not complete because its UI exists. Completion requires real underlying behavior, deterministic tests, appropriate performance or failure evidence, accurate documentation, and a reproducible artifact.
