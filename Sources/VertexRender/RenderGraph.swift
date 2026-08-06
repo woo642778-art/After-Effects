@@ -83,8 +83,10 @@ public struct RenderGraph: Codable, Equatable, Sendable {
 
         func visit(_ node: RenderNode) throws {
             if let state = states[node.id] {
-                if state == .visited { return }
-                if state == .visiting {
+                switch state {
+                case .visited:
+                    return
+                case .visiting:
                     let start = stack.firstIndex(of: node.id) ?? 0
                     let cycleIDs = Array(stack[start...]) + [node.id]
                     throw RenderError.cycle(cycleIDs.map(\.rawValue))
@@ -108,12 +110,6 @@ public struct RenderGraph: Codable, Equatable, Sendable {
             try visit(node)
         }
 
-        guard ordered.last(where: {
-            if case .output = $0.kind { return true }
-            return false
-        }) != nil else {
-            throw RenderError.invalidGraph("The output node is unreachable.")
-        }
         return ordered
     }
 
