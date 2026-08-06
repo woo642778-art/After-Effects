@@ -329,17 +329,26 @@ actor ProjectSessionActor {
     ) -> Set<VertexID> {
         var missing = Set<VertexID>()
         for reference in document.mediaRegistry {
-            if let embedded = try? embeddedMediaStore.resolve(
-                reference: reference,
-                packageURL: packageURL
-            ), embedded != nil {
-                continue
+            do {
+                if let embeddedURL = try embeddedMediaStore.resolve(
+                    reference: reference,
+                    packageURL: packageURL
+                ), FileManager.default.fileExists(atPath: embeddedURL.path) {
+                    continue
+                }
+            } catch {
+                // Embedded corruption is isolated to this media reference.
             }
-            if let external = try? bookmarkStore.resolveAndRefreshIfNeeded(
-                mediaID: reference.id,
-                in: packageURL
-            ), let external, FileManager.default.fileExists(atPath: external.path) {
-                continue
+
+            do {
+                if let externalURL = try bookmarkStore.resolveAndRefreshIfNeeded(
+                    mediaID: reference.id,
+                    in: packageURL
+                ), FileManager.default.fileExists(atPath: externalURL.path) {
+                    continue
+                }
+            } catch {
+                // Bookmark failure is isolated to this media reference.
             }
             missing.insert(reference.id)
         }
