@@ -9,6 +9,10 @@ on:
       - "Documentation/**"
       - "docs/**"
       - "README.md"
+  pull_request:
+    branches:
+      - agent/phase-4-gpu-render-graph
+      - agent/phase-5-project-persistence
   workflow_dispatch:
 
 concurrency:
