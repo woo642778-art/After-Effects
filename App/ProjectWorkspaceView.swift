@@ -13,16 +13,16 @@ struct ProjectWorkspaceView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("PROJECT PERSISTENCE")
+                    Text("PROJECT / COMPOSITIONS")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AfterEffectsTheme.accent)
                         .tracking(0.8)
-                    Text("Atomic saves · journal · recovery")
+                    Text("Atomic saves · journal · schema migration · recovery")
                         .font(.headline)
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                Text("SCHEMA 1")
+                Text("SCHEMA 2")
                     .font(.caption2.monospaced().weight(.bold))
                     .foregroundStyle(AfterEffectsTheme.secondaryText)
             }
@@ -63,7 +63,7 @@ struct ProjectWorkspaceView: View {
                     workspace.prepareExport()
                     isProjectExporterPresented = workspace.exportDocument != nil
                 } label: {
-                    Label("Export", systemImage: "square.and.arrow.up")
+                    Label("Export Package", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.bordered)
                 .disabled(workspace.project == nil)
@@ -163,7 +163,7 @@ struct ProjectWorkspaceView: View {
     private var statusView: some View {
         switch workspace.status {
         case .idle:
-            Text("Create or open a project package before editing persistent settings.")
+            Text("Create or open a project package before editing compositions and layers.")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
         case .ready(let message):
