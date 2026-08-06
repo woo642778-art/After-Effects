@@ -2,10 +2,13 @@ import SwiftUI
 import VertexCore
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @AppStorage("afterEffects.didPresentTelegramPromotion.v1")
     private var didPresentTelegramPromotion = false
 
     @State private var isTelegramPromotionPresented = false
+    @StateObject private var projectWorkspace = ProjectWorkspaceViewModel()
 
     private let milestone = MilestoneCatalog.current
     private let architectureContracts = CoreArchitectureCatalog.contracts
@@ -18,6 +21,7 @@ struct RootView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     header
                     statusCard
+                    ProjectWorkspaceView()
                     MediaImportView()
                     architectureSection
                     sourcesSection
@@ -28,8 +32,14 @@ struct RootView: View {
                 .padding(.bottom, 20)
             }
         }
+        .environmentObject(projectWorkspace)
         .preferredColorScheme(.dark)
         .onAppear(perform: presentTelegramPromotionIfNeeded)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                projectWorkspace.flushAutosave()
+            }
+        }
         .sheet(isPresented: $isTelegramPromotionPresented) {
             TelegramPromotionView()
         }
