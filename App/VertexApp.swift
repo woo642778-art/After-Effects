@@ -20,11 +20,15 @@ struct AfterEffectsApp: App {
             .task {
                 guard !isReady else { return }
 
-                let architectureIsAvailable = !CoreArchitectureCatalog.contracts.isEmpty
-                    && MilestoneCatalog.current.number == 5
-                guard architectureIsAvailable else { return }
+                let startupMetadataIsValid = StartupReadinessPolicy.shouldEnterApp(
+                    architectureContracts: CoreArchitectureCatalog.contracts,
+                    milestone: MilestoneCatalog.current
+                )
+                let splashDelay: UInt64 = startupMetadataIsValid ? 1_250_000_000 : 0
 
-                try? await Task.sleep(nanoseconds: 1_250_000_000)
+                try? await Task.sleep(nanoseconds: splashDelay)
+                guard !Task.isCancelled else { return }
+
                 withAnimation(.easeInOut(duration: 0.32)) {
                     isReady = true
                 }
