@@ -6,35 +6,42 @@ The product target is not a cosmetic clone. The project is intended to remove ma
 
 ## Current status
 
-**Phase 5 of 28: Project Persistence and Recovery**
+**Phase 6 of 28: Layers and Compositions**
 
-Current product version: **5.0.0 (5)**
+Current product version: **6.0.0 (6)**  
+Current project schema: **2**
 
 Implemented:
 
-- exact rational time, stable identity, explicit coordinates and color metadata
-- structured dependency and error contracts
-- After Effects identity, supplied Ae icon, startup loading, and `Made by Maze`
-- once-per-installation Telegram promotion for `https://t.me/aemotionios`
-- platform-neutral media descriptors and isolated AVFoundation inspection, thumbnail decoding, and waveform extraction
-- real Files-based movie selection and media presentation
-- platform-neutral `VertexRender` semantic graph and isolated native Metal compute backend
-- GPU translation, scale, exposure, saturation, inversion, opacity, resizing, metrics, and byte-identical PNG output
-- schema-versioned `.aeproject` packages
-- deterministic project JSON and checksums
-- command-based Undo and Redo with coalescing
-- checksummed write-ahead journal and replay
-- atomic save, backup, autosave rotation, and non-destructive recovery
-- future-schema inspection and migration contracts
-- missing-media detection, fingerprint relinking, and optional media embedding
-- real project create, open, save, export, recovery, Undo, Redo, embed, and relink application flows
-- reproducible unsigned `After-Effects-5.0.0-unsigned.ipa`
+- exact rational time, stable identity, explicit coordinates and color metadata;
+- After Effects identity, supplied Ae icon, startup loading, `Made by Maze`, and one-time Telegram promotion;
+- AVFoundation media inspection, exact-frame decoding, thumbnail generation, and waveform extraction;
+- deterministic `.aeproject` packages, checksums, journal-first Undo/Redo, atomic save, autosave, recovery, relink, and optional media embedding;
+- non-destructive schema 1→2 package migration;
+- real Composition and Layer persistence with authoritative Z-order;
+- media, Adjustment, Nested Composition, Null, Guide, Camera, and Light layer records;
+- real multi-source `VertexRender` DAG;
+- Metal position, anchor, independent scale, rotation, opacity, exposure, saturation, and inversion;
+- real Normal, Add, Multiply, and Screen blending using premultiplied alpha;
+- real Adjustment Layers affecting accumulated layers below;
+- real basic Nested Composition rendering with exact source offsets and parent In/Out ranges;
+- exact-frame GPU preview and byte-identical PNG output;
+- functional composition controls, frame navigation, layer ordering, flags, and inspector;
+- reproducible unsigned `After-Effects-6.0.0-unsigned.ipa`.
+
+Model-only in Phase 6:
+
+- Null and Guide layers;
+- Camera and Light records and controls.
+
+These types persist and support ordering and Undo/Redo, but Camera and Light do not yet influence pixels.
 
 Not implemented yet:
 
-- continuous video playback or timeline editing
-- real multilayer composition or video-file export
-- general effect stacks, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, node compositing, or 3D
+- continuous playback or a full NLE timeline;
+- keyframes, parenting, motion blur, retiming, or advanced pre-composition;
+- Camera/Light rendering or video-file export;
+- masks, tracking, AI cutout, vector shapes, text animation, professional color/audio, particles, node compositing, or 3D.
 
 ## Build
 
@@ -46,7 +53,7 @@ xcodegen generate
 open Vertex.xcodeproj
 ```
 
-Every successful phase publishes an **unsigned IPA** through GitHub Actions. Starting with Phase 3, the phase number is the major product version. Installation requires valid signing credentials supplied by the repository owner.
+Every successful phase publishes an **unsigned arm64 IPA** through GitHub Actions. Starting with Phase 3, the phase number is the major product version. Installation requires valid Apple signing credentials supplied by the repository owner.
 
 ## Canonical documents
 
@@ -56,19 +63,16 @@ Every successful phase publishes an **unsigned IPA** through GitHub Actions. Sta
 - `Documentation/SOURCE_ADOPTION_MATRIX.md`
 - `Documentation/CORE_ARCHITECTURE.md`
 - `Documentation/MEDIA_IO_ARCHITECTURE.md`
-- `Documentation/MEDIA_SOURCE_AUDIT.md`
-- `Documentation/MEDIA_TEST_MATRIX.md`
 - `Documentation/GPU_RENDER_GRAPH_ARCHITECTURE.md`
-- `Documentation/GPU_SOURCE_AUDIT.md`
-- `Documentation/GPU_TEST_MATRIX.md`
 - `Documentation/PROJECT_PERSISTENCE_ARCHITECTURE.md`
-- `Documentation/PROJECT_TEST_MATRIX.md`
-- `Documentation/PHASE_5_COMPLETION.md`
+- `Documentation/LAYERS_COMPOSITIONS_ARCHITECTURE.md`
+- `Documentation/COMPOSITION_TEST_MATRIX.md`
+- `Documentation/PHASE_6_COMPLETION.md`
+- `Documentation/PHASE_6_WORK_LOG.md`
 - `Documentation/VERSIONING_AND_ARTIFACTS.md`
 - `Documentation/BRANDING_AND_FIRST_RUN.md`
-- `Documentation/WORK_LOG.md`
 - `Documentation/HANDOFF.md`
 
 ## Development rule
 
-A feature is not complete because its UI exists. It is complete only when the underlying behavior, tests, appropriate performance evidence, documentation, and a reproducible build artifact are present.
+A feature is not complete because its UI exists. It is complete only when the underlying behavior, tests, performance and resource evidence appropriate to the phase, documentation, and a reproducible build artifact are present.
