@@ -182,15 +182,16 @@ public struct ProjectJournalReplayer: Sendable {
 
         for record in records {
             _ = try record.validated()
+
+            if record.sequence <= committedSequence {
+                continue
+            }
+
             guard record.sequence == expected else {
                 throw ProjectError.journalGap(expected: expected, actual: record.sequence)
             }
             expected += 1
             lastSequence = record.sequence
-
-            if project.appliedCommandIDs.contains(record.command.commandID) {
-                continue
-            }
             project = try engine.apply(record.command, to: project)
             appliedCount += 1
         }
