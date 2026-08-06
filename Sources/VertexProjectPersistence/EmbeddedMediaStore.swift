@@ -1,7 +1,12 @@
 import Foundation
+import VertexCore
 import VertexProject
 
 public struct EmbeddedMediaStore: Sendable {
+    private static let unknownMediaID = VertexID(
+        rawValue: "00000000-0000-0000-0000-000000000000"
+    )
+
     public init() {}
 
     public func fingerprint(of url: URL) throws -> String {
@@ -9,9 +14,7 @@ public struct EmbeddedMediaStore: Sendable {
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
             return StableProjectSHA256.hexDigest(data)
         } catch {
-            throw ProjectPersistenceError.embeddedMediaMismatch(
-                mediaID(from: url) ?? fallbackMediaID
-            )
+            throw ProjectPersistenceError.embeddedMediaMismatch(Self.unknownMediaID)
         }
     }
 
@@ -132,14 +135,5 @@ public struct EmbeddedMediaStore: Sendable {
         result = result.trimmingCharacters(in: CharacterSet(charactersIn: "."))
         result = String(result.prefix(120))
         return result.isEmpty ? "media.bin" : result
-    }
-
-    private var fallbackMediaID: VertexID {
-        VertexID(rawValue: "00000000-0000-0000-0000-000000000000")
-    }
-
-    private func mediaID(from url: URL) -> VertexID? {
-        let token = url.lastPathComponent.split(separator: "-").prefix(5).joined(separator: "-")
-        return try? VertexID(parsing: token)
     }
 }
