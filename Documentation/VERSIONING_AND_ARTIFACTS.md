@@ -1,5 +1,13 @@
 # Versioning and Artifact Policy
 
+## Persistence correction status
+
+The current Phase 5 persistence implementation and every existing Phase 6 binary are retained only as historical verification evidence while the approved `.vertexproject` contract is implemented.
+
+**Superseded draft artifact — do not use as the Phase 7 base.**
+
+A replacement `After-Effects-6.0.0-unsigned.ipa` becomes eligible as the Phase 7 base only after the corrected Phase 5 package, the reapplied Phase 6 layer/composition system, full CI, downloaded IPA inspection, and checksums all pass.
+
 ## Phase-major versioning
 
 Starting with Phase 3, the successful phase number is the product major version.
@@ -9,8 +17,8 @@ Starting with Phase 3, the successful phase number is the product major version.
 | 2 | 2.0.0 policy baseline | 2 | historical Phase 2 filename | completed |
 | 3 | 3.0.0 | 3 | `After-Effects-3.0.0-unsigned.ipa` | completed |
 | 4 | 4.0.0 | 4 | `After-Effects-4.0.0-unsigned.ipa` | completed and verified |
-| 5 | 5.0.0 | 5 | `After-Effects-5.0.0-unsigned.ipa` | completed and verified |
-| 6 | 6.0.0 | 6 | `After-Effects-6.0.0-unsigned.ipa` | reserved for completed Phase 6 only |
+| 5 | 5.0.0 | 5 | `After-Effects-5.0.0-unsigned.ipa` | verified historical draft; persistence correction in progress |
+| 6 | 6.0.0 | 6 | `After-Effects-6.0.0-unsigned.ipa` | existing artifacts superseded; replacement reserved for corrected Phase 6 |
 | N | N.0.0 | N | `After-Effects-N.0.0-unsigned.ipa` | future successful phase |
 
 A phase version is published only when its required tests, iOS Release compilation, identity checks, packaging, artifact upload, downloaded-IPA inspection, documentation, and handoff are complete. Partial milestones remain on the current phase version or use internal prerelease identifiers; they do not consume the next major number.
@@ -38,6 +46,8 @@ Every phase record must include:
 Documentation-only commits are excluded from the product-build trigger so final evidence can be recorded without generating a different ZIP timestamp and checksum.
 
 ## Verified Phase 5 artifact
+
+The values below remain immutable historical evidence for the pre-correction implementation. They do not authorize it as the Phase 7 base.
 
 - Product and CI source HEAD: `e68ffde2eebcdb58becc9d3d1ecaf195f1861e76`
 - Workflow run: `31069517329`
