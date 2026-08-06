@@ -68,6 +68,7 @@ targets:
       - path: Tests/VertexRenderMetalTests
       - path: Tests/VertexProjectTests
       - path: Tests/VertexProjectPersistenceTests
+      - path: Tests/VertexAppTests
     dependencies:
       - target: Vertex
       - package: Vertex
