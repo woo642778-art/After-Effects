@@ -1,6 +1,16 @@
 import Foundation
 import VertexCore
 
+public struct ProjectHistorySnapshot: Codable, Equatable, Sendable {
+    public var undo: [ProjectCommandRecord]
+    public var redo: [ProjectCommandRecord]
+
+    public init(undo: [ProjectCommandRecord] = [], redo: [ProjectCommandRecord] = []) {
+        self.undo = undo
+        self.redo = redo
+    }
+}
+
 public final class ProjectHistoryController {
     public private(set) var project: ProjectDocument
     public let coalescingInterval: TimeInterval
@@ -12,6 +22,7 @@ public final class ProjectHistoryController {
 
     public init(
         project: ProjectDocument,
+        snapshot: ProjectHistorySnapshot = ProjectHistorySnapshot(),
         coalescingInterval: TimeInterval = 0.5,
         historyLimit: Int = 200
     ) throws {
@@ -24,16 +35,16 @@ public final class ProjectHistoryController {
         self.project = try project.validated()
         self.coalescingInterval = coalescingInterval
         self.historyLimit = historyLimit
-        self.undoStack = project.undoHistory
-        self.redoStack = project.redoHistory
+        self.undoStack = snapshot.undo
+        self.redoStack = snapshot.redo
         trimHistories()
-        synchronizeHistories()
     }
 
     public var undoCount: Int { undoStack.count }
     public var redoCount: Int { redoStack.count }
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
+    public var snapshot: ProjectHistorySnapshot { ProjectHistorySnapshot(undo: undoStack, redo: redoStack) }
 
     public func perform(
         _ operation: ProjectOperation,
@@ -58,7 +69,6 @@ public final class ProjectHistoryController {
         }
         redoStack.removeAll(keepingCapacity: true)
         trimHistories()
-        synchronizeHistories()
     }
 
     public func undo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws {
@@ -78,7 +88,6 @@ public final class ProjectHistoryController {
             project = try engine.apply(transition, to: project)
             redoStack.append(original)
             trimHistories()
-            synchronizeHistories()
         } catch {
             undoStack.append(original)
             throw error
@@ -102,17 +111,13 @@ public final class ProjectHistoryController {
             project = try engine.apply(transition, to: project)
             undoStack.append(original)
             trimHistories()
-            synchronizeHistories()
         } catch {
             redoStack.append(original)
             throw error
         }
     }
 
-    private func coalesced(
-        _ previous: ProjectCommandRecord,
-        with current: ProjectCommandRecord
-    ) -> ProjectCommandRecord? {
+    private func coalesced(_ previous: ProjectCommandRecord, with current: ProjectCommandRecord) -> ProjectCommandRecord? {
         guard let previousKey = previous.mergeKey,
               previousKey == current.mergeKey,
               current.timestamp.timeIntervalSince(previous.timestamp) >= 0,
@@ -127,13 +132,11 @@ public final class ProjectHistoryController {
             .setRenderParameter(currentParameter, currentBefore, currentAfter)
         ) where previousParameter == currentParameter && previousAfter == currentBefore:
             mergedForward = .setRenderParameter(previousParameter, before: previousBefore, after: currentAfter)
-
         case let (
             .setRenderBoolean(previousParameter, previousBefore, previousAfter),
             .setRenderBoolean(currentParameter, currentBefore, currentAfter)
         ) where previousParameter == currentParameter && previousAfter == currentBefore:
             mergedForward = .setRenderBoolean(previousParameter, before: previousBefore, after: currentAfter)
-
         default:
             return nil
         }
@@ -150,16 +153,7 @@ public final class ProjectHistoryController {
     }
 
     private func trimHistories() {
-        if undoStack.count > historyLimit {
-            undoStack.removeFirst(undoStack.count - historyLimit)
-        }
-        if redoStack.count > historyLimit {
-            redoStack.removeFirst(redoStack.count - historyLimit)
-        }
-    }
-
-    private func synchronizeHistories() {
-        project.undoHistory = undoStack
-        project.redoHistory = redoStack
+        if undoStack.count > historyLimit { undoStack.removeFirst(undoStack.count - historyLimit) }
+        if redoStack.count > historyLimit { redoStack.removeFirst(redoStack.count - historyLimit) }
     }
 }
