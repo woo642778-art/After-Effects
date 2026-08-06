@@ -12,6 +12,7 @@ public enum ProjectPersistenceError: Error, Equatable, Sendable {
     case autosaveVerificationFailed(String)
     case bookmarkMissing(VertexID)
     case bookmarkStale(VertexID)
+    case bookmarkOperationFailed(String)
     case embeddedMediaMismatch(VertexID)
     case legacyJournalCorrupt(sequence: UInt64?)
     case legacyImportIncomplete(stage: String)
@@ -41,6 +42,8 @@ extension ProjectPersistenceError: LocalizedError {
             "The bookmark sidecar is missing for media \(mediaID.rawValue)."
         case .bookmarkStale(let mediaID):
             "The bookmark sidecar is stale for media \(mediaID.rawValue)."
+        case .bookmarkOperationFailed(let reason):
+            "Bookmark operation failed: \(reason)"
         case .embeddedMediaMismatch(let mediaID):
             "Embedded media verification failed for \(mediaID.rawValue)."
         case .legacyJournalCorrupt(let sequence):
