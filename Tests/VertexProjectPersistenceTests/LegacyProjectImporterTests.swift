@@ -45,8 +45,7 @@ private func injectLegacyState(
     var media = try #require(changed["mediaRegistry"] as? [[String: Any]])
 
     for index in media.indices {
-        let idObject = try #require(media[index]["id"] as? [String: Any])
-        let rawID = try #require(idObject["rawValue"] as? String)
+        let rawID = try #require(media[index]["id"] as? String)
         guard let payload = bookmarkPayloads.first(where: { $0.key.rawValue == rawID })?.value else {
             continue
         }
