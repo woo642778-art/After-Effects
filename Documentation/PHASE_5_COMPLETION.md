@@ -75,8 +75,9 @@ Phase 5 adds a versioned, deterministic, recoverable project system and a real p
 
 - Artifact ID: `8955148634`
 - Artifact name: `After-Effects-5.0.0-unsigned-ipa`
-- Artifact API digest: `sha256:f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- IPA SHA-256: `395e67c262fa24cb7f9b75f459ced1bf4673d6edbdc24d622d1456342f18d366`
+- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
+- IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
+- IPA size: 884,969 bytes
 
 Downloaded IPA inspection:
 
@@ -87,7 +88,7 @@ Downloaded IPA inspection:
 - bundle identifier: `com.woo642778.aftereffects`;
 - version: `5.0.0 (5)`;
 - minimum OS: iOS 17.0;
-- `Assets.car`: present;
+- `Assets.car`: present, 152,879 bytes;
 - `Vertex_VertexRenderMetal.bundle/default.metallib`: present, 6,996 bytes.
 
 ## Current product boundary
