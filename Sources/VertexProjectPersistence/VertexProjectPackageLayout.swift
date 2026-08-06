@@ -46,6 +46,16 @@ public struct VertexProjectPackageLayout: Equatable, Sendable {
         bookmarksDirectoryURL.appendingPathComponent("\(mediaID.lowercased()).bookmark.tmp")
     }
 
+    public func embeddedMediaURL(filename: String) throws -> URL {
+        try validateSingleFilename(filename)
+        return mediaDirectoryURL.appendingPathComponent(filename)
+    }
+
+    public func embeddedMediaTemporaryURL(filename: String) throws -> URL {
+        try validateSingleFilename(filename)
+        return mediaDirectoryURL.appendingPathComponent("\(filename).tmp")
+    }
+
     public func createRequiredDirectories(fileManager: FileManager = .default) throws {
         do {
             try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
@@ -128,6 +138,18 @@ public struct VertexProjectPackageLayout: Equatable, Sendable {
             if entry.hasSuffix(".tmp"), mode != .transactionRecovery {
                 throw ProjectPersistenceError.forbiddenPackageEntry("Media/\(entry)")
             }
+        }
+    }
+
+    private func validateSingleFilename(_ filename: String) throws {
+        guard !filename.isEmpty,
+              !filename.hasPrefix("."),
+              !filename.contains("/"),
+              !filename.contains("\\"),
+              !filename.contains(".."),
+              filename != ".",
+              filename != ".." else {
+            throw ProjectPersistenceError.forbiddenPackageEntry("Media/\(filename)")
         }
     }
 
