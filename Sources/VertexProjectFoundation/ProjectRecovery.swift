@@ -103,8 +103,7 @@ public struct ProjectRecoveryEngine {
         if fileManager.fileExists(atPath: layout.projectBackupURL.path) {
             candidates.append(loadRawProjectCandidate(
                 source: .backup,
-                url: layout.projectBackupURL,
-                historyURL: layout.historyURL
+                url: layout.projectBackupURL
             ))
         }
 
@@ -190,22 +189,15 @@ public struct ProjectRecoveryEngine {
 
     private func loadRawProjectCandidate(
         source: ProjectRecoverySource,
-        url: URL,
-        historyURL: URL
+        url: URL
     ) -> ProjectRecoveryCandidate {
         do {
             let document = try codec.decode(Data(contentsOf: url))
-            let history: ProjectHistorySnapshot
-            if fileManager.fileExists(atPath: historyURL.path) {
-                history = (try? ProjectPackageStore(fileManager: fileManager).decodeHistory(Data(contentsOf: historyURL))) ?? ProjectHistorySnapshot()
-            } else {
-                history = ProjectHistorySnapshot()
-            }
             return ProjectRecoveryCandidate(
                 source: source,
                 url: url,
                 document: document,
-                history: history,
+                history: ProjectHistorySnapshot(),
                 isValid: true
             )
         } catch {
