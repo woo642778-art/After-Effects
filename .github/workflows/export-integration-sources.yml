@@ -1,0 +1,39 @@
+name: Export correction source trees
+
+on:
+  push:
+    branches:
+      - agent/phase-6-persistence-integration
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout corrected Phase 5
+        uses: actions/checkout@v4
+        with:
+          ref: agent/phase-5-project-persistence
+          path: phase5
+
+      - name: Checkout archived Phase 6
+        uses: actions/checkout@v4
+        with:
+          ref: agent/archive/phase-6-pre-correction
+          path: phase6
+
+      - name: Remove repository metadata
+        run: |
+          rm -rf phase5/.git phase6/.git
+
+      - name: Upload source trees
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-5-6-source-trees
+          path: |
+            phase5
+            phase6
+          if-no-files-found: error
+          retention-days: 1
