@@ -37,6 +37,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
+        PRODUCT_MODULE_NAME: Vertex
         MARKETING_VERSION: 5.0.0
         CURRENT_PROJECT_VERSION: 5
         SWIFT_VERSION: "6.0"
