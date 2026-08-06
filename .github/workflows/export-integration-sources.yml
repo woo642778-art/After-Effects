@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/phase-6-persistence-integration
+  pull_request:
+    branches:
+      - agent/phase-5-project-persistence
 
 permissions:
   contents: read
