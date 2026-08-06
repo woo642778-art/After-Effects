@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import VertexProject
-import VertexProjectFoundation
+import VertexProjectPersistence
 
 struct ProjectWorkspaceView: View {
     @EnvironmentObject private var workspace: ProjectWorkspaceViewModel
