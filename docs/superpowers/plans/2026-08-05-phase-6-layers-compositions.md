@@ -4,43 +4,35 @@
 
 **Goal:** Build deterministic schema 2 compositions and layers, real multi-source Metal compositing with Normal/Add/Multiply/Screen, adjustment layers, basic nested compositions, and a functional exact-frame workspace, then publish the verified unsigned `6.0.0 (6)` IPA.
 
-**Architecture:** `VertexProject` owns portable schema 2 state, migration, commands, history, and validation. New module `VertexComposition` compiles one project composition at an exact `RationalTime` into a multi-source `VertexRender` DAG; `VertexRenderMetal` evaluates that DAG using premultiplied-alpha solid, layer, composite, and adjustment kernels. Only the app resolves package URLs, bookmarks, AVFoundation frames, SwiftUI state, and migration destinations.
+**Architecture:** `VertexProject` owns portable schema 2 state, migration, commands, history, and validation. New module `VertexComposition` compiles one project composition at exact `RationalTime` into a multi-source `VertexRender` DAG; `VertexRenderMetal` evaluates that DAG with premultiplied-alpha solid, layer, composite, and adjustment kernels. Only app/Foundation adapters resolve package URLs, bookmarks, AVFoundation frames, SwiftUI state, and migration destinations.
 
 **Tech Stack:** Swift 6.0, Swift Testing, Swift Package Manager, XcodeGen, SwiftUI, AVFoundation adapters, Foundation package persistence, Metal compute, GitHub Actions, iOS 17, macOS 14.
 
 ## Global Constraints
 
-- Branch: `agent/phase-6-layers-compositions`; base: `agent/phase-5-project-persistence`.
-- Draft PR #6 remains stacked on Phase 5 and is not merged automatically.
-- Successful product version: `6.0.0 (6)`.
-- Successful artifact: `After-Effects-6.0.0-unsigned.ipa`.
-- Current project schema after migration: `2`.
-- iOS deployment target remains `17.0`; package macOS floor remains `14`; Swift language version remains `6.0`.
-- Preview and PNG output use the same `RenderResult.image` bytes.
-- Portable project/compiler/render models contain no AVFoundation, Metal, UIKit, SwiftUI, URL bookmark object, file descriptor, or absolute sandbox path.
-- All project time uses `RationalTime`; UI `Double` scrub values are immediately converted to integer frame indices.
-- Limits: dimensions `1...8192`, layers per composition `256`, nesting depth `16`, expanded nodes `4096`.
-- Schema 2 writes only `normal`, `add`, `multiply`, and `screen`.
-- Null, guide, camera, and light persist and support commands but produce no Phase 6 pixels.
-- Continuous playback, NLE editing, keyframes, parenting, motion blur, retiming, advanced pre-composition, camera/light rendering, video export, masks, tracking, AI, shapes, text, professional color/audio, particles, nodes, and 3D remain excluded.
-- No new external dependency is added.
-- Every production task follows RED → GREEN → full relevant regression → focused commit.
+- Branch `agent/phase-6-layers-compositions`; base `agent/phase-5-project-persistence`.
+- Draft PR #6 remains stacked on Phase 5 and unmerged.
+- Product `6.0.0 (6)`; artifact `After-Effects-6.0.0-unsigned.ipa`; schema `2`.
+- iOS `17.0`, macOS package floor `14`, Swift `6.0`.
+- Preview and PNG output consume identical `RenderResult.image` bytes.
+- Portable models contain no AVFoundation, Metal, UIKit, SwiftUI, security-scoped URL object, file descriptor, or absolute sandbox path.
+- All project time uses `RationalTime`; scrub UI converts immediately to integer frame indices.
+- Limits: dimensions `1...8192`, layers `256`, nested depth `16`, expanded nodes `4096`.
+- Schema 2 writes only `normal`, `add`, `multiply`, `screen`.
+- Null, guide, camera, and light are model-only and produce no Phase 6 pixels.
+- Playback, NLE edits, keyframes, parenting, motion blur, retiming, advanced pre-composition, camera/light rendering, video export, masks, tracking, AI, shapes, text, professional color/audio, particles, nodes, and 3D remain excluded.
+- No new external dependency.
+- Schema, commands, migration, compiler, and Metal follow RED → GREEN → relevant regressions → focused commit.
 
 ---
 
-### Task 0: Execution Baseline and Draft PR
+### Task 0: Baseline and Draft PR
 
-**Files:**
-- No production files.
-- PR: create Draft PR #6 if absent.
+**Files:** None.
 
-**Interfaces:**
-- Consumes: Phase 5 branch state and approved Phase 6 design.
-- Produces: a clean baseline, Draft PR, and CI location for every RED/GREEN cycle.
+**Interfaces:** Establishes clean branch, baseline tests, and CI/PR location.
 
-- [ ] **Step 1: Verify the branch base and documentation-only HEAD**
-
-Run:
+- [ ] **Step 1: Verify branch state**
 
 ```bash
 git status --short
@@ -49,35 +41,27 @@ git merge-base HEAD agent/phase-5-project-persistence
 git log -3 --oneline
 ```
 
-Expected: clean tree on `agent/phase-6-layers-compositions`; only the approved spec and plan differ from Phase 5.
+Expected: clean `agent/phase-6-layers-compositions`; only approved Phase 6 spec/plan commits are ahead of Phase 5.
 
-- [ ] **Step 2: Run the Phase 5 baseline suite**
+- [ ] **Step 2: Run Phase 5 baseline**
 
 ```bash
 swift test
 ```
 
-Expected: the existing 58 portable tests pass before Phase 6 production code begins.
+Expected: existing 58 portable tests pass.
 
 - [ ] **Step 3: Create Draft PR #6**
 
-Base: `agent/phase-5-project-persistence`
+Base `agent/phase-5-project-persistence`; title `Phase 6: layers, compositions, and 6.0.0 IPA`. Body states schema 2 migration, real media/adjustment/nested rendering, model-only camera/light, exclusions, and Draft status.
 
-Title:
+- [ ] **Step 4: Post baseline HEAD and test count to PR**
 
-```text
-Phase 6: layers, compositions, and 6.0.0 IPA
-```
-
-Body must state schema 2 migration, real multi-layer/adjustment/nested rendering, model-only camera/light boundaries, excluded later features, and that the PR remains Draft.
-
-- [ ] **Step 4: Record baseline evidence in the PR**
-
-Post the branch HEAD and baseline test count. Do not claim Phase 6 functionality yet.
+Do not claim Phase 6 functionality.
 
 ---
 
-### Task 1: Schema 2 Composition and Layer Values
+### Task 1: Schema 2 Values and Validation
 
 **Files:**
 - Create: `Sources/VertexProject/ProjectRGBAColor.swift`
@@ -89,14 +73,12 @@ Post the branch HEAD and baseline test count. Do not claim Phase 6 functionality
 - Create: `Tests/VertexProjectTests/ProjectCompositionSchemaTests.swift`
 - Modify: `Tests/VertexProjectTests/ProjectCodecTests.swift`
 
-**Interfaces:**
-- Produces: `ProjectRGBAColor`, `ProjectComposition`, `ProjectLayer`, `LayerSource`, `LayerTiming`, `LayerTransform`, `LayerOperation`, `LayerBlendMode`, `AdjustmentScope`, `CameraLayerSettings`, `LightLayerSettings`, and schema 2 `ProjectDocument` validation/lookups.
-- Consumes: `VertexID`, `RationalTime`, `ColorDescriptor`, `MediaReference`.
+**Interfaces:** Produces `ProjectRGBAColor`, `ProjectComposition`, `ProjectLayer`, `LayerSource`, `LayerTiming`, `LayerTransform`, `LayerOperation`, `LayerBlendMode`, `AdjustmentScope`, `CameraLayerSettings`, `LightLayerSettings`, and schema 2 `ProjectDocument`.
 
 - [ ] **Step 1: Write failing schema tests**
 
 ```swift
-@Test("Canonical schema 2 preserves composition Z-order")
+@Test("Canonical schema 2 preserves authoritative Z-order")
 func canonicalSchemaPreservesZOrder() throws {
     let fixture = try ProjectDocument.twoLayerFixture()
     let codec = DeterministicProjectCodec()
@@ -106,43 +88,37 @@ func canonicalSchemaPreservesZOrder() throws {
     #expect(decoded.composition(id: fixture.composition.id)?.layerIDs == [fixture.top.id, fixture.bottom.id])
 }
 
-@Test("Direct and indirect nested cycles are rejected")
-func nestedCyclesFailValidation() throws {
+@Test("Nested composition cycles are rejected")
+func nestedCyclesAreRejected() throws {
     #expect(throws: ProjectError.self) { try ProjectDocument.directCycleFixture().validated() }
     #expect(throws: ProjectError.self) { try ProjectDocument.indirectCycleFixture().validated() }
 }
 ```
 
-Add explicit tests for duplicate IDs, ownership mismatch, missing source identity, invalid In/Out, non-finite transform, model-only blend/operation restrictions, and unsupported blend decoding.
+Also test duplicate IDs, ownership mismatch, missing references, invalid timing, non-finite transforms, model-only restrictions, and unsupported blend decoding.
 
-- [ ] **Step 2: Run the RED tests**
+- [ ] **Step 2: Verify RED**
 
 ```bash
 swift test --filter ProjectCompositionSchemaTests
 ```
 
-Expected: compile failure because schema 2 types do not exist.
+Expected: missing schema 2 types.
 
-- [ ] **Step 3: Implement exact value types**
+- [ ] **Step 3: Implement exact public types**
 
 ```swift
 public struct ProjectRGBAColor: Codable, Equatable, Sendable {
-    public var red: Double
-    public var green: Double
-    public var blue: Double
-    public var alpha: Double
+    public var red: Double; public var green: Double
+    public var blue: Double; public var alpha: Double
     public func validated() throws -> Self
 }
 
 public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
-    public var id: VertexID
-    public var name: String
-    public var width: Int
-    public var height: Int
-    public var duration: RationalTime
-    public var frameRate: RationalTime
-    public var color: ColorDescriptor
-    public var backgroundColor: ProjectRGBAColor
+    public var id: VertexID; public var name: String
+    public var width: Int; public var height: Int
+    public var duration: RationalTime; public var frameRate: RationalTime
+    public var color: ColorDescriptor; public var backgroundColor: ProjectRGBAColor
     public var layerIDs: [VertexID]
 }
 
@@ -157,19 +133,13 @@ public struct LayerTiming: Codable, Equatable, Sendable {
 }
 
 public struct LayerTransform: Codable, Equatable, Sendable {
-    public var positionX: Double
-    public var positionY: Double
-    public var anchorX: Double
-    public var anchorY: Double
-    public var scaleX: Double
-    public var scaleY: Double
-    public var rotationDegrees: Double
-    public var opacity: Double
+    public var positionX: Double; public var positionY: Double
+    public var anchorX: Double; public var anchorY: Double
+    public var scaleX: Double; public var scaleY: Double
+    public var rotationDegrees: Double; public var opacity: Double
     public static let identity = LayerTransform(
-        positionX: 0.5, positionY: 0.5,
-        anchorX: 0.5, anchorY: 0.5,
-        scaleX: 1, scaleY: 1,
-        rotationDegrees: 0, opacity: 1
+        positionX: 0.5, positionY: 0.5, anchorX: 0.5, anchorY: 0.5,
+        scaleX: 1, scaleY: 1, rotationDegrees: 0, opacity: 1
     )
 }
 
@@ -182,42 +152,29 @@ public enum LayerOperation: Codable, Equatable, Sendable {
 public enum LayerSource: Codable, Equatable, Sendable {
     case media(mediaID: VertexID, sourceStartTime: RationalTime)
     case adjustment(scope: AdjustmentScope)
-    case null
-    case guide
+    case null, guide
     case camera(CameraLayerSettings)
     case light(LightLayerSettings)
     case composition(compositionID: VertexID, sourceStartTime: RationalTime)
 }
 
 public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
-    public var id: VertexID
-    public var compositionID: VertexID
-    public var name: String
-    public var source: LayerSource
-    public var enabled: Bool
-    public var locked: Bool
-    public var solo: Bool
-    public var timing: LayerTiming
-    public var transform: LayerTransform
-    public var blendMode: LayerBlendMode
-    public var operations: [LayerOperation]
+    public var id: VertexID; public var compositionID: VertexID
+    public var name: String; public var source: LayerSource
+    public var enabled: Bool; public var locked: Bool; public var solo: Bool
+    public var timing: LayerTiming; public var transform: LayerTransform
+    public var blendMode: LayerBlendMode; public var operations: [LayerOperation]
 }
 ```
 
-Camera fields are exactly projection, focal length, near/far clip, position XYZ, and point-of-interest XYZ. Light fields are exactly kind, RGBA color, intensity, position XYZ, direction XYZ, cone angle, and cone feather. Enforce the approved numeric ranges.
+Camera fields: projection, focal length, near/far clip, position XYZ, point-of-interest XYZ. Light fields: kind, RGBA, intensity, position XYZ, direction XYZ, cone angle, cone feather. Apply approved finite/range checks and model-only restrictions.
 
-- [ ] **Step 4: Upgrade `ProjectDocument`**
-
-Set:
+- [ ] **Step 4: Upgrade root schema and new-project creation**
 
 ```swift
 public static let currentSchemaVersion = 2
 public static let currentAppVersion = "6.0.0"
-```
 
-Root fields:
-
-```swift
 public var compositionRegistry: [ProjectComposition]
 public var layerRegistry: [ProjectLayer]
 public var activeCompositionID: VertexID?
@@ -226,7 +183,7 @@ public var selectedMediaID: VertexID?
 public var legacyRenderSettings: ProjectRenderSettings?
 ```
 
-Helpers:
+`ProjectDocument.makeNew` deterministically creates one empty `Main Composition`, makes it active, and creates no fake layer. Add:
 
 ```swift
 public func composition(id: VertexID) -> ProjectComposition?
@@ -235,9 +192,9 @@ public func layers(in compositionID: VertexID) -> [ProjectLayer]
 public func nestedCompositionCycle() -> [VertexID]?
 ```
 
-`normalized()` sorts registries and applied command IDs by stable ID but never sorts `ProjectComposition.layerIDs`. `validated()` checks all identities, ownership, timing, source references, model-only restrictions, and nested cycles.
+`normalized()` sorts registries/applied command IDs, never `layerIDs`. `validated()` checks all root and graph invariants.
 
-- [ ] **Step 5: Run schema and codec tests**
+- [ ] **Step 5: Run GREEN and codec regressions**
 
 ```bash
 swift test --filter ProjectCompositionSchemaTests
@@ -255,7 +212,7 @@ git commit -m "feat: add schema 2 composition and layer values"
 
 ---
 
-### Task 2: Deterministic Schema 1 to 2 Migration
+### Task 2: Deterministic Schema 1 → 2 Migration
 
 **Files:**
 - Modify: `Sources/VertexCore/VertexID.swift`
@@ -268,14 +225,12 @@ git commit -m "feat: add schema 2 composition and layer values"
 - Create: `Tests/VertexProjectTests/Fixtures/schema1-selected-media.json`
 - Create: `Tests/VertexProjectTests/Fixtures/schema1-no-composition.json`
 
-**Interfaces:**
-- Produces: stable digest-derived IDs, frozen schema 1 DTOs/replay, and registered `Schema1To2Migrator`.
-- Consumes: Task 1 schema 2 values.
+**Interfaces:** Produces stable derived IDs, package-visible schema 1 DTO/replay contracts, and registered `Schema1To2Migrator`.
 
 - [ ] **Step 1: Write failing migration tests**
 
 ```swift
-@Test("Schema 1 selected media migrates to one deterministic media layer")
+@Test("Selected schema 1 media becomes one deterministic media layer")
 func selectedMediaMigratesDeterministically() throws {
     let input = try Fixture.data("schema1-selected-media.json")
     let first = try ProjectMigrationRegistry.current.migrate(input, from: 1, to: 2)
@@ -288,7 +243,7 @@ func selectedMediaMigratesDeterministically() throws {
     #expect(project.legacyRenderSettings == nil)
 }
 
-@Test("Schema 1 without selected media creates no fake layer")
+@Test("No selected media preserves legacy values without fake layer")
 func noSelectionPreservesLegacyValues() throws {
     let input = try Fixture.data("schema1-no-composition.json")
     let result = try ProjectMigrationRegistry.current.migrate(input, from: 1, to: 2)
@@ -299,33 +254,20 @@ func noSelectionPreservesLegacyValues() throws {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **Step 2: Verify RED**
 
 ```bash
 swift test --filter ProjectSchemaMigrationTests
 ```
 
-Expected: failure because no 1→2 migrator exists.
+Expected: no 1→2 migrator.
 
-- [ ] **Step 3: Implement stable UUID derivation**
-
-Add a checked initializer unconditionally:
+- [ ] **Step 3: Add exact stable ID APIs**
 
 ```swift
 public init(uuidBytes: [UInt8]) throws
-```
-
-It requires exactly 16 bytes and formats the canonical lowercase UUID string.
-
-Expose digest bytes:
-
-```swift
 public static func digest(_ data: Data) -> [UInt8]
-```
 
-Derive IDs:
-
-```swift
 public enum DeterministicVertexID {
     public static func derive(domain: String, components: [String]) throws -> VertexID {
         let payload = ([domain] + components).joined(separator: "\u{1f}")
@@ -337,20 +279,20 @@ public enum DeterministicVertexID {
 }
 ```
 
-Freeze exact domain-vector expected IDs in tests.
+Freeze exact domain/vector output IDs in tests.
 
-- [ ] **Step 4: Implement private schema 1 compatibility types**
+- [ ] **Step 4: Freeze schema 1 wire types with Swift `package` access**
 
-`Schema1Compatibility.swift` contains the exact Phase 5 wire shapes for project, render settings, placeholder, operation, command, history, manifest, and journal. Implement `Schema1CommandEngine` and:
+`Schema1Compatibility.swift` defines `package` schema 1 project, render settings, placeholder, operation, command, history, manifest, and journal types. `package` access permits `VertexProjectFoundation` to read them without exposing them as public writable API.
 
 ```swift
-struct Schema1RecoveredState: Sendable {
-    var document: Schema1ProjectDocument
-    var lastJournalSequence: UInt64
+package struct Schema1RecoveredState: Sendable {
+    package var document: Schema1ProjectDocument
+    package var lastJournalSequence: UInt64
 }
 
-struct Schema1JournalReplayer {
-    func replay(
+package struct Schema1JournalReplayer {
+    package func replay(
         _ records: [Schema1JournalRecord],
         onto document: Schema1ProjectDocument,
         startingAfter sequence: UInt64
@@ -358,7 +300,9 @@ struct Schema1JournalReplayer {
 }
 ```
 
-- [ ] **Step 5: Implement and register `Schema1To2Migrator`**
+Implement all Phase 5 operation preconditions in a schema 1 command engine.
+
+- [ ] **Step 5: Implement and register migrator**
 
 ```swift
 public struct Schema1To2Migrator: ProjectMigrator {
@@ -372,9 +316,9 @@ public static let current = ProjectMigrationRegistry(
 )
 ```
 
-Reuse placeholder IDs; otherwise derive `Main Composition`. Use old output dimensions, project frame rate/color, exact ten-second duration, transparent background, and full In/Out. Move selected media plus old static Render Lab values into one media layer, or preserve them in `legacyRenderSettings` without creating a layer.
+Reuse placeholder IDs; otherwise derive `Main Composition`. Use old dimensions/frame rate/color, ten exact seconds, transparent background, full In/Out. Move selected media plus old static Render Lab values into one media layer; otherwise preserve `legacyRenderSettings`.
 
-- [ ] **Step 6: Run migration and project tests**
+- [ ] **Step 6: Run GREEN and full project regressions**
 
 ```bash
 swift test --filter ProjectSchemaMigrationTests
@@ -392,7 +336,7 @@ git commit -m "feat: migrate project schema deterministically"
 
 ---
 
-### Task 3: Composition and Layer Commands
+### Task 3: Composition/Layer Commands and History
 
 **Files:**
 - Create: `Sources/VertexProject/ProjectCommandPayloads.swift`
@@ -403,9 +347,7 @@ git commit -m "feat: migrate project schema deterministically"
 - Create: `Tests/VertexProjectTests/ProjectLayerCommandTests.swift`
 - Modify: `Tests/VertexProjectTests/ProjectCommandTests.swift`
 
-**Interfaces:**
-- Produces: exact reversible composition/layer operations and deterministic duplication payloads.
-- Consumes: validated schema 2 values.
+**Interfaces:** Produces exact reversible composition/layer operations and deterministic duplication payloads.
 
 - [ ] **Step 1: Write failing command tests**
 
@@ -423,34 +365,20 @@ func reorderUndoRestoresExactIndex() throws {
     _ = try controller.undo()
     #expect(controller.project.composition(id: fixture.composition.id)?.layerIDs == [fixture.top.id, fixture.bottom.id])
 }
-
-@Test("Referenced child composition cannot be removed")
-func referencedChildRemovalFails() throws {
-    let fixture = try ProjectDocument.nestedFixture()
-    let before = fixture.document
-    #expect(throws: ProjectError.self) {
-        try ProjectCommandEngine().apply(
-            ProjectCommandRecord(project: before, operation: .removeComposition(
-                fixture.child, ownedLayers: [], previousActiveID: fixture.parent.id, previousSelection: nil
-            )),
-            to: before
-        )
-    }
-}
 ```
 
-Add cases for every approved composition and layer command, exact preconditions, cycle rejection, duplicate identity, and locked-layer edit refusal except unlock.
+Add tests for every approved composition/layer command, exact preconditions, locked edit refusal except unlock, referenced composition deletion, source cycle rejection, journal preparation failure, and duplication remapping.
 
-- [ ] **Step 2: Run RED**
+- [ ] **Step 2: Verify RED**
 
 ```bash
 swift test --filter ProjectCompositionCommandTests
 swift test --filter ProjectLayerCommandTests
 ```
 
-Expected: missing operation cases.
+Expected: missing operations.
 
-- [ ] **Step 3: Implement command payloads and operations**
+- [ ] **Step 3: Implement operation cases**
 
 Retain Phase 5 media/project operations. Add:
 
@@ -480,13 +408,13 @@ case setLayerSource(layerID: VertexID, before: LayerSource, after: LayerSource)
 case setLayerOperations(layerID: VertexID, before: [LayerOperation], after: [LayerOperation])
 ```
 
-Camera/light edits use `setLayerSource` with exact before/after records. `ProjectDuplicationFactory` derives all new IDs before a command is created and remaps only nested references inside the duplicated payload.
+Camera/light edits use `setLayerSource`. `ProjectDuplicationFactory` derives all IDs before recording and remaps only nested references internal to the duplicated payload.
 
-- [ ] **Step 4: Extend history coalescing**
+- [ ] **Step 4: Implement inverse/preconditions/coalescing**
 
-Coalesce chained transform, timing, and operation changes only when project, layer, merge key, time window, and previous-after/current-before match. Blend changes have no merge key. Failed undo/redo preparation must preserve project bytes, Z-order, selection, and stack counts.
+Apply full-document validation after every operation. Coalesce chained transform/timing/operations only when project, layer, merge key, time window, and previous-after/current-before match. Blend changes have no merge key. Failed undo/redo preparation preserves project bytes, Z-order, selection, and stack counts.
 
-- [ ] **Step 5: Run all project command/history/journal tests**
+- [ ] **Step 5: Run GREEN**
 
 ```bash
 swift test --filter VertexProjectTests
@@ -503,7 +431,7 @@ git commit -m "feat: add composition and layer command history"
 
 ---
 
-### Task 4: Non-Destructive Package Migration and Recovery
+### Task 4: Package Migration, Autosave, and Recovery
 
 **Files:**
 - Create: `Sources/VertexProjectFoundation/Schema1PackageReader.swift`
@@ -515,14 +443,12 @@ git commit -m "feat: add composition and layer command history"
 - Modify: `Tests/VertexProjectFoundationTests/ProjectPackageStoreTests.swift`
 - Modify: `Tests/VertexProjectFoundationTests/ProjectRecoveryTests.swift`
 
-**Interfaces:**
-- Produces: schema-aware package opening and a separate schema 2 working package.
-- Consumes: Task 2 schema 1 replay and migrator.
+**Interfaces:** Produces schema-aware opening and a separate schema 2 working package.
 
-- [ ] **Step 1: Write failing package migration tests**
+- [ ] **Step 1: Write failing package tests**
 
 ```swift
-@Test("Schema 1 package migration preserves source and resets incompatible history")
+@Test("Schema 1 migration preserves source and resets incompatible history")
 func packageMigrationIsNonDestructive() throws {
     let fixture = try Schema1PackageFixture.make()
     let before = try fixture.snapshotBytes()
@@ -539,21 +465,21 @@ func packageMigrationIsNonDestructive() throws {
 }
 ```
 
-Add injected destination-write failure and future-schema no-rewrite tests.
+Add destination write failure and future schema no-rewrite tests.
 
-- [ ] **Step 2: Run RED**
+- [ ] **Step 2: Verify RED**
 
 ```bash
 swift test --filter ProjectPackageMigrationTests
 ```
 
-Expected: missing package migrator.
+Expected: missing migrator.
 
-- [ ] **Step 3: Implement schema 1 package reading**
+- [ ] **Step 3: Implement schema 1 package reader**
 
-Verify schema 1 project/manifest checksum and identity, decode history/journal with compatibility DTOs, replay complete records newer than the committed sequence, and return one recovered logical schema 1 snapshot. Never write source files.
+Use Task 2 `package` DTOs. Verify project/manifest checksum and identity, decode history/journal, replay complete records newer than committed sequence, and return one recovered logical schema 1 snapshot without writing source files.
 
-- [ ] **Step 4: Implement migration/opening services**
+- [ ] **Step 4: Implement final services**
 
 ```swift
 public struct ProjectPackageMigrationResult: Sendable {
@@ -564,10 +490,7 @@ public struct ProjectPackageMigrationResult: Sendable {
 }
 
 public struct ProjectPackageMigrator {
-    public func migrate(
-        schema1PackageURL: URL,
-        destinationURL: URL
-    ) throws -> ProjectPackageMigrationResult
+    public func migrate(schema1PackageURL: URL, destinationURL: URL) throws -> ProjectPackageMigrationResult
 }
 
 public enum ProjectPackageOpenResult: Sendable {
@@ -583,13 +506,13 @@ public struct ProjectPackageOpeningService {
 }
 ```
 
-Sequence: verify/replay schema 1 → migrate canonical bytes → decode/validate schema 2 → create destination with empty history/journal sequence 0 → readback/checksum verify. Delete partial destination on failure; preserve source.
+Sequence: verify/replay schema 1 → migrate canonical bytes → decode/validate schema 2 → create destination with empty history/journal sequence 0 → readback/checksum. Delete partial destination on failure; preserve source.
 
-- [ ] **Step 5: Add schema 2 save/autosave/recovery regressions**
+- [ ] **Step 5: Add schema 2 persistence regressions**
 
-Assert composition/layer ownership and exact Z-order survive save/reopen, autosave rotation, backup recovery, and recovered-package creation. Mismatched backup history opens empty.
+Assert ownership/Z-order survive save/reopen, autosave rotation, backup recovery, and recovered-package creation. Mismatched backup history opens empty.
 
-- [ ] **Step 6: Run Foundation tests**
+- [ ] **Step 6: Run GREEN**
 
 ```bash
 swift test --filter VertexProjectFoundationTests
@@ -617,47 +540,42 @@ git commit -m "feat: migrate project packages to schema 2"
 - Modify: `Tests/VertexRenderTests/RenderGraphTests.swift`
 - Modify: `Tests/VertexRenderTests/RenderSchedulingTests.swift`
 
-**Interfaces:**
-- Produces: ordered multi-source node-local evaluation plan and deterministic render cache context.
-- Consumes: `PortableImage`, `RationalTime`, `VertexID`, `ColorDescriptor`.
+**Interfaces:** Produces ordered node-local evaluation and deterministic composition cache context.
 
 - [ ] **Step 1: Write failing DAG tests**
 
 ```swift
-@Test("Composite dependency order is backdrop then source")
+@Test("Composite dependencies remain backdrop then source")
 func compositeOrderIsSemantic() throws {
     let graph = try RenderGraph.twoSourceFixture(blendMode: .multiply)
     let node = try #require(try graph.evaluationPlan().orderedNodes.first {
-        if case .composite = $0.kind { return true }
-        return false
+        if case .composite = $0.kind { return true }; return false
     })
     #expect(node.dependencies == [RenderGraph.fixtureBackdropID, RenderGraph.fixtureSourceID])
 }
 
-@Test("Disconnected graph nodes fail validation")
+@Test("Disconnected nodes fail")
 func disconnectedNodesFail() {
     #expect(throws: RenderError.self) { try RenderGraph.disconnectedFixture().evaluationPlan() }
 }
 ```
 
-Add tests for multiple sources, local operations, arity, missing dependencies, cycles, and cache changes by composition/revision/time/output.
+Also test multiple sources, local operations, arity, missing dependency, cycle, and cache context changes.
 
-- [ ] **Step 2: Run RED**
+- [ ] **Step 2: Verify RED**
 
 ```bash
 swift test --filter RenderMultiSourceTests
 ```
 
-Expected: missing multi-source node types.
+Expected: missing DAG types.
 
-- [ ] **Step 3: Implement render values**
+- [ ] **Step 3: Implement graph/cache values**
 
 ```swift
 public struct RenderRGBAColor: Codable, Equatable, Sendable {
-    public var red: Double
-    public var green: Double
-    public var blue: Double
-    public var alpha: Double
+    public var red: Double; public var green: Double
+    public var blue: Double; public var alpha: Double
 }
 
 public enum RenderSource: Codable, Equatable, Sendable {
@@ -670,12 +588,9 @@ public enum RenderBlendMode: String, Codable, CaseIterable, Sendable {
 }
 
 public struct RenderTransform2D: Codable, Equatable, Sendable {
-    public var positionX: Double
-    public var positionY: Double
-    public var anchorX: Double
-    public var anchorY: Double
-    public var scaleX: Double
-    public var scaleY: Double
+    public var positionX: Double; public var positionY: Double
+    public var anchorX: Double; public var anchorY: Double
+    public var scaleX: Double; public var scaleY: Double
     public var rotationDegrees: Double
 }
 
@@ -694,9 +609,9 @@ public struct RenderCacheContext: Codable, Equatable, Sendable {
 }
 ```
 
-Add `transform2D(RenderTransform2D)` to `RenderOperation`. `solidColor` is the portable deterministic composition background source.
+Add `transform2D(RenderTransform2D)` to `RenderOperation`.
 
-- [ ] **Step 4: Implement `RenderEvaluationPlan`**
+- [ ] **Step 4: Implement evaluation plan and metrics compatibility**
 
 ```swift
 public struct RenderEvaluationPlan: Equatable, Sendable {
@@ -708,11 +623,17 @@ public struct RenderEvaluationPlan: Equatable, Sendable {
 public func evaluationPlan() throws -> RenderEvaluationPlan
 ```
 
-Require one output, allow many sources, preserve dependency order, and reject duplicate/missing/disconnected/cyclic nodes. Node arity: source 0, operations 1, adjustment 1, composite 2 ordered `[backdrop, source]`, output 1.
+Arity: source 0, operations 1, adjustment 1, composite 2 ordered `[backdrop, source]`, output 1. Reject duplicate/missing/disconnected/cyclic nodes.
 
-Extend `RenderMetrics` with `expandedNodeCount`, `renderedLayerCount`, and `estimatedPeakTextureBytes`, all defaulting to `0` in the initializer so existing backends/tests remain source-compatible until Task 7. Add optional `RenderCacheContext` to `RenderRequest` and include it in cache bytes.
+`RenderMetrics` final stored fields include `expandedNodeCount`, `renderedLayerCount`, and `estimatedPeakTextureBytes`. Preserve source compatibility with:
 
-- [ ] **Step 5: Run render tests**
+```swift
+public var estimatedTextureBytes: Int { estimatedPeakTextureBytes }
+```
+
+The initializer defaults new counts/peak bytes to `0` until Task 7 supplies them. Add optional `RenderCacheContext` to `RenderRequest` and include it in cache bytes.
+
+- [ ] **Step 5: Run GREEN**
 
 ```bash
 swift test --filter VertexRenderTests
@@ -743,29 +664,19 @@ git commit -m "feat: extend render graph for multi-source composition"
 - Create: `Tests/VertexCompositionTests/CompositionGraphCompilerTests.swift`
 - Create: `Tests/VertexCompositionTests/CompositionLimitsTests.swift`
 
-**Interfaces:**
-- Produces: `CompositionGraphCompiler.compile` and platform-free exact frame resolution.
-- Consumes: Tasks 1 and 5.
+**Interfaces:** Produces `CompositionGraphCompiler.compile` and platform-free exact frame resolution.
 
-- [ ] **Step 1: Wire product and test target**
+- [ ] **Step 1: Wire product/target and module source**
 
 ```swift
 .library(name: "VertexComposition", targets: ["VertexComposition"])
-.target(
-    name: "VertexComposition",
-    dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexRender"]
-)
-.testTarget(
-    name: "VertexCompositionTests",
-    dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]
-)
+.target(name: "VertexComposition", dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexRender"])
+.testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"])
 ```
 
-Create `CompositionModule.swift` with a public module identifier so SwiftPM has a valid source before RED tests compile. Add product/test dependencies to `project.yml`.
+Create `CompositionModule.swift` before running tests; add app/test product dependencies to `project.yml`.
 
-- [ ] **Step 2: Write failing compiler tests**
-
-Final contracts:
+- [ ] **Step 2: Write failing compiler tests against final contracts**
 
 ```swift
 public enum CompositionFrameResolution: Equatable, Sendable {
@@ -803,17 +714,17 @@ public struct CompositionRenderRequest: Sendable {
 }
 ```
 
-Test bottom-to-top order, enabled/timing/Solo, participating-only missing media, negative source time transparency, adjustment placement, nested offset and child bounds, frame deduplication, cycles, limits, cancellation, and cache context.
+Test bottom-to-top order, enabled/timing/Solo, participating-only missing media, negative time transparency, adjustment placement, nested offset/bounds, frame deduplication, cycles, limits, cancellation, and cache context.
 
-- [ ] **Step 3: Run RED**
+- [ ] **Step 3: Verify RED**
 
 ```bash
 swift test --filter VertexCompositionTests
 ```
 
-Expected: missing compiler types.
+Expected: missing compiler implementation.
 
-- [ ] **Step 4: Implement visibility and recursive compilation**
+- [ ] **Step 4: Implement visibility and recursive compiler**
 
 ```swift
 struct CompositionVisibilityResolver {
@@ -834,9 +745,9 @@ public struct CompositionGraphCompiler: Sendable {
 }
 ```
 
-Start with `RenderSource.solidColor`, traverse authoritative IDs bottom-to-top, cache media by `mediaID + exact time + target size`, recurse nested compositions with an ID stack, insert adjustment nodes over the accumulator, generate deterministic node IDs, and enforce all limits before returning. Negative media time and nested time outside child duration produce transparency without I/O.
+Start with `RenderSource.solidColor`; traverse authoritative IDs bottom-to-top; cache media by ID+exact time+target size; recurse nested compositions with ID stack; add adjustment over current accumulator; derive deterministic node IDs; enforce all limits. Negative media time and child-out-of-range produce transparency without I/O.
 
-- [ ] **Step 5: Run compiler and full portable tests**
+- [ ] **Step 5: Run GREEN and full portable regression**
 
 ```bash
 swift test --filter VertexCompositionTests
@@ -854,7 +765,7 @@ git commit -m "feat: compile project compositions into render graphs"
 
 ---
 
-### Task 7: Metal DAG Execution and Blend Kernels
+### Task 7: Metal DAG and Premultiplied Blending
 
 **Files:**
 - Create: `Sources/VertexRenderMetal/MetalRenderParameters.swift`
@@ -866,67 +777,52 @@ git commit -m "feat: compile project compositions into render graphs"
 - Create: `Tests/VertexRenderMetalTests/MetalCompositionPixelTests.swift`
 - Modify: `Tests/VertexRenderMetalTests/MetalRenderBackendTests.swift`
 
-**Interfaces:**
-- Produces: premultiplied RGBA8 solid/layer/composite/adjustment execution and texture last-use reuse.
-- Consumes: `RenderEvaluationPlan`.
+**Interfaces:** Produces premultiplied RGBA8 solid/layer/composite/adjustment execution and last-use texture reuse.
 
 - [ ] **Step 1: Write failing native pixel tests**
 
-`PixelFixture.premultipliedRGBA(_:)` decodes PNG into the same premultiplied RGBA8 representation used by `MetalImageCodec`.
+`PixelFixture.premultipliedRGBA` decodes the output PNG into the same premultiplied RGBA8 representation used by `MetalImageCodec`.
 
 ```swift
-@Test("Multiply uses approved semitransparent alpha formula")
+@Test("Multiply follows semitransparent alpha formula")
 func multiplyPremultipliedAlpha() async throws {
     let request = try RenderFixture.twoSourceRequest(
         backdrop: .rgba(128, 64, 32, 128),
         source: .rgba(64, 128, 255, 128),
         blend: .multiply
     )
-    let result = try await MetalRenderBackend().render(
-        request,
-        cancellationToken: RenderCancellationToken()
-    )
+    let result = try await MetalRenderBackend().render(request, cancellationToken: .init())
     #expect(try PixelFixture.premultipliedRGBA(result.image) == [56, 56, 80, 192])
 }
 
-@Test("Transparent RGB cannot contaminate output")
+@Test("Transparent RGB cannot contaminate backdrop")
 func transparentRGBDoesNotLeak() async throws {
     let result = try await MetalRenderBackend().render(
-        try RenderFixture.transparentContaminationRequest(),
-        cancellationToken: RenderCancellationToken()
+        try RenderFixture.transparentContaminationRequest(), cancellationToken: .init()
     )
     #expect(try PixelFixture.premultipliedRGBA(result.image) == [40, 80, 120, 255])
 }
 ```
 
-Freeze exact tests for Normal, Add, Multiply, Screen, position, anchor, independent scale, rotation, opacity, exposure, saturation, invert, adjustment mix, two sources, and nested graph output.
+Freeze exact fixtures for all four blends, transform components, opacity, operations, adjustment mix, two sources, and nested graph.
 
-- [ ] **Step 2: Run RED on macOS**
+- [ ] **Step 2: Verify RED on macOS**
 
 ```bash
 swift test --filter MetalCompositionPixelTests
 ```
 
-Expected: missing shader pipelines/DAG executor.
+Expected: missing pipelines/executor.
 
-- [ ] **Step 3: Implement four pipeline resources**
+- [ ] **Step 3: Implement resources and shader parameters**
 
-Load:
-
-```text
-vertexSolidKernel
-vertexLayerKernel
-vertexCompositeKernel
-vertexAdjustmentKernel
-```
-
-Define Swift and Metal parameter structs with identical field order/alignment and assert their exact `MemoryLayout.stride` in native tests.
+Load `vertexSolidKernel`, `vertexLayerKernel`, `vertexCompositeKernel`, `vertexAdjustmentKernel`. Swift and Metal parameter structs have identical field order/alignment; native tests assert exact `MemoryLayout.stride`.
 
 - [ ] **Step 4: Implement shader semantics**
 
-Solid fills premultiplied RGBA. Layer performs inverse anchor/position/scale/rotation sampling, exposure, saturation, inversion, opacity, and premultiplication. Composite uses ordered backdrop/source textures and the approved blend/alpha equations. Adjustment safely unpremultiplies, applies operations, premultiplies, and mixes original/adjusted by opacity.
+Solid fills premultiplied RGBA. Layer performs inverse anchor/position/scale/rotation sampling, exposure, saturation, invert, opacity, premultiplication. Composite uses ordered backdrop/source and approved formulas. Adjustment safely unpremultiplies, applies operations, premultiplies, and mixes by opacity.
 
-- [ ] **Step 5: Implement texture pool and executor**
+- [ ] **Step 5: Implement pool/executor**
 
 ```swift
 final class MetalTexturePool: @unchecked Sendable {
@@ -945,13 +841,11 @@ struct MetalGraphExecutor {
 }
 ```
 
-Evaluate node-local operations, decrement consumer counts, release after last use, read back only output, and report pixels/nodes/layers/peak bytes.
+Evaluate node-local operations; decrement consumers; release after last use; read back only output; populate final metrics.
 
-- [ ] **Step 6: Replace the old flattened backend**
+- [ ] **Step 6: Replace old flattened backend and run GREEN**
 
-`MetalRenderBackend.render` uses `evaluationPlan()` and `MetalGraphExecutor`. Delete `sourceImage()` and `flattenedOperations()` after compilation succeeds.
-
-- [ ] **Step 7: Run native and portable render tests**
+Delete `sourceImage()`/`flattenedOperations()` after backend compilation succeeds.
 
 ```bash
 swift test --filter VertexRenderMetalTests
@@ -960,9 +854,9 @@ swift test --filter VertexCompositionTests
 xcrun -sdk macosx metal -c Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal -o /tmp/VertexRenderKernels.air
 ```
 
-Expected: all pass; Metal compile exits 0.
+Expected: all pass; Metal compile exit 0.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add Sources/VertexRenderMetal Tests/VertexRenderMetalTests
@@ -971,7 +865,7 @@ git commit -m "feat: execute composition graphs with Metal"
 
 ---
 
-### Task 8: App Media Resolver and Exact Preview Controller
+### Task 8: App Media Adapter and Exact Preview
 
 **Files:**
 - Create: `App/CompositionMediaFrameResolver.swift`
@@ -981,11 +875,9 @@ git commit -m "feat: execute composition graphs with Metal"
 - Modify: `App/MediaImportView.swift`
 - Modify: `App/ProjectPackageFileDocument.swift`
 
-**Interfaces:**
-- Produces: app-only media URL/frame adapter, durable typed command methods, exact frame navigation, latest render, last-success retention, and PNG payload.
-- Consumes: Tasks 3, 4, 6, and 7.
+**Interfaces:** Produces app-only media resolution, durable typed operations, exact navigation, latest render, last-success retention, and PNG payload.
 
-- [ ] **Step 1: Implement app-only media resolution**
+- [ ] **Step 1: Implement exact media adapter**
 
 ```swift
 protocol CompositionMediaLocationResolving: Sendable {
@@ -1001,29 +893,22 @@ actor CompositionMediaFrameResolver: CompositionFrameResolver {
 }
 ```
 
-Resolution order: verified embedded file → valid bookmark → structured missing-media error. Request AVFoundation with exact time and target size.
+Resolution: verified embedded → valid bookmark → missing-media error. AVFoundation receives exact time and target size.
 
-- [ ] **Step 2: Expose one durable command entry point**
+- [ ] **Step 2: Expose durable command entry**
 
 ```swift
 @MainActor
-func applyProjectOperation(
-    _ operation: ProjectOperation,
-    mergeKey: String? = nil
-)
+func applyProjectOperation(_ operation: ProjectOperation, mergeKey: String? = nil)
 ```
 
-Order remains validate → append/synchronize journal → history perform → publish → autosave. Add typed composition/layer methods in the extension file.
+Order: validate → journal append/synchronize → history perform → publish → autosave. Add typed methods for all Phase 6 operations.
 
-- [ ] **Step 3: Make opening schema-aware**
+- [ ] **Step 3: Make opening schema-aware and media import layer-based**
 
-Use `ProjectPackageOpeningService`. Schema 1 opens a distinct migrated internal package; schema 2 opens directly; future schema is not rewritten. Display migration status.
+Use `ProjectPackageOpeningService`: schema 1 opens a distinct migrated package; schema 2 opens directly; future schema is not rewritten. Media import registers media and inserts a real media layer. `legacyRenderSettings` remains read-only.
 
-- [ ] **Step 4: Replace new global Render Lab writes**
-
-Media import registers media and inserts a real media layer into the active composition. `legacyRenderSettings` is read-only migration preservation.
-
-- [ ] **Step 5: Implement exact preview controller**
+- [ ] **Step 4: Implement exact preview controller**
 
 ```swift
 @MainActor
@@ -1032,7 +917,6 @@ final class CompositionPreviewController: ObservableObject {
     @Published private(set) var result: RenderResult?
     @Published private(set) var errorMessage: String?
     @Published private(set) var isRendering = false
-
     func setFrameIndex(_ value: Int64, composition: ProjectComposition)
     func step(by frames: Int64, composition: ProjectComposition)
     func render(project: ProjectDocument, packageURL: URL?)
@@ -1041,9 +925,9 @@ final class CompositionPreviewController: ObservableObject {
 }
 ```
 
-Convert frame index to exact time. Cancel prior compile/render, compile with `CompositionGraphCompiler`, use `LatestRenderCoordinator`, publish matching generation only, and retain previous successful result on failure.
+Convert index to exact time; cancel prior compile/render; compile; use `LatestRenderCoordinator`; publish matching generation only; retain previous success on failure.
 
-- [ ] **Step 6: Run full portable suite and iOS Debug build**
+- [ ] **Step 5: Run tests and app Debug build**
 
 ```bash
 swift test
@@ -1054,7 +938,7 @@ xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Debug \
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add App
@@ -1063,7 +947,7 @@ git commit -m "feat: connect composition media and exact preview"
 
 ---
 
-### Task 9: Functional Composition Workspace UI
+### Task 9: Functional Composition Workspace
 
 **Files:**
 - Create: `App/CompositionWorkspaceView.swift`
@@ -1077,27 +961,25 @@ git commit -m "feat: connect composition media and exact preview"
 - Delete after replacement: `App/RenderLabView.swift`
 - Delete after replacement: `App/RenderLabViewModel.swift`
 
-**Interfaces:**
-- Produces: actual composition/layer editing and exact preview without a decorative timeline.
-- Consumes: Task 8 workspace/controller.
+**Interfaces:** Produces real composition/layer editing and exact preview without a fake timeline.
 
 - [ ] **Step 1: Build composition header**
 
-Active picker; create, duplicate, rename, delete; width/height, frame rate, duration, and background. Each accepted edit sends one durable command. Referenced deletion displays an error and leaves state unchanged.
+Active picker; create/duplicate/rename/delete; dimensions, frame rate, duration, background. Each accepted edit emits one durable command. Referenced delete reports error without mutation.
 
 - [ ] **Step 2: Build exact frame navigator**
 
-First, previous, next, last, direct integer frame entry, and scrub slider converted immediately to a clamped integer frame.
+First/previous/next/last, direct integer entry, and scrub converted immediately to clamped integer frame.
 
 - [ ] **Step 3: Build layer list**
 
-Top row is top Z-order. Show source type, name, enabled, lock, Solo, current activity, blend, missing media, and `Model only` for camera/light. One move emits one reorder command. Add Media, Adjustment, Null, Guide, Camera, Light, and valid Nested Composition.
+Top row is top Z-order. Show source, name, enabled, lock, Solo, current activity, blend, missing, and `Model only`. One move emits one reorder. Add Media, Adjustment, Null, Guide, Camera, Light, and cycle-safe Nested Composition.
 
 - [ ] **Step 4: Build inspector**
 
-Expose name, flags, Start/In/Out, position, anchor, scale X/Y, rotation, opacity, blend, exposure, saturation, invert, nested source/start, and camera/light model fields. Locked layers expose only unlock. Camera/light display `No Phase 6 output effect`.
+Expose supported name/flags/timing/transform/blend/operations/nested/camera/light fields. Locked layers expose only unlock. Camera/light show `No Phase 6 output effect`.
 
-Use merge keys:
+Merge keys:
 
 ```text
 layer.<id>.transform.position
@@ -1109,73 +991,51 @@ layer.<id>.operations.exposure
 layer.<id>.operations.saturation
 ```
 
-Blend changes use no merge key.
+Blend uses no merge key.
 
-- [ ] **Step 5: Build workspace composition**
+- [ ] **Step 5: Assemble workspace and replace Render Lab**
 
-Show checkerboard, last successful image, progress, current error, metrics, and PNG share/export from the same `RenderResult.image`. Preserve Open, Save, package Export, Undo, Redo, autosave, relink, embed, and recovery controls.
+Show checkerboard, last image, progress, current error, metrics, and PNG from identical result bytes. Preserve project Open/Save/Export, Undo/Redo, autosave, relink, embed, recovery. Media import adds a layer. Delete old Render Lab files only after `git grep RenderLab` finds no production/test reference except historical docs.
 
-- [ ] **Step 6: Replace old Render Lab flow**
-
-Root displays the composition workspace. Media import adds a layer. Remove old Render Lab files only after `git grep RenderLab` shows no production/test reference except historical documentation.
-
-- [ ] **Step 7: Compile**
+- [ ] **Step 6: Compile and commit**
 
 ```bash
 xcodegen generate
 xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Debug \
   -sdk iphoneos -destination "generic/platform=iOS" CODE_SIGNING_ALLOWED=NO build
-```
-
-Expected: exit 0.
-
-- [ ] **Step 8: Commit**
-
-```bash
 git add App
 git commit -m "feat: add composition and layer workspace"
 ```
+
+Expected: build exit 0.
 
 ---
 
 ### Task 10: Integration, CI, Documentation, and IPA
 
 **Files:**
-- Modify: `Package.swift`
-- Modify: `project.yml`
-- Modify: `.github/workflows/phase-build.yml`
-- Modify: `Sources/VertexCore/Milestone.swift`
-- Modify: `Sources/VertexProject/ProjectModule.swift`
-- Modify: `README.md`
+- Modify: `Package.swift`, `project.yml`, `.github/workflows/phase-build.yml`
+- Modify: `Sources/VertexCore/Milestone.swift`, `Sources/VertexProject/ProjectModule.swift`
+- Modify: `README.md`, `Documentation/VERSIONING_AND_ARTIFACTS.md`, `Documentation/HANDOFF.md`
 - Create: `Documentation/LAYERS_COMPOSITIONS_ARCHITECTURE.md`
 - Create: `Documentation/COMPOSITION_TEST_MATRIX.md`
 - Create: `Documentation/PHASE_6_WORK_LOG.md`
 - Create after verified build: `Documentation/PHASE_6_COMPLETION.md`
-- Modify: `Documentation/VERSIONING_AND_ARTIFACTS.md`
-- Modify: `Documentation/HANDOFF.md`
 
-**Interfaces:**
-- Produces: verified `6.0.0 (6)` source, CI, evidence, and unsigned IPA.
-- Consumes: all prior tasks.
+**Interfaces:** Produces verified source/CI evidence and unsigned IPA.
 
-- [ ] **Step 1: Update product version and truthful milestone**
+- [ ] **Step 1: Set truthful version/milestone**
 
 ```yaml
 MARKETING_VERSION: 6.0.0
 CURRENT_PROJECT_VERSION: 6
 ```
 
-Update Phase 6 milestone deliverables without claiming excluded features.
+Update deliverables without excluded claims.
 
 - [ ] **Step 2: Update CI**
 
-Linux:
-
-```bash
-swift test
-```
-
-macOS:
+Linux `swift test`. macOS:
 
 ```bash
 swift test --filter VertexProjectFoundationTests
@@ -1184,9 +1044,7 @@ swift test --filter VertexRenderMetalTests
 xcrun -sdk macosx metal -c Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal -o "$RUNNER_TEMP/VertexRenderKernels.air"
 ```
 
-Build iOS Release unsigned and verify display name, bundle ID, arm64, version `6.0.0`, build `6`, `Assets.car`, and `default.metallib`.
-
-Package exactly:
+Build unsigned iOS Release; verify display name, bundle ID, arm64, `6.0.0 (6)`, `Assets.car`, `default.metallib`. Package exactly:
 
 ```bash
 zip -qry artifacts/After-Effects-6.0.0-unsigned.ipa Payload
@@ -1194,9 +1052,9 @@ shasum -a 256 artifacts/After-Effects-6.0.0-unsigned.ipa \
   > artifacts/After-Effects-6.0.0-unsigned.ipa.sha256
 ```
 
-Artifact name: `After-Effects-6.0.0-unsigned-ipa`.
+Artifact name `After-Effects-6.0.0-unsigned-ipa`.
 
-- [ ] **Step 3: Run fresh complete verification**
+- [ ] **Step 3: Run fresh full verification**
 
 ```bash
 swift test
@@ -1211,15 +1069,11 @@ xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" clean build
 ```
 
-Expected: zero failures and build exit 0. Record exact test counts from output.
+Expected: zero failures and build exit 0. Record exact counts.
 
-- [ ] **Step 4: Verify final GitHub Actions run**
+- [ ] **Step 4: Verify final Actions artifact**
 
-Use the final product/CI HEAD. Confirm every job/step succeeds. Download that run's artifact, not an earlier one.
-
-- [ ] **Step 5: Inspect downloaded IPA**
-
-Verify:
+Use final product/CI HEAD. Confirm all jobs, download that artifact, and inspect:
 
 ```text
 Payload/AfterEffects.app/AfterEffects
@@ -1230,28 +1084,26 @@ CFBundleShortVersionString = 6.0.0
 CFBundleVersion = 6
 MinimumOSVersion = 17.0
 Assets.car exists
-Vertex_VertexRenderMetal.bundle/default.metallib exists
+default.metallib exists
 ```
 
-Calculate artifact ZIP SHA-256, IPA SHA-256, IPA byte size, and resource sizes. Compare against the uploaded `.sha256` file.
+Calculate ZIP SHA-256, IPA SHA-256, IPA size, resource sizes; compare `.sha256`.
 
-- [ ] **Step 6: Write final evidence**
+- [ ] **Step 5: Write exact completion evidence**
 
-Record exact product/CI commit, workflow run ID, artifact ID, ZIP digest, IPA digest, test counts, binary identity, implemented behavior, excluded behavior, and unverified physical-device/manual scenarios. Documentation-only commits must remain ignored by the build trigger to avoid a checksum loop.
+Record product/CI commit, run ID, artifact ID, digests, test counts, identity, implemented/excluded behavior, and unverified physical-device/manual scenarios. Documentation paths remain ignored to prevent checksum loops.
 
-- [ ] **Step 7: Audit stale claims and requirements**
+- [ ] **Step 6: Audit stale claims and spec coverage**
 
 ```bash
 git grep -nE '5\.0\.0|CURRENT_PROJECT_VERSION: 5|SCHEMA 1|ProjectCompositionPlaceholder|global Render Lab'
 ```
 
-Expected: matches only in historical documentation, frozen schema 1 compatibility, or migration fixtures. Re-read the approved design and map every requirement to a test, real UI behavior, or explicit exclusion/model-only statement.
+Expected: intentional historical/schema1 fixture matches only. Map every approved design requirement to passing test, real UI behavior, or explicit exclusion/model-only statement.
 
-- [ ] **Step 8: Update handoff and PR comment**
+- [ ] **Step 7: Update handoff/PR and commit**
 
-Document branch/PR, schema 2 migration, modules, final evidence, current behavior, exclusions, and the Phase 7 Motion Engine design gate. Keep PR #6 Draft and unmerged.
-
-- [ ] **Step 9: Commit final evidence**
+Document branch/PR, schema 2, migration, modules, evidence, current behavior, exclusions, and Phase 7 design gate. Keep PR Draft/unmerged.
 
 ```bash
 git add .github Package.swift project.yml Sources App Tests README.md Documentation docs
