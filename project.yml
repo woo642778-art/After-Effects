@@ -88,3 +88,5 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AfterEffects.app/AfterEffects
+        BUNDLE_LOADER: $(TEST_HOST)
