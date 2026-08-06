@@ -55,16 +55,16 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 3,
-        title: "Media Input and Output Foundation",
+        number: 4,
+        title: "GPU Render Graph",
         status: .implemented,
         deliverables: [
-            "Portable media descriptors, exact requests, providers, cancellation, and structured errors",
-            "AVFoundation metadata inspection without leaking platform types into VertexMedia",
-            "Requested-time thumbnail decoding with preferred-transform handling",
-            "Bounded normalized audio waveform extraction",
-            "Real Files-based movie selection with metadata, thumbnail, and waveform presentation",
-            "Versioned After Effects 3.0.0 unsigned IPA artifact"
+            "Portable VertexRender graph, request, result, validation, cache, cancellation, and error contracts",
+            "Native Metal compute backend isolated behind the RenderBackend protocol",
+            "GPU transform, exposure, saturation, inversion, opacity, and output resizing",
+            "Real imported-thumbnail Render Lab with latest-request-wins scheduling",
+            "Byte-identical PNG preview and file export from one RenderResult",
+            "Versioned After Effects 4.0.0 unsigned IPA artifact"
         ],
         sourceAdoptions: [
             SourceAdoption(
@@ -75,18 +75,25 @@ public enum MilestoneCatalog {
                 purpose: "Phase 3 production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
             ),
             SourceAdoption(
+                id: "metal",
+                repository: "Apple Metal",
+                license: "Apple platform SDK",
+                mode: .wrappedDependency,
+                purpose: "Phase 4 GPU compute execution behind VertexRenderMetal without exposing Metal types"
+            ),
+            SourceAdoption(
                 id: "metalpetal",
                 repository: "MetalPetal/MetalPetal",
                 license: "MIT",
-                mode: .directDependency,
-                purpose: "Deferred to Phase 4 GPU image processing and render graph"
+                mode: .researchOnly,
+                purpose: "Audited future filters and composition backend candidate; not linked into Phase 4"
             ),
             SourceAdoption(
                 id: "videoio",
                 repository: "MetalPetal/VideoIO",
                 license: "MIT",
                 mode: .researchOnly,
-                purpose: "Isolated Phase 4 preview/export candidate; not imported by Phase 3 product code"
+                purpose: "Audited future timed preview and video export candidate; not linked into Phase 4"
             ),
             SourceAdoption(
                 id: "videolab",
@@ -100,9 +107,9 @@ public enum MilestoneCatalog {
                 repository: "fwcd/mini-cut",
                 license: "GPL-3.0",
                 mode: .behavioralReference,
-                purpose: "Timeline interaction research only; no source copied into the MIT product"
+                purpose: "Timeline interaction research only; no source copied into the product"
             )
         ],
-        artifactPolicy: "Phase 3 publishes After-Effects-3.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
+        artifactPolicy: "Phase 4 publishes After-Effects-4.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
     )
 }
