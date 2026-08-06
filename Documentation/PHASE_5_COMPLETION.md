@@ -2,101 +2,69 @@
 
 ## Scope
 
-Phase 5 adds a versioned, deterministic, recoverable project system and a real project workspace. It persists media references and Render Lab settings, provides command-based Undo and Redo, records write-ahead journal entries, atomically saves project packages, rotates autosaves, recovers damaged packages non-destructively, relinks missing media using strong identity evidence, and optionally embeds media.
+Corrected Phase 5 implements a deterministic, recoverable `.vertexproject` system and real application workspace. It persists canonical project and media metadata without persisting Undo/Redo, recent command IDs, bookmark bytes, operation WAL records, platform objects, or absolute sandbox paths.
 
-## Implemented modules
+## Implemented architecture
 
 ### VertexProject
 
-- schema version 1 `ProjectDocument` and `ProjectManifest`;
-- portable media references and persistent Render Lab settings;
-- deterministic sorted-key JSON, canonical timestamps, and SHA-256;
-- structured `ProjectError` values;
-- command application with project identity, base revision, precondition, duplicate-ID, inverse, and finite-value checks;
-- Undo, Redo, 200-entry bounded history, and compatible command coalescing;
-- journal preparation before Undo or Redo mutation;
-- checksummed newline-delimited journal records and idempotent replay;
-- future-schema metadata inspection and sequential migration registry;
-- fingerprint-based media relinking decisions.
+- schema version 1 canonical `ProjectDocument`;
+- deterministic sorted-key JSON, canonical UTC dates, and SHA-256;
+- portable media references and Render Lab values;
+- desired-state `ProjectCommandRequest` values;
+- engine-derived forward/inverse `ProjectTransition` mutations;
+- session-only `ProjectEditingSession` with 200-entry Undo/Redo bounds, 512 recent-ID bound, and compatible edit coalescing;
+- future-schema inspection, sequential migration contracts, and fingerprint-based relinking.
 
-### VertexProjectFoundation
+### VertexProjectPersistence
 
-- secure `.aeproject` package layout;
-- durable temporary writes and same-volume atomic rename;
-- project backup, manifest checksum validation, history persistence, and journal append;
-- current, previous, and two hourly autosave snapshots;
-- recovery candidate inspection and separate recovered-package creation;
-- preservation of damaged source packages before recovery writes;
-- revision-consistent backup recovery history;
-- security bookmark adapter behavior;
-- fingerprinted media embedding and embedded-media resolution.
+- exact `.vertexproject` package allowlist;
+- durable synchronized temporary writes and same-volume atomic promotion;
+- matching `project.json` and `manifest.json` verification;
+- complete `Journal/pending-save.json` transactions and recovery decisions;
+- immutable full-document autosaves retaining eight valid unique snapshots;
+- bookmark sidecars under `Bookmarks/`;
+- fingerprint-verified embedded media under `Media/`;
+- internal non-destructive `.aeproject` inspection and conversion.
 
-### Application workspace
+### Application
 
-- create and rename projects;
-- open, save, and export project packages;
-- display schema and revision;
-- register selected media in the current project;
-- persist Render Lab settings and output dimensions;
-- reflect Undo and Redo back into Render Lab controls;
-- write journal records before normal, Undo, and Redo state changes;
-- schedule autosaves after edits and on app backgrounding;
-- display missing-media state;
-- relink using fingerprint verification;
-- embed selected media;
-- show explicit recovery candidates for damaged packages.
+- serial project ownership through `ProjectSessionActor`;
+- create, rename, open, save, export, and background autosave;
+- session Undo and Redo;
+- explicit pending-save decision handling;
+- legacy package inspection and conversion to a separate destination;
+- media registration, missing-state presentation, bookmark relinking, and verified embedding;
+- Xcode app-target tests compiled independently before IPA packaging.
 
-## Debugging and quality record
+## Verification
 
-1. The first Phase 5 CI run intentionally failed because schema and codec tests referenced types that did not exist.
-2. Command, journal, relinking, package, recovery, and embedding behavior were each introduced after corresponding failing tests.
-3. Canonical ISO-8601 timestamps lose sub-millisecond in-memory precision by design. Package verification was corrected to require canonical `decode → re-encode` byte identity instead of raw `Date` object equality.
-4. The first iOS app build failed because the project recovery view did not import `VertexProjectFoundation`. Adding the module import resolved the cascading SwiftUI generic errors.
-5. Bookmark creation and resolution were split into platform-correct iOS and macOS options.
-6. Undo and Redo initially mutated memory before appending the journal. The history API now invokes a journal preparation callback first; failed preparation leaves project and history unchanged.
-7. Backup recovery initially paired an older backup project with the current newer history. Backup candidates now use empty history unless a revision-matched backup history is added in a future schema.
-8. Render Lab now observes project revision changes so Undo and Redo update visible controls as well as persistent state.
-
-## Final verification
-
-- Product and CI source HEAD: `e68ffde2eebcdb58becc9d3d1ecaf195f1861e76`
-- CI trigger-policy completion commit: `f563d0a524c51ff803bf8bd6b385c219bf76f3d9`
-- Successful workflow run: `31069517329`
-- Portable tests: 58 passed
-- Native project-package tests: 9 passed
-- Native Metal fixture tests: 2 passed
-- Metal shader compilation: passed
-- XcodeGen generation: passed
-- iOS 17 arm64 Release build: passed
-- Identity, version, asset, and Metal-library checks: passed
-- IPA packaging and upload: passed
+- Source HEAD: `e821cfa62ae2c8c42e1a9b3393553ae71f80bb68`
+- Successful workflow run: `31111240394`
+- Portable Swift tests: 109 passed
+- Native persistence tests: passed
+- Native Metal tests and shader compilation: passed
+- iOS app tests: build-for-testing compilation passed
+- iOS 17 arm64 Release build and identity/resource checks: passed
 
 ## Artifact
 
-- Artifact ID: `8955148634`
-- Artifact name: `After-Effects-5.0.0-unsigned-ipa`
-- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
-- IPA size: 884,969 bytes
+- Artifact ID: `8971903654`
+- Artifact ZIP SHA-256: `4e2cd38972072ba2b58285744602bd2ea0a70a11aeed57a889357f73b91a6a7b`
+- IPA SHA-256: `bcf72cf8105022015c468ad507f6f3a64b62c69d713b4f8ba8696a8e7fc99ed8`
+- IPA size: 1,102,371 bytes
+- Display name: `After Effects`
+- Bundle identifier: `com.woo642778.aftereffects`
+- Version: `5.0.0 (5)`
+- Minimum OS: iOS 17.0
+- Executable: Mach-O 64-bit arm64
+- `Assets.car`: 152,879 bytes
+- Metal library: 6,996 bytes
 
-Downloaded IPA inspection:
+The ZIP-bundled checksum matches the independently computed IPA digest. The IPA remains unsigned.
 
-- executable: `Payload/AfterEffects.app/AfterEffects`;
-- executable format: Mach-O 64-bit arm64;
-- display name: `After Effects`;
-- bundle name: `AfterEffects`;
-- bundle identifier: `com.woo642778.aftereffects`;
-- version: `5.0.0 (5)`;
-- minimum OS: iOS 17.0;
-- `Assets.car`: present, 152,879 bytes;
-- `Vertex_VertexRenderMetal.bundle/default.metallib`: present, 6,996 bytes.
+## Boundary and next gate
 
-## Current product boundary
+Phase 5 does not implement layers/compositions, continuous playback, timeline editing, video export, effects, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, nodes, or 3D.
 
-Implemented: branded startup, one-time Telegram promotion, media inspection, thumbnail and waveform analysis, native Metal still-frame Render Lab, exact-preview PNG export, project packages, deterministic save data, Undo and Redo, journal, autosaves, recovery, media relinking, and optional media embedding.
-
-Not implemented: continuous playback, timeline editing, real layer composition, video export, general effect stacks, keyframes, retiming, masks, tracking, AI cutout, shape or text animation, professional color or audio processing, particles, node compositing, or 3D.
-
-## Phase 6 start gate
-
-Phase 6 is Layers and Compositions. It must define stable composition and layer identities, media, adjustment, null, guide, camera, light, and nested-composition models, ordering and visibility rules, project commands and migrations, and one real multi-layer render vertical slice without creating a second render path. Version `6.0.0 (6)` may be published only after those gates pass.
+Draft PR #5 remains unmerged. Corrected Phase 5 must now be integrated into Draft PR #6, with schema 2, Layers, Compositions, compiler, Metal, preview, and PNG parity restored. No Phase 7 source branch is valid until the replacement 6.0.0 artifact is downloaded and inspected.
