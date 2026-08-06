@@ -46,12 +46,13 @@ public final class ProjectHistoryController {
     public var canRedo: Bool { !redoStack.isEmpty }
     public var snapshot: ProjectHistorySnapshot { ProjectHistorySnapshot(undo: undoStack, redo: redoStack) }
 
+    @discardableResult
     public func perform(
         _ operation: ProjectOperation,
         mergeKey: String? = nil,
         timestamp: Date = Date(),
         commandID: VertexID = VertexID()
-    ) throws {
+    ) throws -> ProjectCommandRecord {
         let record = ProjectCommandRecord(
             project: project,
             commandID: commandID,
@@ -59,8 +60,12 @@ public final class ProjectHistoryController {
             mergeKey: mergeKey,
             timestamp: timestamp
         )
-        project = try engine.apply(record, to: project)
+        try perform(record)
+        return record
+    }
 
+    public func perform(_ record: ProjectCommandRecord) throws {
+        project = try engine.apply(record, to: project)
         if let last = undoStack.last,
            let merged = coalesced(last, with: record) {
             undoStack[undoStack.count - 1] = merged
@@ -71,7 +76,8 @@ public final class ProjectHistoryController {
         trimHistories()
     }
 
-    public func undo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws {
+    @discardableResult
+    public func undo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws -> ProjectCommandRecord {
         guard let original = undoStack.popLast() else {
             throw ProjectError.invalidOperation("There is no command to undo.")
         }
@@ -88,13 +94,15 @@ public final class ProjectHistoryController {
             project = try engine.apply(transition, to: project)
             redoStack.append(original)
             trimHistories()
+            return transition
         } catch {
             undoStack.append(original)
             throw error
         }
     }
 
-    public func redo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws {
+    @discardableResult
+    public func redo(timestamp: Date = Date(), commandID: VertexID = VertexID()) throws -> ProjectCommandRecord {
         guard let original = redoStack.popLast() else {
             throw ProjectError.invalidOperation("There is no command to redo.")
         }
@@ -111,6 +119,7 @@ public final class ProjectHistoryController {
             project = try engine.apply(transition, to: project)
             undoStack.append(original)
             trimHistories()
+            return transition
         } catch {
             redoStack.append(original)
             throw error
