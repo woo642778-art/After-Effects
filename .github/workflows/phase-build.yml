@@ -74,6 +74,27 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Compile iOS app session tests
+        run: |
+          set -euo pipefail
+          TEST_BUILD_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
+          if ! xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$PWD/DerivedDataTests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build-for-testing >"$TEST_BUILD_LOG" 2>&1; then
+            echo "iOS test compilation failed. Compiler diagnostics:"
+            /usr/bin/grep -n -C 4 "error:" "$TEST_BUILD_LOG" || /usr/bin/tail -n 250 "$TEST_BUILD_LOG"
+            exit 1
+          fi
+          /usr/bin/tail -n 80 "$TEST_BUILD_LOG"
+
       - name: Build iOS application without signing
         run: |
           set -euo pipefail
