@@ -89,11 +89,16 @@ struct MediaImportView: View {
     private func loadedContent(_ media: MediaImportViewModel.LoadedMedia) -> some View {
         if let thumbnail = media.thumbnail,
            let image = UIImage(data: thumbnail.data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("DECODED SOURCE FRAME")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
         }
 
         Text(media.descriptor.filename)
@@ -116,10 +121,7 @@ struct MediaImportView: View {
                     "Timing",
                     value: "\(video.nominalFrameRate.formatted(.number.precision(.fractionLength(0...3)))) fps · \(video.variableFrameRateStatus.rawValue.uppercased())"
                 )
-                metadataRow(
-                    "Color",
-                    value: colorText(video)
-                )
+                metadataRow("Color", value: colorText(video))
             }
 
             if let audio {
@@ -136,6 +138,12 @@ struct MediaImportView: View {
             Text("No audio stream")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
+        }
+
+        if let thumbnail = media.thumbnail {
+            Divider().overlay(Color.white.opacity(0.10))
+            RenderLabView(source: thumbnail)
+                .id(media.descriptor.id)
         }
     }
 
