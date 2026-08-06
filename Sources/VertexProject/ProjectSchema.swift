@@ -18,13 +18,27 @@ public enum MediaAvailabilityStatus: String, Codable, CaseIterable, Sendable {
 
 public struct MediaLocator: Codable, Equatable, Sendable {
     public var relativeHint: String?
-    public var bookmarkData: Data?
     public var embeddedPath: String?
 
-    public init(relativeHint: String? = nil, bookmarkData: Data? = nil, embeddedPath: String? = nil) {
+    public init(relativeHint: String? = nil, embeddedPath: String? = nil) {
         self.relativeHint = relativeHint
-        self.bookmarkData = bookmarkData
         self.embeddedPath = embeddedPath
+    }
+
+    @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
+    public init(
+        relativeHint: String? = nil,
+        bookmarkData: Data?,
+        embeddedPath: String? = nil
+    ) {
+        self.relativeHint = relativeHint
+        self.embeddedPath = embeddedPath
+    }
+
+    @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
+    public var bookmarkData: Data? {
+        get { nil }
+        set { }
     }
 }
 
@@ -72,7 +86,8 @@ public struct MediaReference: Codable, Equatable, Sendable, Identifiable {
             throw ProjectError.invalidValue("Media file size must not be negative.")
         }
         if let embeddedPath = locator.embeddedPath {
-            guard !embeddedPath.hasPrefix("/"), !embeddedPath.split(separator: "/").contains("..") else {
+            guard !embeddedPath.hasPrefix("/"),
+                  !embeddedPath.split(separator: "/").contains("..") else {
                 throw ProjectError.invalidPackagePath("Embedded media paths must remain inside the project package.")
             }
         }
@@ -106,7 +121,13 @@ public struct ProjectMetadata: Codable, Equatable, Sendable {
     public var createdByAppVersion: String
     public var lastSavedByAppVersion: String
 
-    public init(name: String, createdAt: Date, modifiedAt: Date, createdByAppVersion: String, lastSavedByAppVersion: String) {
+    public init(
+        name: String,
+        createdAt: Date,
+        modifiedAt: Date,
+        createdByAppVersion: String,
+        lastSavedByAppVersion: String
+    ) {
         self.name = name
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
@@ -119,7 +140,10 @@ public struct ProjectSettings: Codable, Equatable, Sendable {
     public var frameRate: RationalTime
     public var color: ColorDescriptor
 
-    public init(frameRate: RationalTime = RationalTime(value: 30, timescale: 1), color: ColorDescriptor = .rec709SDR(alphaMode: .straight)) {
+    public init(
+        frameRate: RationalTime = RationalTime(value: 30, timescale: 1),
+        color: ColorDescriptor = .rec709SDR(alphaMode: .straight)
+    ) {
         self.frameRate = frameRate
         self.color = color
     }
@@ -172,7 +196,12 @@ public struct ProjectRenderSettings: Codable, Equatable, Sendable {
     }
 
     public var allValuesAreFinite: Bool {
-        exposure.isFinite && saturation.isFinite && opacity.isFinite && scale.isFinite && translationX.isFinite && translationY.isFinite
+        exposure.isFinite
+            && saturation.isFinite
+            && opacity.isFinite
+            && scale.isFinite
+            && translationX.isFinite
+            && translationY.isFinite
     }
 
     public func value(for parameter: ProjectRenderParameter) -> Double {
@@ -198,9 +227,16 @@ public struct ProjectRenderSettings: Codable, Equatable, Sendable {
     }
 
     public func validated() throws -> Self {
-        guard allValuesAreFinite else { throw ProjectError.invalidValue("Render settings must contain only finite values.") }
-        guard scale > 0 else { throw ProjectError.invalidValue("Render scale must be positive.") }
-        guard outputWidth > 0, outputHeight > 0, outputWidth <= 8192, outputHeight <= 8192 else {
+        guard allValuesAreFinite else {
+            throw ProjectError.invalidValue("Render settings must contain only finite values.")
+        }
+        guard scale > 0 else {
+            throw ProjectError.invalidValue("Render scale must be positive.")
+        }
+        guard outputWidth > 0,
+              outputHeight > 0,
+              outputWidth <= 8192,
+              outputHeight <= 8192 else {
             throw ProjectError.invalidValue("Output dimensions must be between 1 and 8192 pixels.")
         }
         return self
@@ -232,8 +268,34 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var activeCompositionID: VertexID?
     public var selectedMediaID: VertexID?
     public var renderSettings: ProjectRenderSettings
-    public var appliedCommandIDs: [VertexID]
 
+    public init(
+        schemaVersion: Int = ProjectDocument.currentSchemaVersion,
+        minimumReaderVersion: Int = ProjectDocument.currentSchemaVersion,
+        projectID: VertexID,
+        revision: UInt64,
+        metadata: ProjectMetadata,
+        settings: ProjectSettings,
+        mediaRegistry: [MediaReference],
+        compositionRegistry: [ProjectCompositionPlaceholder],
+        activeCompositionID: VertexID?,
+        selectedMediaID: VertexID?,
+        renderSettings: ProjectRenderSettings
+    ) {
+        self.schemaVersion = schemaVersion
+        self.minimumReaderVersion = minimumReaderVersion
+        self.projectID = projectID
+        self.revision = revision
+        self.metadata = metadata
+        self.settings = settings
+        self.mediaRegistry = mediaRegistry
+        self.compositionRegistry = compositionRegistry
+        self.activeCompositionID = activeCompositionID
+        self.selectedMediaID = selectedMediaID
+        self.renderSettings = renderSettings
+    }
+
+    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
     public init(
         schemaVersion: Int = ProjectDocument.currentSchemaVersion,
         minimumReaderVersion: Int = ProjectDocument.currentSchemaVersion,
@@ -248,38 +310,61 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         renderSettings: ProjectRenderSettings,
         appliedCommandIDs: [VertexID]
     ) {
-        self.schemaVersion = schemaVersion
-        self.minimumReaderVersion = minimumReaderVersion
-        self.projectID = projectID
-        self.revision = revision
-        self.metadata = metadata
-        self.settings = settings
-        self.mediaRegistry = mediaRegistry
-        self.compositionRegistry = compositionRegistry
-        self.activeCompositionID = activeCompositionID
-        self.selectedMediaID = selectedMediaID
-        self.renderSettings = renderSettings
-        self.appliedCommandIDs = appliedCommandIDs
+        self.init(
+            schemaVersion: schemaVersion,
+            minimumReaderVersion: minimumReaderVersion,
+            projectID: projectID,
+            revision: revision,
+            metadata: metadata,
+            settings: settings,
+            mediaRegistry: mediaRegistry,
+            compositionRegistry: compositionRegistry,
+            activeCompositionID: activeCompositionID,
+            selectedMediaID: selectedMediaID,
+            renderSettings: renderSettings
+        )
     }
 
-    public static func makeNew(id: VertexID = VertexID(), name: String, timestamp: Date = Date()) throws -> ProjectDocument {
+    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
+    public var appliedCommandIDs: [VertexID] {
+        get { [] }
+        set { }
+    }
+
+    public static func makeNew(
+        id: VertexID = VertexID(),
+        name: String,
+        timestamp: Date = Date()
+    ) throws -> ProjectDocument {
         let document = ProjectDocument(
             projectID: id,
             revision: 0,
-            metadata: ProjectMetadata(name: name, createdAt: timestamp, modifiedAt: timestamp, createdByAppVersion: currentAppVersion, lastSavedByAppVersion: currentAppVersion),
+            metadata: ProjectMetadata(
+                name: name,
+                createdAt: timestamp,
+                modifiedAt: timestamp,
+                createdByAppVersion: currentAppVersion,
+                lastSavedByAppVersion: currentAppVersion
+            ),
             settings: ProjectSettings(),
             mediaRegistry: [],
             compositionRegistry: [],
             activeCompositionID: nil,
             selectedMediaID: nil,
-            renderSettings: ProjectRenderSettings(),
-            appliedCommandIDs: []
+            renderSettings: ProjectRenderSettings()
         )
         return try document.validated()
     }
 
-    public static func makeFixture(timestamp: Date, media: [MediaReference]) throws -> ProjectDocument {
-        var document = try makeNew(id: VertexID(rawValue: "50000000-0000-0000-0000-000000000001"), name: "Fixture", timestamp: timestamp)
+    public static func makeFixture(
+        timestamp: Date,
+        media: [MediaReference]
+    ) throws -> ProjectDocument {
+        var document = try makeNew(
+            id: VertexID(rawValue: "50000000-0000-0000-0000-000000000001"),
+            name: "Fixture",
+            timestamp: timestamp
+        )
         document.mediaRegistry = media
         return try document.validated()
     }
@@ -288,20 +373,37 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         var copy = self
         copy.mediaRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.compositionRegistry.sort { $0.id.rawValue < $1.id.rawValue }
-        copy.appliedCommandIDs = Array(Set(copy.appliedCommandIDs)).sorted { $0.rawValue < $1.rawValue }
         return copy
     }
 
     public func validated() throws -> ProjectDocument {
-        guard schemaVersion == Self.currentSchemaVersion else { throw ProjectError.unsupportedSchema(found: schemaVersion, supported: Self.currentSchemaVersion) }
-        guard minimumReaderVersion <= schemaVersion else { throw ProjectError.invalidValue("Minimum reader version cannot exceed the schema version.") }
-        guard !metadata.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ProjectError.invalidValue("Project name must not be empty.") }
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw ProjectError.unsupportedSchema(found: schemaVersion, supported: Self.currentSchemaVersion)
+        }
+        guard minimumReaderVersion <= schemaVersion else {
+            throw ProjectError.invalidValue("Minimum reader version cannot exceed the schema version.")
+        }
+        guard !metadata.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ProjectError.invalidValue("Project name must not be empty.")
+        }
         _ = try renderSettings.validated()
-        for reference in mediaRegistry { _ = try reference.validated() }
-        guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else { throw ProjectError.duplicateIdentity("media") }
-        guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else { throw ProjectError.duplicateIdentity("composition") }
-        if let selectedMediaID, !mediaRegistry.contains(where: { $0.id == selectedMediaID }) { throw ProjectError.invalidValue("Selected media must exist in the media registry.") }
-        if let activeCompositionID, !compositionRegistry.contains(where: { $0.id == activeCompositionID }) { throw ProjectError.invalidValue("Active composition must exist in the composition registry.") }
+        for reference in mediaRegistry {
+            _ = try reference.validated()
+        }
+        guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else {
+            throw ProjectError.duplicateIdentity("media")
+        }
+        guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else {
+            throw ProjectError.duplicateIdentity("composition")
+        }
+        if let selectedMediaID,
+           !mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
+            throw ProjectError.invalidValue("Selected media must exist in the media registry.")
+        }
+        if let activeCompositionID,
+           !compositionRegistry.contains(where: { $0.id == activeCompositionID }) {
+            throw ProjectError.invalidValue("Active composition must exist in the composition registry.")
+        }
         return self
     }
 }
@@ -324,7 +426,13 @@ public struct ProjectManifest: Codable, Equatable, Sendable {
     public var lastSuccessfulSave: Date
     public var integrityStatus: ProjectIntegrityStatus
 
-    public init(document: ProjectDocument, projectChecksum: String, committedJournalSequence: UInt64, lastSuccessfulSave: Date, integrityStatus: ProjectIntegrityStatus = .valid) {
+    public init(
+        document: ProjectDocument,
+        projectChecksum: String,
+        committedJournalSequence: UInt64,
+        lastSuccessfulSave: Date,
+        integrityStatus: ProjectIntegrityStatus = .valid
+    ) {
         schemaVersion = document.schemaVersion
         minimumReaderVersion = document.minimumReaderVersion
         projectID = document.projectID
