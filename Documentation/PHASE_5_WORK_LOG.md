@@ -2,41 +2,41 @@
 
 ## Scope
 
-Project schema, deterministic serialization, command history, write-ahead journaling, atomic packages, autosave, recovery, migration boundaries, media relinking and embedding, real application integration, version 5.0.0, and unsigned IPA production.
+Canonical project data, session-only editing history, `.vertexproject` persistence, full pending-save transactions, immutable autosaves, bookmark sidecars, verified embedded media, non-destructive legacy import, serial app-session ownership, version 5.0.0, and unsigned IPA verification.
 
-## Test-driven sequence
+## Correction reason
 
-1. Added schema and deterministic-codec tests before project types existed. CI failed on missing `ProjectDocument`, `MediaReference`, `DeterministicProjectCodec`, and `ProjectError`.
-2. Implemented the portable schema, manifest, validation, timestamp codec, and SHA-256. The codec tests passed.
-3. Added command, revision, duplicate-ID, Undo, Redo, and coalescing tests before implementation. CI failed on missing command and history types.
-4. Implemented command preconditions, inverse operations, revision advancement, bounded history, Undo, Redo, and coalescing.
-5. Added journal, replay, migration-inspection, and media-relink tests before implementation. CI failed on missing journal, migration, and relink types.
-6. Implemented checksummed journal lines, trailing-line analysis, idempotent replay, future-schema inspection, sequential migration requirements, and fingerprint-only automatic relinking.
-7. Added real file-system tests for atomic save, interruption, manifest matching, history persistence, journal append, autosave rotation, backup recovery, path traversal, and media embedding.
-8. Implemented `VertexProjectFoundation` with package layout, durable writes, POSIX atomic rename, history and manifest files, autosaves, recovery, bookmark adapters, and embedded media.
-9. A package test initially failed because in-memory `Date` values retained sub-millisecond precision while the canonical ISO-8601 format intentionally stores fixed fractional precision. Verification was changed to canonical decode/re-encode byte equality.
-10. Added the application workspace and connected project creation, open, save, export, media registration, persistent Render Lab settings, Undo, Redo, autosave, recovery, relink, and embed flows.
-11. The first iOS application build failed because the recovery view referenced Foundation-adapter types without importing `VertexProjectFoundation`. Adding the module import resolved the SwiftUI cascading errors.
-12. Bookmark options were separated for iOS and macOS compilation boundaries, and the package document declared its `FileWrapper` sendability boundary.
-13. A post-build review found that Undo and Redo changed memory before journal append. Added tests proving journal preparation runs first and that a preparation failure leaves state and stacks unchanged; updated the app to append in that callback.
-14. Another review found that backup project data could be paired with a newer current history file. Added a regression test and changed backup candidates to use empty history unless a revision-matched backup history is introduced.
-15. Render Lab was changed to observe project revision so Undo and Redo update visible controls as well as persistent project data.
-16. A final downloaded-artifact inspection found that an earlier draft IPA checksum had been recorded in documentation. The final artifact ZIP and its bundled checksum file both identify the final IPA SHA-256 as `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`; all completion records were corrected before handoff.
+The first Phase 5 draft implemented a writable `.aeproject` dialect with persisted history, an operation WAL, backups, mutable autosaves, and bookmark bytes in project data. That structure did not match the approved persistence contract. It is retained only as historical/legacy import evidence and is not a valid Phase 7 base.
 
-## Final verification
+## Test-driven correction sequence
 
-- Product and CI source HEAD: `e68ffde2eebcdb58becc9d3d1ecaf195f1861e76`
-- CI trigger-policy completion commit: `f563d0a524c51ff803bf8bd6b385c219bf76f3d9`
-- Workflow run: `31069517329`
-- Portable tests: 58 passed
-- Native project package tests: 9 passed
-- Native Metal tests: 2 passed
+1. Archived the pre-correction Phase 5 and Phase 6 heads and marked previous 6.0 artifacts as superseded drafts.
+2. Added RED tests proving canonical JSON must exclude bookmark bytes, applied command IDs, compatibility render values, inverses, and history.
+3. Introduced desired-state requests, engine-derived transitions, and `ProjectEditingSession`; verified empty history after reopen, 200-entry stack bounds, 512 recent-ID bounds, coalescing, duplicate-ID scope, and selection/Redo behavior.
+4. Replaced the public filesystem product with `VertexProjectPersistence` and enforced the exact `.vertexproject` root allowlist.
+5. Added durable file-I/O failure injection and a complete `Journal/pending-save.json` envelope containing independently checksummed project and manifest bytes.
+6. Verified every save interruption boundary reopens to one complete pair, with explicit decisions for uncertain/older/divergent pending data.
+7. Added immutable autosaves with 20-digit monotonic sequence/checksum names, duplicate suppression, corruption isolation, safe exhaustion, and eight-snapshot retention.
+8. Moved bookmark bytes to sidecars and added deterministic fingerprint-verified embedded-media promotion.
+9. Added internal legacy DTOs, source-tree digesting, contiguous WAL-prefix replay, non-destructive `.aeproject` conversion, per-media failure isolation, and staging cleanup.
+10. Routed the application through `ProjectSessionActor`, separated canonical and legacy document types, added explicit pending-save decisions and legacy inspection UI, and compiled app-boundary tests.
+11. Split app-test compilation into an independent CI job so app concurrency and document integration fail before IPA packaging.
+12. Downloaded and inspected the corrected 5.0 artifact; the bundled checksum and independently computed IPA digest matched.
+
+## Corrected verification
+
+- Product and CI source HEAD: `e821cfa62ae2c8c42e1a9b3393553ae71f80bb68`
+- Workflow run: `31111240394`
+- Portable tests: 109 passed
+- Native persistence tests: passed
+- Native Metal fixture tests and shader compilation: passed
+- iOS app session tests: compiled with `build-for-testing`
 - iOS 17 arm64 Release build: passed
-- Artifact ID: `8955148634`
-- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
-- IPA size: 884,969 bytes
+- Artifact ID: `8971903654`
+- Artifact ZIP SHA-256: `4e2cd38972072ba2b58285744602bd2ea0a70a11aeed57a889357f73b91a6a7b`
+- IPA SHA-256: `bcf72cf8105022015c468ad507f6f3a64b62c69d713b4f8ba8696a8e7fc99ed8`
+- IPA size: 1,102,371 bytes
 
 ## Result
 
-Phase 5 is complete on Draft PR #5. The branch remains stacked on Phase 4 and is not merged. Phase 6 must begin with an approved Layers and Compositions design, project schema migration planning, and a single shared render-graph vertical slice.
+Corrected Phase 5 is complete on Draft PR #5 and remains stacked on Phase 4. The next required step is to merge this corrected state into Draft PR #6, restore canonical schema 2 and all Layers/Compositions/Metal behavior, and inspect a replacement 6.0.0 IPA before any Phase 7 source work begins.
