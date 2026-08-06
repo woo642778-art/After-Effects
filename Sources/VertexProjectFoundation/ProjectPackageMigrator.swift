@@ -88,7 +88,7 @@ public struct ProjectPackageOpeningService {
 
     public func open(
         packageURL: URL,
-        migrationDestination: @Sendable () throws -> URL
+        migrationDestination: () throws -> URL
     ) throws -> ProjectPackageOpenResult {
         let layout = try ProjectPackageLayout(root: packageURL)
         guard fileManager.fileExists(atPath: layout.projectURL.path) else {
