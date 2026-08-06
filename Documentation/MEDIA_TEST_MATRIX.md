@@ -2,7 +2,7 @@
 
 ## Automated portable tests
 
-The Linux Swift 6.0 CI suite executes 20 tests across `VertexCoreTests` and `VertexMediaTests`.
+The final Linux Swift 6.0 CI suite executes 21 tests across `VertexCoreTests` and `VertexMediaTests`.
 
 | Area | Covered behavior |
 |---|---|
@@ -13,7 +13,7 @@ The Linux Swift 6.0 CI suite executes 20 tests across `VertexCoreTests` and `Ver
 | Frame requests | Rejection of invalid target dimensions |
 | Waveform values | Paired arrays, finite normalized range, bucket count |
 | Cancellation | Token succeeds before cancellation and throws afterward |
-| Waveform aggregation | Stereo full-scale, silence, peak and RMS calculation |
+| Waveform aggregation | Stereo full-scale, silence, peak/RMS calculation, and codec-padding overrun assigned to the final bucket |
 | Provider abstraction | Deterministic fake inspector through the public protocol |
 
 ## Apple-platform build validation
@@ -44,7 +44,12 @@ The first Apple-platform build exposed two platform-specific type issues that Li
 - `AVAssetTrack.estimatedDataRate` is `Float` and required an explicit conversion to the portable `Double?` field.
 - Core Video color constants bridge as `CFString`; direct switch-pattern casting against `String?` did not compile. The adapter now bridges constants to local `String` values and uses explicit equality checks.
 
-The corrected final source passed both jobs.
+A post-build review found two additional defects before finalization:
+
+- adding a fixed 8,192-frame estimate pad could leave artificial silence at the end of the displayed waveform;
+- file-importer errors were routed through an invented invalid path rather than presented directly.
+
+The waveform now uses the requested duration estimate, tolerates small codec-padding overruns in the final bucket, and has a regression test. Importer failures now become explicit view-model error state. Final run `31058027136` passed all 21 portable tests and the complete iOS build pipeline.
 
 ## Deferred validation
 
