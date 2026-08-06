@@ -1,95 +1,90 @@
 # Project Persistence Test Matrix
 
-## Portable Swift suite
+## Corrected Phase 5 verification
 
-The final Linux Swift 6.0.3 run executed 58 tests with zero failures.
+The corrected Phase 5 source HEAD `e821cfa62ae2c8c42e1a9b3393553ae71f80bb68` passed GitHub Actions run `31111240394`.
 
-### Project schema and codec
+### Portable Swift 6.0.3 suite
 
-- equal logical projects encode to identical bytes;
-- registry insertion order does not affect bytes;
-- deterministic SHA-256 is 64 lowercase hexadecimal characters;
-- non-finite render values are rejected;
-- future schemas are rejected before writable decoding;
-- project timestamps use canonical UTC encoding.
+The Linux run completed **109 tests with zero failures**.
 
-### Commands and history
+Canonical model and session coverage includes:
 
-- command application increments revision exactly once;
-- duplicate command IDs are rejected;
-- stale base revisions are rejected;
-- Undo and Redo restore Render Lab values;
-- compatible slider commands coalesce into one Undo entry;
-- a new normal command clears Redo history;
-- Undo journal preparation occurs before state mutation;
-- a failed journal preparation leaves project and history unchanged.
+- deterministic project bytes and registry ordering;
+- absence of bookmark bytes, applied command IDs, legacy compatibility values, history, command inverses, and persistence state from canonical JSON;
+- portable `MediaLocator` fields only;
+- desired-state request validation and exact forward/inverse transition derivation;
+- one revision increment per transition and stale-revision rejection;
+- empty history and recent-ID state after open/reopen;
+- 200-entry Undo/Redo bounds and 512 recent-command-ID bound;
+- duplicate command rejection within one session and acceptance in a new session;
+- continuous-edit coalescing and Redo preservation across workspace selection.
 
-### Journal and compatibility
+Package and transaction coverage includes:
 
-- journal records are independently checksummed;
-- deterministic lines decode and replay;
-- replay is idempotent for already-applied commands;
-- a truncated final line is excluded while complete preceding lines survive;
-- sequence gaps stop replay;
-- future project metadata can be inspected without writable decode;
-- a missing sequential migration link is rejected.
+- `.vertexproject` extension enforcement;
+- exact root allowlist and rejection of legacy/unknown entries;
+- path-containment checks;
+- durable write, file synchronization, atomic promotion, directory synchronization, and exact injected failures;
+- matching project/manifest creation and replacement;
+- independent pending-envelope checksums;
+- six save-boundary interruption cases reopening to one complete verified pair;
+- automatic completion only for a proven valid newer/partial candidate;
+- explicit decision for corrupt, uncertain, older, or divergent pending data.
 
-### Media relinking
+Autosave, bookmark, and media coverage includes:
 
-- filename alone is not accepted as a strong relink;
-- one matching fingerprint produces automatic relink;
-- multiple matching fingerprints require user selection;
-- no candidates report missing media.
+- immutable 20-digit sequence/checksum autosave names;
+- duplicate suppression, corruption isolation, sequence exhaustion, and retention of eight valid unique snapshots;
+- no history, command, inverse, recent-ID, or bookmark state in autosaves;
+- lowercase bookmark-sidecar names, atomic replacement, stale refresh, missing/corrupt sidecar isolation;
+- deterministic sanitized embedded-media names, traversal rejection, pre/post fingerprint checks, collision rejection, tamper detection, and independence from external originals.
 
-### File-system package behavior
+Legacy import coverage includes:
 
-- package paths cannot use absolute paths or parent traversal;
-- package creation produces matching project, manifest, checksum, and history;
-- an injected failure after temporary project write preserves the prior current project;
-- persisted history restores an Undo operation after reload;
-- journal append produces one complete durable line;
-- autosave retention is bounded to current, previous, and two hourly snapshots;
-- a corrupt current project recovers from a valid backup into a separate package;
-- backup recovery does not reuse history from a newer revision;
-- embedded media remains resolvable after the external source is deleted.
+- source-tree digest equality before and after inspection/conversion;
+- preserved project/composition/media IDs and timestamps;
+- valid contiguous journal-prefix replay with checksum/gap/unknown-command/invalid-transition stopping rules;
+- truncated final-line isolation;
+- discarded persisted Undo/Redo, backup, and mutable autosave state;
+- per-media bookmark failure isolation;
+- verified embedded-media copy;
+- deterministic repeated conversion bytes and failed-staging cleanup.
 
-### Existing regression coverage
+All prior exact-time, identity, dependency, color, media-provider, waveform, render-graph, cache-key, cancellation, Metal fixture, preview/output-parity, and milestone-policy tests also remained active.
 
-The same run also passed all prior exact-time, identity, dependency, color, media-provider, waveform, render-graph, cache-key, cancellation, preview/output-parity, and milestone-policy tests.
+## Apple-platform and app verification
 
-## Native macOS suite
+The macOS job passed native `VertexProjectPersistenceTests`, native Metal fixture tests, and independent Metal shader compilation.
 
-The final macOS job ran `VertexProjectFoundationTests` separately and passed 9 project-package tests. This verifies the Foundation implementation on an Apple platform in addition to the Linux file-system run.
+The iOS app-test job generated the Xcode project and compiled the app plus `Tests/VertexAppTests` with `build-for-testing`. Those tests cover canonical and legacy UTTypes, serial session operations, Undo/Redo, pending-decision handling, and concurrent request ordering at the app boundary.
 
-The same job passed 2 native Metal fixture tests and compiled the Metal shader source independently.
+The Release job passed:
 
-## iOS build and product checks
-
-The final GitHub Actions run passed:
-
-- XcodeGen project generation;
-- supplied Ae icon asset generation;
-- iOS 17 generic-device Release compilation;
-- unsigned arm64 application build;
+- XcodeGen and supplied icon generation;
+- iOS 17 generic-device unsigned Release compilation;
+- arm64 executable verification;
 - display name `After Effects`;
 - bundle identifier `com.woo642778.aftereffects`;
 - version `5.0.0 (5)`;
-- compiled `Assets.car` presence;
-- packaged `Vertex_VertexRenderMetal.bundle/default.metallib` presence;
+- `Assets.car` and packaged Metal library checks;
 - unsigned IPA packaging and artifact upload.
 
-## Final evidence
+## Artifact evidence
 
-- Product and CI source HEAD: `e68ffde2eebcdb58becc9d3d1ecaf195f1861e76`
-- Successful workflow run: `31069517329`
-- Portable tests: 58 passed
-- Native project-package tests: 9 passed
-- Native Metal fixture tests: 2 passed
-- Artifact ID: `8955148634`
-- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- Extracted IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
-- IPA size: 884,969 bytes
+- Workflow run: `31111240394`
+- Artifact ID: `8971903654`
+- Artifact name: `After-Effects-5.0.0-unsigned-ipa`
+- Artifact ZIP SHA-256: `4e2cd38972072ba2b58285744602bd2ea0a70a11aeed57a889357f73b91a6a7b`
+- IPA SHA-256: `bcf72cf8105022015c468ad507f6f3a64b62c69d713b4f8ba8696a8e7fc99ed8`
+- IPA size: `1,102,371` bytes
+- Executable: Mach-O 64-bit arm64
+- Minimum OS: iOS 17.0
+- `Assets.car`: 152,879 bytes
+- `Vertex_VertexRenderMetal.bundle/default.metallib`: 6,996 bytes
+
+The ZIP-bundled checksum file reports the same IPA SHA-256.
 
 ## Unverified environment
 
-No physical iPhone or iPad installation, signing, long-duration field test, external-provider document round trip, or manual recovery UI session was performed. The IPA remains unsigned.
+No physical-device installation, signing, long-duration field test, external-provider document round trip, or manual destructive recovery exercise was performed. The IPA is unsigned. This corrected 5.0 artifact verifies Phase 5 only; it is not the final Phase 7 base until corrected Phase 6 is reintegrated and a replacement 6.0 artifact is inspected.
