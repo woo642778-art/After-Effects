@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import VertexProject
+import VertexProjectFoundation
 
 struct ProjectWorkspaceView: View {
     @EnvironmentObject private var workspace: ProjectWorkspaceViewModel
@@ -135,10 +136,8 @@ struct ProjectWorkspaceView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first { workspace.openProject(from: url) }
-            case .failure(let error):
-                if (error as NSError).code != NSUserCancelledError {
-                    workspace.projectNameInput = workspace.projectNameInput
-                }
+            case .failure:
+                break
             }
         }
         .fileImporter(
