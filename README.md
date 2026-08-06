@@ -6,9 +6,9 @@ The product target is not a cosmetic clone. The project is intended to remove ma
 
 ## Current status
 
-**Phase 3 of 28: Media Input and Output Foundation**
+**Phase 4 of 28: GPU Render Graph**
 
-Current product version: **3.0.0 (3)**
+Current product version: **4.0.0 (4)**
 
 Implemented:
 
@@ -16,19 +16,23 @@ Implemented:
 - structured dependency and error contracts
 - After Effects identity, supplied Ae icon, startup loading, and `Made by Maze`
 - once-per-installation Telegram promotion for `https://t.me/aemotionios`
-- platform-neutral `VertexMedia` descriptors, requests, providers, cancellation, and waveform aggregation
-- isolated AVFoundation metadata inspection
-- preferred-transform-aware thumbnail decoding at a requested exact time
-- normalized audio peak/RMS waveform extraction
-- real Files-based movie selection and presentation of metadata, thumbnail, and waveform
-- reproducible unsigned `After-Effects-3.0.0-unsigned.ipa`
+- platform-neutral media descriptors, requests, providers, cancellation, and waveform aggregation
+- isolated AVFoundation metadata inspection, thumbnail decoding, and waveform extraction
+- real Files-based movie selection and media presentation
+- platform-neutral `VertexRender` semantic graph, validation, cache identity, cancellation, and latest-request scheduling
+- isolated native `VertexRenderMetal` compute backend
+- GPU translation, scale, exposure, saturation, inversion, opacity, and output resizing
+- interactive Render Lab using a real imported movie thumbnail
+- CPU/GPU/total render metrics
+- byte-identical preview and PNG file export
+- reproducible unsigned `After-Effects-4.0.0-unsigned.ipa`
 
 Not implemented yet:
 
-- timeline playback or editing
-- multilayer GPU composition
-- preview/export parity
-- effects, motion, retiming, masks, tracking, AI cutout, shapes, text animation, color grading, audio effects, particles, nodes, or 3D
+- continuous video playback or timeline editing
+- multilayer composition or video-file export
+- project persistence and recovery
+- general effect stacks, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, node compositing, or 3D
 
 ## Build
 
@@ -40,7 +44,7 @@ xcodegen generate
 open Vertex.xcodeproj
 ```
 
-Every successful phase publishes an **unsigned IPA** through GitHub Actions. Starting with Phase 3, the phase number is the major product version. An installable IPA requires valid signing credentials supplied by the repository owner.
+Every successful phase publishes an **unsigned IPA** through GitHub Actions. Starting with Phase 3, the phase number is the major product version. Installation requires valid signing credentials supplied by the repository owner.
 
 ## Canonical documents
 
@@ -52,6 +56,10 @@ Every successful phase publishes an **unsigned IPA** through GitHub Actions. Sta
 - `Documentation/MEDIA_IO_ARCHITECTURE.md`
 - `Documentation/MEDIA_SOURCE_AUDIT.md`
 - `Documentation/MEDIA_TEST_MATRIX.md`
+- `Documentation/GPU_RENDER_GRAPH_ARCHITECTURE.md`
+- `Documentation/GPU_SOURCE_AUDIT.md`
+- `Documentation/GPU_TEST_MATRIX.md`
+- `Documentation/PHASE_4_COMPLETION.md`
 - `Documentation/VERSIONING_AND_ARTIFACTS.md`
 - `Documentation/BRANDING_AND_FIRST_RUN.md`
 - `Documentation/WORK_LOG.md`
@@ -59,4 +67,4 @@ Every successful phase publishes an **unsigned IPA** through GitHub Actions. Sta
 
 ## Development rule
 
-A feature is not complete because its UI exists. It is complete only when the underlying behavior, tests, performance evidence appropriate to the phase, documentation, and reproducible build artifact are present.
+A feature is not complete because its UI exists. It is complete only when the underlying behavior, tests, appropriate performance evidence, documentation, and a reproducible build artifact are present.
