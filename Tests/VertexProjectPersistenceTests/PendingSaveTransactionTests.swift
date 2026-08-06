@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import VertexCore
 import VertexProject
 @testable import VertexProjectPersistence
 
@@ -38,12 +39,13 @@ func pendingEnvelopeRoundTripsExactBytes() throws {
     let encoded = try PendingSaveEnvelopeCodec().encode(envelope)
     let decoded = try PendingSaveEnvelopeCodec().decode(encoded)
     let verified = try decoded.verifiedPair()
+    let reencoded = try PendingSaveEnvelopeCodec().encode(decoded)
 
     #expect(decoded.projectData == projectData)
     #expect(decoded.manifestData == manifestData)
     #expect(verified.document == document)
     #expect(verified.manifest == manifest)
-    #expect(encoded == try PendingSaveEnvelopeCodec().encode(decoded))
+    #expect(encoded == reencoded)
 
     let projectJSON = String(decoding: decoded.projectData, as: UTF8.self)
     for forbidden in ["bookmarkData", "appliedCommandIDs", "legacyRenderSettings", "inverseOperation", "history", "undo", "redo"] {
@@ -106,7 +108,8 @@ func saveFailureBoundariesNeverExposeMixedPair() throws {
         #expect(snapshot.manifest.projectRevision == snapshot.document.revision)
         #expect(snapshot.manifest.projectID == snapshot.document.projectID)
         #expect(snapshot.manifest.projectChecksum == DeterministicProjectCodec().checksum(data: snapshot.projectData))
-        #expect(try VertexProjectManifestCodec().decode(snapshot.manifestData) == snapshot.manifest)
+        let decodedManifest = try VertexProjectManifestCodec().decode(snapshot.manifestData)
+        #expect(decodedManifest == snapshot.manifest)
     }
 }
 
@@ -133,7 +136,8 @@ func uncertainPendingCandidatesRequireDecision() throws {
         )
         let manifestData = try VertexProjectManifestCodec().encode(manifest)
         let envelope = PendingSaveEnvelope(projectData: projectData, manifestData: manifestData)
-        try PendingSaveEnvelopeCodec().encode(envelope).write(to: layout.pendingSaveURL, options: .atomic)
+        let envelopeData = try PendingSaveEnvelopeCodec().encode(envelope)
+        try envelopeData.write(to: layout.pendingSaveURL, options: Data.WritingOptions.atomic)
 
         guard case .pendingDecision(let context) = try VertexProjectPackageStore().open(at: url) else {
             Issue.record("An older or divergent pending pair must require a decision.")
