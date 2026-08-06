@@ -226,9 +226,11 @@ func legacyImportIsNonDestructiveAndDeterministic() throws {
     let embedded = try #require(resultA.snapshot.document.mediaRegistry.first {
         $0.id == legacyEmbeddedMediaID
     })
-    let embeddedURL = try #require(
-        EmbeddedMediaStore().resolve(reference: embedded, packageURL: destinationA)
+    let embeddedURLOptional = try EmbeddedMediaStore().resolve(
+        reference: embedded,
+        packageURL: destinationA
     )
+    let embeddedURL = try #require(embeddedURLOptional)
     #expect(try Data(contentsOf: embeddedURL) == fixture.embeddedBytes)
 
     let canonicalEntries = try FileManager.default.contentsOfDirectory(atPath: destinationA.path)
