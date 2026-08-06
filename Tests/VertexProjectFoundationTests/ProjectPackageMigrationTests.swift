@@ -17,51 +17,84 @@ private struct Schema1PackageFixture {
         let layout = try ProjectPackageLayout(root: packageURL)
         try layout.createDirectories()
 
-        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
-        let projectID = VertexID(rawValue: "63000000-0000-0000-0000-000000000001")
-        let media = MediaReference.fixture(id: "63000000-0000-0000-0000-000000000010")
-        let composition = Schema1CompositionPlaceholder(
-            id: VertexID(rawValue: "63000000-0000-0000-0000-000000000020"),
-            name: "Legacy Comp"
-        )
-        let project = Schema1ProjectDocument(
-            schemaVersion: 1,
-            minimumReaderVersion: 1,
-            projectID: projectID,
-            revision: 4,
-            metadata: ProjectMetadata(
-                name: "Legacy Package",
-                createdAt: timestamp,
-                modifiedAt: timestamp,
-                createdByAppVersion: "5.0.0",
-                lastSavedByAppVersion: "5.0.0"
-            ),
-            settings: ProjectSettings(),
-            mediaRegistry: [media],
-            compositionRegistry: [composition],
-            activeCompositionID: composition.id,
-            selectedMediaID: media.id,
-            renderSettings: ProjectRenderSettings(exposure: 1, outputWidth: 1280, outputHeight: 720),
-            appliedCommandIDs: []
-        )
-        let projectData = try Schema1ProjectCodec.encode(project)
-        let manifest = Schema1Manifest(
-            schemaVersion: 1,
-            minimumReaderVersion: 1,
-            projectID: projectID,
-            createdByAppVersion: "5.0.0",
-            lastSavedByAppVersion: "5.0.0",
-            projectRevision: 4,
-            projectChecksum: StableProjectSHA256.hexDigest(projectData),
-            committedJournalSequence: 0,
-            lastSuccessfulSave: timestamp,
-            integrityStatus: .valid
-        )
-        let manifestData = try Schema1ProjectCodec.makeEncoder().encode(manifest)
+        let timestamp = "2023-11-14T22:13:20.000Z"
+        let projectID = "63000000-0000-0000-0000-000000000001"
+        let mediaID = "63000000-0000-0000-0000-000000000010"
+        let compositionID = "63000000-0000-0000-0000-000000000020"
+        let projectObject: [String: Any] = [
+            "schemaVersion": 1,
+            "minimumReaderVersion": 1,
+            "projectID": projectID,
+            "revision": 4,
+            "metadata": [
+                "name": "Legacy Package",
+                "createdAt": timestamp,
+                "modifiedAt": timestamp,
+                "createdByAppVersion": "5.0.0",
+                "lastSavedByAppVersion": "5.0.0"
+            ],
+            "settings": [
+                "frameRate": ["value": 30, "timescale": 1],
+                "color": [
+                    "primaries": "rec709",
+                    "transferFunction": "rec709",
+                    "matrix": "bt709",
+                    "alphaMode": "straight"
+                ]
+            ],
+            "mediaRegistry": [[
+                "id": mediaID,
+                "displayName": "legacy.mov",
+                "originalFilename": "legacy.mov",
+                "fileSize": 100,
+                "modificationDate": timestamp,
+                "contentFingerprint": "legacy-fingerprint",
+                "locator": ["relativeHint": "legacy.mov"],
+                "kind": "video",
+                "availabilityStatus": "external"
+            ]],
+            "compositionRegistry": [["id": compositionID, "name": "Legacy Comp"]],
+            "activeCompositionID": compositionID,
+            "selectedMediaID": mediaID,
+            "renderSettings": [
+                "exposure": 1.0,
+                "saturation": 1.0,
+                "opacity": 1.0,
+                "inverted": false,
+                "scale": 1.0,
+                "translationX": 0.0,
+                "translationY": 0.0,
+                "outputWidth": 1280,
+                "outputHeight": 720
+            ],
+            "appliedCommandIDs": []
+        ]
+        let projectData = try JSONSerialization.data(withJSONObject: projectObject, options: [.sortedKeys])
+        let manifestObject: [String: Any] = [
+            "schemaVersion": 1,
+            "minimumReaderVersion": 1,
+            "projectID": projectID,
+            "createdByAppVersion": "5.0.0",
+            "lastSavedByAppVersion": "5.0.0",
+            "projectRevision": 4,
+            "projectChecksum": StableProjectSHA256.hexDigest(projectData),
+            "committedJournalSequence": 0,
+            "lastSuccessfulSave": timestamp,
+            "integrityStatus": "valid"
+        ]
+        let manifestData = try JSONSerialization.data(withJSONObject: manifestObject, options: [.sortedKeys])
+
         try projectData.write(to: layout.projectURL)
         try manifestData.write(to: layout.manifestURL)
-        FileManager.default.createFile(atPath: layout.journalURL.path, contents: Data())
-        return Schema1PackageFixture(root: root, packageURL: packageURL, projectData: projectData, manifestData: manifestData)
+        guard FileManager.default.createFile(atPath: layout.journalURL.path, contents: Data()) else {
+            throw ProjectError.packageCorruption("Schema 1 fixture journal could not be created.")
+        }
+        return Schema1PackageFixture(
+            root: root,
+            packageURL: packageURL,
+            projectData: projectData,
+            manifestData: manifestData
+        )
     }
 }
 
