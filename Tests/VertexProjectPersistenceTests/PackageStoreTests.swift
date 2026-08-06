@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import VertexCore
 import VertexProject
 @testable import VertexProjectPersistence
 
