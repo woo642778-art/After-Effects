@@ -108,6 +108,8 @@ package struct Schema1RecoveredState: Sendable {
 }
 
 package struct Schema1CommandEngine {
+    package init() {}
+
     package func apply(_ record: ProjectCommandRecord, to input: Schema1ProjectDocument) throws -> Schema1ProjectDocument {
         guard record.projectID == input.projectID else { throw ProjectError.invalidProjectIdentity }
         guard record.baseRevision == input.revision else {
@@ -204,6 +206,8 @@ package struct Schema1CommandEngine {
 }
 
 package struct Schema1JournalReplayer {
+    package init() {}
+
     package func replay(
         _ records: [ProjectJournalRecord],
         onto document: Schema1ProjectDocument,
