@@ -5,94 +5,85 @@
 Approved design for Phase 6 of the After Effects/Vertex roadmap.
 
 - Branch: `agent/phase-6-layers-compositions`
-- Base branch: `agent/phase-5-project-persistence`
-- Product version on successful completion: `6.0.0 (6)`
-- Unsigned artifact on successful completion: `After-Effects-6.0.0-unsigned.ipa`
+- Base: `agent/phase-5-project-persistence`
+- Successful product version: `6.0.0 (6)`
+- Successful unsigned artifact: `After-Effects-6.0.0-unsigned.ipa`
 - Project schema after migration: `2`
 
-Phase 6 introduces real composition and layer semantics, real multi-source GPU compositing, an adjustment-layer path, and basic nested-composition rendering. It must not create a second preview/export compositor or claim later-phase animation, timeline, 3D, or export features.
+Phase 6 adds real composition and layer semantics, real multi-source GPU compositing, adjustment layers, and basic nested-composition rendering. It does not add a second preview/export path and does not claim later-phase timeline, animation, 3D, or video-export behavior.
 
-## 1. Scope
+## 1. Accepted scope
 
-### 1.1 Real Phase 6 behavior
+### 1.1 Real behavior
 
 Phase 6 implements:
 
 - stable composition and layer identities;
-- deterministic composition and layer persistence;
-- schema 1 to schema 2 migration;
+- deterministic schema 2 persistence;
+- non-destructive schema 1 to schema 2 migration;
 - multiple media layers rendered in explicit Z-order;
-- static per-layer position, anchor, independent X/Y scale, rotation, opacity, exposure, saturation, and inversion;
-- real `normal`, `add`, `multiply`, and `screen` Metal blending;
-- adjustment layers that affect the accumulated visible result below them;
-- basic nested compositions with source start offsets and parent In/Out ranges;
-- null, guide, camera, and light layer models with persistence, ordering, selection, commands, Undo, Redo, journaling, and autosave;
-- a real composition workspace with exact-frame navigation and the existing persistence controls;
-- one preview/output render result path;
-- deterministic pixel fixtures and regression coverage;
-- version `6.0.0 (6)` and an unsigned arm64 IPA after all gates pass.
+- static position, anchor, independent X/Y scale, rotation, opacity, exposure, saturation, and inversion;
+- real Metal `normal`, `add`, `multiply`, and `screen` blending;
+- adjustment layers affecting all participating layers below them;
+- nested compositions with parent In/Out ranges and source-start offsets;
+- null, guide, camera, and light records with persistence, ordering, commands, Undo, Redo, journaling, autosave, and recovery;
+- an exact-frame composition workspace;
+- one semantic render request used by preview and PNG output;
+- deterministic compiler and pixel tests;
+- a verified `6.0.0 (6)` unsigned arm64 IPA after every gate passes.
 
-### 1.2 Explicit exclusions
+### 1.2 Exclusions
 
 Phase 6 does not implement:
 
-- continuous video playback;
-- a full NLE timeline or trim-edit toolset;
+- continuous playback;
+- a full NLE timeline or trim tools;
 - keyframes, interpolation, parenting, constraints, or motion blur;
 - Time Stretch, reverse, freeze, Time Remap, or frame synthesis;
-- advanced pre-composition semantics such as Collapse Transformations or Continuous Rasterization;
-- camera or light influence on 2D output;
+- Collapse Transformations, Continuous Rasterization, or advanced pre-composition behavior;
+- visible camera or light rendering;
 - video-file export;
 - masks, tracking, AI cutout, shape rendering, text rendering, professional color management, audio processing, particles, node compositing, or 3D rendering.
 
-Camera and light rows must be visibly marked as model-only in Phase 6. They may not be presented as active rendering controls.
+Camera and light rows are marked `Model only` and must not appear to affect Phase 6 output.
 
-## 2. Chosen architecture
+## 2. Architecture
 
-### 2.1 Recommended approach
+### 2.1 Selected approach
 
-Extend the existing `VertexRender` semantic graph from one source to a multi-source DAG and compile project compositions into that graph through a new platform-neutral `VertexComposition` module.
-
-The selected dependency direction is:
+The existing `VertexRender` graph becomes a multi-source DAG. A new platform-neutral `VertexComposition` module compiles persistent project data into that graph.
 
 ```text
-VertexCore
-VertexMedia
-VertexProject
-VertexRender
-   ↑        ↑
-   └─ VertexComposition
-             ↑
-       application adapters
-             ↑
-    VertexRenderMetal backend
+VertexCore        VertexMedia
+    ↑                 ↑
+VertexProject      VertexRender
+      \              /
+       VertexComposition
+               ↑
+        application adapters
+               ↓
+       VertexRenderMetal
 ```
 
-More precisely:
+Dependency rules:
 
-- `VertexProject` owns persistent composition and layer values and project commands.
-- `VertexComposition` depends on `VertexProject`, `VertexMedia`, and `VertexRender` and compiles a project composition at an exact time into a `RenderGraph`.
-- `VertexRender` owns backend-neutral graph nodes and validation.
-- `VertexRenderMetal` executes the graph.
-- the app resolves package media and external security-scoped media, then supplies exact frames through the compiler interface.
+- `VertexProject` owns persistent composition/layer values and project commands.
+- `VertexComposition` depends on `VertexProject`, `VertexMedia`, and `VertexRender`.
+- `VertexRender` owns backend-neutral graph values and validation and does not depend on `VertexProject`.
+- `VertexRenderMetal` executes `VertexRender` requests.
+- the app resolves package or external media and implements the frame-resolver adapter.
 
-`VertexRender` must not depend on `VertexProject`. This keeps the render graph reusable by future node, effect, and interchange systems.
+This preserves one preview/output semantic path and keeps the graph reusable for future effect and node systems.
 
 ### 2.2 Rejected approaches
 
-#### Render every layer separately, then merge final images
+Rendering every layer separately and merging final PNG/CPU buffers is rejected because it creates avoidable round trips, weakens cancellation and cache semantics, and complicates adjustment layers.
 
-Rejected because it encourages CPU/PNG round trips, complicates adjustment layers, weakens cancellation and cache semantics, and risks different preview and output paths.
+A separate layer compositor beside `VertexRender` is rejected because it would create two render systems.
 
-#### Add a separate layer compositor beside `VertexRender`
-
-Rejected because it creates two semantic render systems and violates the project invariant that preview and output share one graph and backend path.
-
-## 3. Schema 2 project model
+## 3. Schema 2 model
 
 ### 3.1 Project root
-
-Schema 2 replaces composition placeholders and global Render Lab ownership with actual records.
 
 ```text
 ProjectDocument
@@ -112,9 +103,11 @@ ProjectDocument
 └── appliedCommandIDs
 ```
 
-`legacyRenderSettings` is migration-only preservation data. New Phase 6 editing does not write global Render Lab state. When a schema 1 selected media item can be migrated into a media layer, the values move into that layer and `legacyRenderSettings` is `nil`. When no selected media exists, the old values remain in `legacyRenderSettings` so migration does not discard them.
+`legacyRenderSettings` exists only to preserve schema 1 global Render Lab values when no selected media can be converted into a layer. New Phase 6 edits do not write global Render Lab state.
 
-### 3.2 Composition record
+Canonical serialization sorts `mediaRegistry`, `compositionRegistry`, `layerRegistry`, and `appliedCommandIDs` by stable ID. It never sorts `ProjectComposition.layerIDs`; that array is the authoritative Z-order. Authoritative JSON remains UTF-8, sorted-key, non-pretty-printed, finite-number-only, and free of platform or GPU objects.
+
+### 3.2 Composition
 
 ```text
 ProjectComposition
@@ -131,18 +124,17 @@ ProjectComposition
 
 Rules:
 
-- dimensions are in `1...8192`;
-- duration is positive;
-- frame rate is positive and exact;
+- width and height are each `1...8192`;
+- duration and frame rate are positive exact values;
 - `layerIDs[0]` is the visually highest layer;
-- the last layer ID is the visually lowest layer;
-- the renderer traverses the list from last to first;
-- each layer ID occurs exactly once;
-- every listed layer exists and declares the same owning composition;
-- a layer can belong to exactly one composition;
-- background alpha may be zero for a transparent composition.
+- the final ID is the visually lowest layer;
+- rendering traverses from the final ID toward index zero;
+- IDs are unique and each referenced layer exists;
+- every referenced layer declares this composition as owner;
+- every layer belongs to exactly one composition;
+- background RGBA components are finite and within `0...1`.
 
-### 3.3 Layer record
+### 3.3 Layer
 
 ```text
 ProjectLayer
@@ -163,38 +155,80 @@ ProjectLayer
 
 Timing rules:
 
-- the visible interval is `inPoint <= compositionTime < outPoint`;
+- a layer participates only when `inPoint <= compositionTime < outPoint`;
 - `outPoint` is exclusive;
 - `0 <= inPoint < outPoint <= composition.duration`;
-- `startTime` is the composition time at which the source-local timeline origin begins;
-- source time is calculated as `compositionTime - startTime + sourceStartTime` for media and nested sources;
-- all time values use `RationalTime`;
-- locked status blocks editing but does not affect rendering.
+- `startTime` defines the composition time corresponding to source-local zero before source-start offset;
+- all project time uses `RationalTime`;
+- locked status affects editing only, not rendering.
 
 ### 3.4 Layer sources
 
 ```text
 LayerSource
-├── media(mediaID: VertexID, sourceStartTime: RationalTime)
-├── adjustment(scope: AdjustmentScope)
+├── media(mediaID, sourceStartTime)
+├── adjustment(scope)
 ├── null
 ├── guide
-├── camera(CameraLayerSettings)
-├── light(LightLayerSettings)
-└── composition(compositionID: VertexID, sourceStartTime: RationalTime)
+├── camera(settings)
+├── light(settings)
+└── composition(compositionID, sourceStartTime)
 ```
 
-`AdjustmentScope` has one schema 2 value:
+Schema 2 has one adjustment scope: `belowAll`.
+
+Media and nested-composition source time is:
 
 ```text
-belowAll
+sourceTime = compositionTime - startTime + sourceStartTime
 ```
 
-The type exists so later schemas can add explicit start/end ranges without replacing the adjustment source model.
+A negative source time produces transparency without resolving a frame. A nested source time at or beyond child duration also produces transparency. The media frame adapter returns either a frame or an explicit valid out-of-range transparent result; I/O, decode, or missing-media failures remain errors.
 
-Camera settings are portable numeric data only, such as projection identifier, focal length, clipping values, and neutral 3D vectors. Light settings are portable numeric data only, such as type, intensity, color, cone angle, and feather. Phase 6 validates and persists them but does not compile them into visible render nodes.
+### 3.5 Exact camera and light records
 
-### 3.5 Static transform
+Camera settings are model-only and contain exactly:
+
+```text
+CameraLayerSettings
+├── projection: perspective
+├── focalLengthMillimeters: Double
+├── nearClip: Double
+├── farClip: Double
+├── positionX/Y/Z: Double
+└── pointOfInterestX/Y/Z: Double
+```
+
+Validation:
+
+- projection has only `perspective` in schema 2;
+- focal length and near clip are positive;
+- far clip is greater than near clip;
+- all values are finite.
+
+Light settings contain exactly:
+
+```text
+LightLayerSettings
+├── kind: point | directional | spot
+├── color: ProjectRGBAColor
+├── intensity: Double
+├── positionX/Y/Z: Double
+├── directionX/Y/Z: Double
+├── coneAngleDegrees: Double
+└── coneFeather: Double
+```
+
+Validation:
+
+- intensity is nonnegative;
+- cone angle is within `0...180`;
+- cone feather is within `0...1`;
+- all numeric values are finite.
+
+Null, guide, camera, and light layers must use `normal` blend mode and an empty operation list in schema 2. Adjustment layers must also use `normal`; their opacity is the adjustment mix. Media and nested-composition layers may use all four implemented blend modes.
+
+### 3.6 Static transform
 
 ```text
 LayerTransform
@@ -208,31 +242,32 @@ LayerTransform
 └── opacity: Double
 ```
 
-Rules:
+Defaults:
 
-- position and anchor use composition-normalized top-left coordinates;
-- all values must be finite;
-- `scaleX` and `scaleY` must be positive;
-- opacity is within `0...1`;
-- rotation preserves the finite user value and is not forcibly normalized;
-- Phase 7 may replace static values with animation channels without changing layer identity.
+```text
+position = (0.5, 0.5)
+anchor = (0.5, 0.5)
+scale = (1, 1)
+rotation = 0
+opacity = 1
+```
 
-### 3.6 Layer operations
+Position and anchor use composition-normalized top-left coordinates. All values are finite, both scales are positive, opacity is `0...1`, and rotation preserves the finite user value without forced wrapping.
 
-The persisted operation model is independent of Metal and contains only Phase 6-supported static operations:
+### 3.7 Operations and blend modes
+
+Persisted operations are independent of Metal:
 
 ```text
 LayerOperation
-├── exposure(stops: Double)
-├── saturation(value: Double)
-└── invert(enabled: Bool)
+├── exposure(stops)
+├── saturation(value)
+└── invert(enabled)
 ```
 
-For media and nested layers, operations run before blending. For adjustment layers, operations run on the accumulated result below the adjustment. Adjustment-layer opacity mixes the unadjusted and fully adjusted accumulated textures.
+Exposure and saturation values must be finite; saturation is nonnegative. Media/nested operations run before blending. Adjustment operations run on the accumulated result below and are mixed with the original accumulator by layer opacity.
 
-### 3.7 Blend modes
-
-Schema 2 stores only:
+Schema 2 blend modes are exactly:
 
 ```text
 normal
@@ -241,81 +276,78 @@ multiply
 screen
 ```
 
-Unsupported identifiers are rejected. Overlay, Soft Light, Difference, Darken, Lighten, Color Dodge, and Color Burn are planned extensions and require a later schema and shader expansion before they become selectable or writable.
+Overlay, Soft Light, Difference, Darken, Lighten, Color Dodge, and Color Burn require a later schema and shader extension and are neither selectable nor writable in Phase 6.
 
-### 3.8 Visibility and Solo
+### 3.8 Enabled, Solo, and missing media
 
-The compiler first determines layers active at the requested composition time.
+The compiler filters by enabled state and time range first.
 
-- disabled layers are excluded;
-- layers outside their In/Out range are excluded;
-- model-only null, guide, camera, and light layers produce no pixels;
 - when no active layer is solo, every active render-capable layer participates;
-- when one or more active layers are solo, only active solo layers participate;
-- an adjustment layer follows the same Solo filter;
-- a solo adjustment with no participating result below it operates on transparency;
-- locked status does not affect render inclusion.
-
-A missing media item is an error only when its layer survives enabled, timing, and Solo filtering. Missing media on an excluded layer does not block the frame.
+- when any active layer is solo, only active solo layers participate;
+- adjustments follow the same Solo filter;
+- a solo adjustment with no participating pixels below operates on transparency;
+- model-only layers produce no pixels;
+- missing media is an error only when its media layer survives enabled, timing, and Solo filtering.
 
 ## 4. Schema 1 to schema 2 migration
 
-### 4.1 Migration boundary
+### 4.1 Recovery before migration
 
-Future schema detection remains ahead of full writable decode. Schema 1 is migrated through ordered raw JSON migration before decoding as schema 2.
+A schema 1 package first goes through the existing schema 1 load/recovery process. Valid pending schema 1 journal records are replayed with the schema 1 command engine to produce one recovered logical document snapshot. Migration runs on that snapshot only; it does not combine unrelated autosave or backup candidates.
 
-A schema 1 package is not overwritten during first migration. The application creates a new internal working package, performs migration and full validation there, and leaves the schema 1 source package unchanged. The existing app-specific `.aeproject` extension and UTI remain unchanged in Phase 6; this does not claim compatibility with Adobe `.aep` files.
+Because schema 1 command payloads are not schema 2 command payloads, the new schema 2 package starts with:
 
-### 4.2 Deterministic conversion
+```text
+empty Undo/Redo history
+committed journal sequence = 0
+empty journal
+revision retained from recovered schema 1 snapshot
+```
 
-For every schema 1 composition placeholder:
+Migration itself is not an Undo command.
 
-- reuse its existing ID as the schema 2 composition ID;
+### 4.2 Non-destructive package behavior
+
+The schema 1 package is not overwritten. The app creates a new internal working package, writes schema 2 canonical data, validates checksum and readback, then opens the new package. Failure leaves the source package untouched.
+
+The existing app-specific `.aeproject` extension and UTI remain unchanged in Phase 6. This does not claim Adobe `.aep` compatibility.
+
+### 4.3 Deterministic conversion
+
+For each schema 1 composition placeholder:
+
+- reuse its ID;
 - retain its non-empty name;
-- assign the previous output width and height;
-- assign the project frame rate;
-- assign a deterministic default duration of ten seconds;
-- assign the project color descriptor;
-- assign a transparent background;
-- start with an empty layer order.
+- assign old output width and height;
+- assign project frame rate and color;
+- assign a ten-second exact duration;
+- use a transparent background;
+- start with empty Z-order.
 
-When schema 1 contains no placeholder:
+When no placeholder exists, derive one default composition ID from the project ID and a fixed domain string and create `Main Composition`.
 
-- derive one default composition ID from the project ID and constant domain string;
-- create one composition named `Main Composition`;
-- make it active.
-
-When `activeCompositionID` points to a valid migrated placeholder, retain it. Otherwise select the first composition by canonical ID order.
+Retain a valid active composition. Otherwise choose the first composition in canonical ID order.
 
 When `selectedMediaID` is valid:
 
-- derive a deterministic media-layer ID from project ID, active composition ID, and media ID;
+- deterministically derive a media-layer ID from project ID, active composition ID, and media ID;
 - create one media layer in the active composition;
-- set its source start to zero;
-- set its In/Out range to the full default composition duration;
-- migrate the schema 1 global transform, opacity, exposure, saturation, and inversion into the layer;
+- use zero source start and the full composition In/Out range;
+- migrate old transform, opacity, exposure, saturation, and inversion;
 - use `normal` blend mode;
-- preserve `selectedMediaID` and select the new layer.
+- preserve selected media and select the new layer.
 
-When no selected media exists, preserve old global values in `legacyRenderSettings` and create no fake layer.
+When no selected media exists, create no fake layer and preserve old values in `legacyRenderSettings`.
 
-Deterministic derived IDs use SHA-256 over an explicit UTF-8 domain string and stable IDs, then map the first 16 bytes into a UUID with fixed version and variant bits. The same schema 1 bytes must always produce the same schema 2 IDs and canonical JSON bytes.
+Derived IDs use SHA-256 over an explicit UTF-8 domain and stable IDs. The first 16 digest bytes are mapped to an RFC 4122 UUID with version bits `0101` and variant bits `10`. Identical source bytes produce identical IDs and canonical schema 2 bytes.
 
-### 4.3 Migration failure
+### 4.4 Failure conditions
 
-Migration fails without writing a new authoritative package when:
+Migration fails without authoritatively publishing a new package when source JSON is malformed, schema 1 recovery fails, generated ownership is invalid, references are missing, canonical validation fails, or readback/checksum validation fails.
 
-- source JSON is malformed;
-- referenced schema 1 identities are invalid;
-- generated schema 2 ownership is inconsistent;
-- canonical validation fails;
-- the migrated package cannot be read back with matching checksums.
+## 5. Commands and history
 
-The source package remains available for recovery or a future migration fix.
-
-## 5. Project commands and history
-
-### 5.1 Composition operations
+### 5.1 Composition commands
 
 ```text
 createComposition(composition, ownedLayers, insertionContext)
@@ -326,11 +358,12 @@ setCompositionDimensions(compositionID, before, after)
 setCompositionDuration(compositionID, before, after)
 setCompositionFrameRate(compositionID, before, after)
 setCompositionBackground(compositionID, before, after)
+duplicateComposition(sourceID, duplicateComposition, duplicateLayers)
 ```
 
-A composition referenced by a nested-composition layer cannot be removed. Phase 6 rejects the operation rather than performing implicit cascade deletion. Removing an unreferenced composition removes its owned layers as one reversible command payload.
+A nested-referenced composition cannot be removed. Removing an unreferenced composition removes its owned layers as one reversible command payload. Duplication derives new stable identities before the command is recorded and remaps internal nested references only when they point within the duplicated payload.
 
-### 5.2 Layer operations
+### 5.2 Layer commands
 
 ```text
 insertLayer(layer, compositionID, index)
@@ -351,127 +384,100 @@ setCameraSettings(layerID, before, after)
 setLightSettings(layerID, before, after)
 ```
 
-Every command carries project identity, base revision, a command ID, timestamp, exact before/after state, inverse operation, and an optional merge key.
+Every record carries project identity, base revision, command ID, timestamp, exact before/after data, inverse operation, and optional merge key.
 
-### 5.3 Preconditions and Undo/Redo
+Preconditions are exact. Insert requires absent identity and valid index. Remove requires matching full record and index. Reorder requires matching current index. Property edits require current value equal to `before`. Nested source edits validate the complete dependency graph.
 
-- insert requires the identity to be absent and the insertion index to be valid;
-- removal requires exact record and index matches;
-- reorder requires exact current index and target bounds;
-- property changes require the current value to match `before`;
-- nested source changes validate the full composition dependency graph;
-- failed preconditions do not increment revision;
-- a new normal command clears Redo history;
-- transform slider changes merge by project, layer, property, and active gesture window;
-- paired X/Y position edits may use one transaction merge key;
-- blend-mode edits remain independent Undo entries;
-- Undo of deletion restores the same identity, full record, and exact Z-order index;
-- Undo/Redo journal preparation succeeds before memory, selection, order, and history mutate.
+Transform sliders merge by project, layer, property, and active gesture. Paired X/Y position may use one transaction key. Blend-mode changes are separate Undo entries. Undo of deletion restores the same identity, record, and exact index.
 
-The durable order remains:
+Durability order:
 
 ```text
-validate command
-→ append and synchronize journal record
+validate
+→ append and synchronize journal
 → apply command
 → increment revision
-→ update Undo/Redo stacks
+→ update history
 → schedule autosave
 ```
 
-## 6. Composition compiler
+Journal preparation failure leaves project, Z-order, selection, history, and preview source state unchanged.
 
-### 6.1 Public role
+## 6. VertexComposition compiler
 
-`VertexComposition` provides a backend-neutral asynchronous compiler.
+### 6.1 Public contracts
 
 ```text
 CompositionRenderRequest
 ├── project
 ├── compositionID
-├── time: RationalTime
+├── exact time
 ├── output descriptor
 ├── project revision/cache context
 └── limits
 
+CompositionFrameResolution
+├── frame(PortableImage)
+└── transparent
+
 CompositionFrameResolver
-└── resolve(mediaID, exactSourceTime, targetSize) async throws -> PortableImage
+└── resolve(mediaID, exactSourceTime, targetSize) async throws
 
 CompositionGraphCompiler
-└── compile(request, frameResolver, cancellationToken) async throws -> RenderRequest
+└── compile(request, resolver, cancellationToken) async throws -> RenderRequest
 ```
 
-The frame resolver protocol contains no URL, AVFoundation, Metal, UIKit, or SwiftUI type.
+No URL, AVFoundation, Metal, UIKit, or SwiftUI type appears in these contracts.
 
-### 6.2 Exact time mapping
+### 6.2 Z-order and adjustment expansion
 
-For a media or nested-composition layer:
+The compiler begins with a deterministic background source and traverses `layerIDs` from bottom to top.
 
-```text
-sourceTime = compositionTime - layer.startTime + sourceStartTime
-```
-
-The compiler does not use floating-point seconds for project time. A nested composition renders only when the parent layer is active and the calculated child time satisfies the child composition duration.
-
-### 6.3 Z-order expansion
-
-`Composition.layerIDs` is authoritative top-to-bottom order. Compilation starts with the composition background and traverses from the last ID to the first.
-
-For each participating media or nested layer:
+Media or nested layer:
 
 ```text
 source/subcomposition
-→ layer operations and transform
-→ composite over accumulated result
+→ node-local operations and transform
+→ composite over current accumulator
 ```
 
-For an adjustment layer:
+Adjustment layer:
 
 ```text
-accumulated result below
+current accumulator
 → adjustment operations
 → mix by adjustment opacity
 → continue with layers above
 ```
 
-Adjustment layers never affect layers above them.
+Adjustments never affect layers above them.
 
-### 6.4 Nested compositions
+### 6.3 Nested compositions
 
-Nested compositions compile recursively into the same semantic graph. The child graph root becomes a parent layer input. The compiler maintains a composition-ID stack and rejects direct or indirect cycles, including `A → B → C → A`.
+Nested compositions compile recursively into the same graph. The child root becomes a parent layer input. A composition-ID stack rejects direct and indirect cycles.
 
 Limits:
 
-- maximum composition dimension: `8192 × 8192`;
-- maximum stored layers per composition: `256`;
-- maximum nested depth: `16`;
-- maximum expanded render nodes: `4096`.
+- composition size: `8192 × 8192`;
+- stored layers per composition: `256`;
+- nested depth: `16`;
+- expanded graph nodes: `4096`.
 
-Limit failures produce no partial output.
+Limit failure produces no partial successful result.
 
-### 6.5 Request-local frame cache
+### 6.4 Request-local frame cache and cancellation
 
-The compiler caches frame resolution by:
+The resolver cache key is:
 
 ```text
 mediaID + exact source time + requested target dimensions
 ```
 
-Identical requests within one composition render resolve once. The cache is discarded after the request and does not replace later persistent proxy/cache work.
+Identical requests resolve once per render. The cache is discarded afterward.
 
-### 6.6 Cancellation
+Cancellation is checked before and after every frame resolution, before nested descent, after each compiled layer, and before backend submission. A stale request cannot publish over a newer preview.
 
-Cancellation is checked:
-
-- before resolving each media frame;
-- after each asynchronous frame result;
-- before descending into a nested composition;
-- after compiling each layer;
-- before backend submission.
-
-A cancelled older request cannot replace a newer preview.
-
-## 7. Render graph extension
+## 7. VertexRender graph changes
 
 ### 7.1 Node kinds
 
@@ -480,44 +486,31 @@ RenderNodeKind
 ├── source(PortableImage)
 ├── operations([RenderOperation])
 ├── composite(RenderBlendMode)
-├── adjustment([RenderOperation], mix: Double)
+├── adjustment([RenderOperation], mix)
 └── output
 ```
 
-The composition compiler may represent the initial transparent or colored background as a deterministic generated source image.
+`RenderOperation` gains an exact node-local 2D transform form containing anchor, position, independent scale, and rotation. Existing exposure, saturation, invert, and opacity operations remain explicit.
 
-### 7.2 Validation
+### 7.2 Validation and execution semantics
 
-- one output node is required;
-- multiple source nodes are allowed;
-- source nodes have no dependencies;
-- operation nodes have one dependency;
-- adjustment nodes have one dependency;
-- composite nodes have exactly two ordered dependencies: `[backdrop, source]`;
+- exactly one output is required;
+- multiple sources are allowed;
+- source has zero dependencies;
+- operations and adjustment have one dependency;
+- composite has two ordered dependencies: `[backdrop, source]`;
 - output has one dependency;
-- duplicate identities, missing dependencies, disconnected nodes, and cycles are rejected;
-- dependency order is semantic for composite nodes and must not be sorted or normalized away;
-- every supported operation and blend mode validates before backend work.
+- duplicate IDs, missing dependencies, disconnected nodes, and cycles fail;
+- composite dependency order is semantic and is never sorted away;
+- every operation and blend mode validates before GPU work.
 
-The current single-source Phase 4 validation is replaced, not bypassed.
+The backend no longer obtains one global source through `sourceImage()` or flattens all operations through `flattenedOperations()`. It evaluates nodes in validated topological order and applies operations only to the node that owns them.
 
-### 7.3 Preview/output parity
+The cache context includes composition ID, exact time, project revision, graph bytes, and output descriptor.
 
-```text
-Project composition
-→ CompositionGraphCompiler
-→ RenderRequest
-→ MetalRenderBackend
-→ RenderResult.image
-```
-
-The preview and PNG output use the same `RenderResult.image` bytes. No preview-only compositor and no output-only compositor may be introduced.
-
-## 8. Metal execution and blend semantics
+## 8. Metal compositing
 
 ### 8.1 Pipelines
-
-The backend is split into explicit compute pipelines:
 
 ```text
 vertexLayerKernel
@@ -525,36 +518,23 @@ vertexCompositeKernel
 vertexAdjustmentKernel
 ```
 
-`vertexLayerKernel` applies:
+The layer kernel applies anchor-aware transform, normalized position, independent scale, rotation, exposure, saturation, inversion, opacity, and premultiplication.
 
-- anchor-aware transform;
-- normalized position;
-- independent X/Y scale;
-- rotation;
-- exposure;
-- saturation;
-- inversion;
-- opacity and premultiplication.
+The adjustment kernel applies operations to the accumulator and mixes original and adjusted results by adjustment opacity.
 
-`vertexCompositeKernel` applies the selected blend mode with alpha.
+### 8.2 Premultiplied alpha and blend formulas
 
-`vertexAdjustmentKernel` applies operations to the accumulated input and mixes the result using adjustment opacity.
+Internal composition textures use premultiplied alpha. Straight decoded input is converted before blending. Fully transparent RGB cannot affect output.
 
-### 8.2 Alpha representation
-
-Internal composition textures use premultiplied alpha. Decoded straight-alpha pixels are converted before blend work. Fully transparent RGB must not contaminate output.
-
-Given straight source color `Cs`, backdrop color `Cb`, source alpha `as`, backdrop alpha `ab`, and blend function `B(Cb, Cs)`:
+For straight source color `Cs`, backdrop color `Cb`, source alpha `as`, backdrop alpha `ab`, and blend function `B`:
 
 ```text
 ao = as + ab × (1 - as)
-Co-premultiplied =
+Co-premul =
     as × (1 - ab) × Cs
   + as × ab × B(Cb, Cs)
   + ab × (1 - as) × Cb
 ```
-
-Blend functions:
 
 ```text
 normal:   B(Cb, Cs) = Cs
@@ -563,30 +543,17 @@ multiply: B(Cb, Cs) = Cb × Cs
 screen:   B(Cb, Cs) = 1 - (1 - Cb) × (1 - Cs)
 ```
 
-Phase 6 fixtures use deterministic Rec.709 SDR numeric inputs. The backend must preserve color metadata and perform blend math consistently, but full gamut, transfer-function, HDR, ACES, and OCIO management remains Phase 22.
+Phase 6 uses deterministic Rec.709 SDR fixtures and preserves color metadata. Full gamut, transfer-function, HDR, ACES, and OCIO management remains Phase 22.
 
-### 8.3 Texture lifetime
+### 8.3 Texture lifetime and metrics
 
-A composition chain uses two full-size accumulator textures in ping-pong order plus transient source/layer textures. Nested results are released after their parent consumer no longer needs them. Backend execution tracks last use and reuses compatible textures instead of allocating one permanent texture per graph node.
+A linear composition chain uses two full-size accumulator textures in ping-pong order plus transient source/layer textures. Nested outputs and intermediates are released after last use and compatible textures are reused.
 
-Render metrics include:
+Metrics include decoded input pixels, output pixels, expanded nodes, rendered layers, estimated peak texture bytes, CPU encoding time, GPU time when available, and total time.
 
-- decoded input pixel count;
-- output pixel count;
-- expanded node count;
-- active rendered layer count;
-- estimated peak texture bytes;
-- CPU encoding time;
-- GPU execution time when available;
-- total time.
-
-### 8.4 Failure semantics
-
-GPU allocation, pipeline, command-buffer, and readback failures return structured errors. The app retains the last successful preview but visibly reports the current request failure. It does not present a partial frame as successful.
+GPU allocation, pipeline, command-buffer, or readback failure returns a structured error and no partial successful frame.
 
 ## 9. Application workspace
-
-### 9.1 View structure
 
 ```text
 CompositionWorkspaceView
@@ -598,64 +565,19 @@ CompositionWorkspaceView
 └── ProjectPersistenceControls
 ```
 
-The existing atomic Save, Open, Export package, Undo, Redo, autosave, relink, embed, and recovery controls remain available.
+The existing Open, Save, package Export, Undo, Redo, autosave, relink, embed, and recovery controls remain.
 
-### 9.2 Composition header
+Composition header supports select, create, duplicate, rename, dimensions, frame rate, duration, and remove. Referenced deletion reports an explicit error.
 
-Provides:
+The exact-frame navigator supports first, previous, next, last, direct frame entry, and simple scrub. UI Double values are immediately converted to an exact frame index and are never persisted as source-of-truth time. This is not the Phase 9 NLE timeline.
 
-- active composition selection;
-- create, duplicate, rename, and remove actions;
-- dimensions, frame rate, and duration display/editing;
-- explicit error when deletion is blocked by nested references.
+The layer list displays top Z-order first and exposes type, name, enabled, locked, solo, current-time activity, blend mode, missing status, and model-only status. A drag is one reorder command.
 
-### 9.3 Exact-frame navigator
+Add options are Media, Adjustment, Null, Guide, Camera, Light, and Nested Composition.
 
-This is not the Phase 9 NLE timeline. It provides:
+The inspector exposes supported properties only. A locked layer can only be unlocked through its explicit lock control. Camera/light fields are labeled as having no Phase 6 output effect.
 
-- current exact frame number;
-- first, previous, next, and last frame;
-- direct frame-number entry;
-- a simple duration scrub control whose UI Double is immediately converted to an exact frame index and never persisted as source-of-truth time.
-
-### 9.4 Layer list
-
-The top row is the highest Z-order. Each row shows:
-
-- layer type;
-- name;
-- enabled, locked, and solo state;
-- current-time activity;
-- blend mode;
-- missing-media status;
-- a `Model only` badge for camera and light.
-
-Dragging creates one reorder command. Add options are Media, Adjustment, Null, Guide, Camera, Light, and Nested Composition.
-
-### 9.5 Inspector
-
-Phase 6 inspector fields:
-
-- name;
-- enabled, locked, solo;
-- Start, In, Out;
-- Position X/Y;
-- Anchor X/Y;
-- Scale X/Y;
-- Rotation;
-- Opacity;
-- Blend Mode;
-- Exposure;
-- Saturation;
-- Invert;
-- nested source composition and source start time;
-- camera/light model data with clear no-output-impact labeling.
-
-A locked layer cannot be changed through normal inspector controls, but it can be unlocked through its explicit lock control.
-
-### 9.6 Media resolution
-
-The app resolves a media layer in this order:
+Media resolution order is:
 
 ```text
 verified embedded file
@@ -663,7 +585,7 @@ verified embedded file
 → missing-media error and relink flow
 ```
 
-The app adapter requests an exact AVFoundation frame and returns `PortableImage` through `CompositionFrameResolver`.
+The app adapter resolves exact AVFoundation frames and returns `CompositionFrameResolution`.
 
 ## 10. Error model
 
@@ -685,117 +607,85 @@ frameResolutionFailed
 graphCompilationFailed
 ```
 
-Rules:
+Persistent validation and compilation both verify ownership and cycles. Future schemas are not decoded as writable projects. Deleting a layer does not delete its media record. Unsupported model-only data never silently changes pixels. The app keeps the last successful preview when a newer request fails and displays the current error.
 
-- persistent project validation and render compilation both verify ownership and cycles;
-- future schema data is not decoded as writable state;
-- journal failure leaves project, list order, selection, history, and preview source state unchanged;
-- migration failure leaves schema 1 source data unchanged;
-- deleting a layer never implicitly deletes its media registry item;
-- deleting a referenced composition is rejected;
-- latest-request coordination prevents stale results from publishing;
-- unsupported model-only output does not silently alter pixels.
-
-## 11. Testing strategy
+## 11. Tests
 
 ### 11.1 Schema and migration
 
-Required tests:
-
-- deterministic schema 1 to 2 migration;
+- deterministic schema 1→2 bytes and derived IDs;
 - placeholder reuse and no-placeholder default composition;
-- deterministic derived composition and layer IDs;
-- selected media and Render Lab value migration;
-- legacy render settings preservation without selected media;
-- source package unchanged on migration success and failure;
-- canonical schema 2 byte equality;
-- duplicate composition, layer, and layer-order identities rejected;
-- ownership mismatch rejected;
-- missing media/composition source reference rejected;
-- direct and indirect nested cycles rejected;
-- timing and transform validation.
+- selected-media Render Lab migration;
+- legacy values preserved without selected media;
+- schema 1 journal replay before migration;
+- new schema 2 history and journal reset;
+- source package unchanged on success and failure;
+- registry canonicalization with Z-order preservation;
+- duplicate IDs, ownership mismatch, missing references, invalid timing, invalid transform, and direct/indirect cycles rejected.
 
-### 11.2 Commands, journal, and history
+### 11.2 Commands and persistence
 
-Required tests:
-
-- composition creation, deletion, rename, dimensions, duration, and active selection;
+- composition create, duplicate, delete, rename, dimensions, duration, frame rate, background, and active selection;
 - referenced-composition deletion rejection;
-- layer insert, remove, duplicate, rename, selection, and exact reorder;
-- full-record and exact-index restoration on Undo;
-- transform command coalescing;
-- blend changes as independent Undo entries;
-- enabled, locked, and solo commands;
-- source change cycle rejection;
-- journal preparation before mutation;
-- failed journal preparation leaves all state unchanged;
-- save/reopen restores schema 2 structure and supported history behavior;
-- autosave and recovery retain layer ownership and order.
+- layer insert, remove, duplicate, rename, select, and exact reorder;
+- full identity/record/index restoration on Undo;
+- transform merge and independent blend Undo;
+- enabled, locked, solo, timing, source, operation, camera, and light commands;
+- journal-before-mutation and failure atomicity;
+- save/reopen, autosave, recovery, relink, and embed with schema 2 ownership and order.
 
 ### 11.3 Compiler
 
-Required tests:
-
-- bottom-to-top Z-order expansion;
+- exact bottom-to-top expansion;
 - enabled, timing, and Solo filtering;
-- missing media only errors when participating;
-- adjustment affects only accumulated layers below;
-- nested exact-time offset and parent In/Out behavior;
-- request-local frame deduplication;
-- direct and indirect cycle refusal;
-- depth 16, layer 256, and node 4096 limits;
-- cancellation boundaries;
-- deterministic graph and cache identity.
+- participating-only missing-media failure;
+- adjustment affects only below;
+- nested source offset, parent In/Out, negative time, and child-duration behavior;
+- frame deduplication;
+- cycle and resource limits;
+- cancellation;
+- deterministic graph and cache context.
 
-### 11.4 Metal pixel fixtures
-
-Small deterministic RGBA fixtures verify:
+### 11.4 Metal fixtures
 
 - Normal Source Over;
-- Add;
-- Multiply;
-- Screen;
+- Add, Multiply, and Screen;
 - semitransparent edges;
-- transparent RGB contamination prevention;
-- position and anchor;
-- independent X/Y scale;
-- rotation;
-- opacity;
-- exposure, saturation, and inversion;
+- transparent-RGB contamination prevention;
+- position, anchor, independent scale, rotation, opacity;
+- exposure, saturation, inversion;
 - adjustment operations and mix;
-- at least two real media sources;
-- nested composition output;
-- preview and PNG output byte equality.
+- two or more real sources;
+- nested composition;
+- preview/PNG byte equality.
 
 ### 11.5 Regression gates
 
-All prior exact-time, identity, color metadata, media provider, waveform, render graph, Metal, deterministic project codec, project command, journal, atomic-save, autosave, recovery, relink, embed, and product-policy tests remain green.
+All previous exact-time, identity, color metadata, media, waveform, render, Metal, deterministic codec, command, journal, atomic save, autosave, recovery, relink, embed, and product-policy tests remain green.
 
-## 12. Delivery and verification
+## 12. Completion gate
 
-Phase 6 is complete only after all of the following are true:
+Phase 6 is complete only when:
 
-- schema 2 and deterministic schema 1 to 2 migration pass;
-- real multi-media-layer output passes pixel tests;
-- Normal, Add, Multiply, and Screen pass Metal fixtures;
-- adjustment layers render correctly;
-- nested compositions render correctly;
-- null, guide, camera, and light persist and support ordering and Undo/Redo without false rendering claims;
-- project save, journal, autosave, recovery, relink, and embed regression tests pass;
-- Linux portable Swift tests pass;
-- native macOS Foundation project tests pass;
+- schema 2 and non-destructive deterministic migration pass;
+- real multi-media-layer rendering passes;
+- four blend modes pass Metal pixel fixtures;
+- adjustment and nested compositions render correctly;
+- null, guide, camera, and light persist and support commands without false output claims;
+- Linux portable tests pass;
+- native macOS project tests pass;
 - native Metal tests and shader compilation pass;
-- iOS 17 generic-device Release build passes;
-- product identity, version `6.0.0 (6)`, arm64 architecture, app assets, and compiled Metal resources are inspected;
-- `After-Effects-6.0.0-unsigned.ipa` is downloaded and its SHA-256 is recorded;
-- completion, work-log, versioning, README, and handoff documents state both implemented and excluded behavior;
+- iOS 17 arm64 Release build passes;
+- identity, version `6.0.0 (6)`, assets, architecture, and Metal resources are inspected;
+- `After-Effects-6.0.0-unsigned.ipa` is downloaded and its SHA-256 recorded;
+- completion, test, work-log, versioning, README, and handoff documents are updated;
 - Draft PR #6 remains stacked on Phase 5 and is not merged automatically.
 
-## 13. Implementation principles
+## 13. Engineering rules
 
-- TDD is required for schema, commands, compiler, and blend behavior.
-- No decorative layer UI may land before its command and render semantics exist.
-- Preview and output may not diverge.
-- Exact `RationalTime`, deterministic persistence, non-destructive recovery, source-license traceability, and honest status cannot be weakened.
-- Project data may not persist AVFoundation, Metal, UIKit, SwiftUI, security-scoped URL, file-descriptor, or absolute sandbox-path objects.
-- New external source code is not required for this phase. Apple APIs remain adapter boundaries, and current audited third-party candidates remain unlinked unless separately reviewed and approved.
+- TDD is mandatory for schema, commands, compiler, and blend behavior.
+- Decorative layer UI cannot precede real command and render semantics.
+- Preview and output cannot diverge.
+- Exact `RationalTime`, deterministic persistence, non-destructive recovery, source-license traceability, and honest status cannot weaken.
+- Project data cannot persist AVFoundation, Metal, UIKit, SwiftUI, security-scoped URL objects, file descriptors, or absolute sandbox paths.
+- No new external source code is required. Existing audited third-party candidates remain unlinked unless separately reviewed and approved.
