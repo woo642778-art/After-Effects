@@ -62,7 +62,14 @@ let package = Package(
         ),
         .testTarget(
             name: "VertexRenderMetalTests",
-            dependencies: ["VertexRenderMetal", "VertexRender", "VertexMedia", "VertexCore"]
+            dependencies: [
+                "VertexRenderMetal",
+                "VertexRender",
+                "VertexComposition",
+                "VertexProject",
+                "VertexMedia",
+                "VertexCore"
+            ]
         ),
         .testTarget(
             name: "VertexProjectTests",
