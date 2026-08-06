@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   portable-tests:
-    name: Vertex portable core, media, and render tests
+    name: Vertex portable core, media, render, and project tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         run: swift test
 
   unsigned-ipa:
-    name: Build After Effects 4.0.0 unsigned IPA
+    name: Build After Effects 5.0.0 unsigned IPA
     runs-on: macos-15
     needs: portable-tests
     steps:
@@ -51,6 +51,9 @@ jobs:
 
       - name: Run native Metal fixture tests
         run: swift test --filter VertexRenderMetalTests
+
+      - name: Run native project package tests
+        run: swift test --filter VertexProjectFoundationTests
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -88,8 +91,8 @@ jobs:
           BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           test "$DISPLAY_NAME" = "After Effects"
-          test "$VERSION" = "4.0.0"
-          test "$BUILD" = "4"
+          test "$VERSION" = "5.0.0"
+          test "$BUILD" = "5"
           test "$BUNDLE_ID" = "com.woo642778.aftereffects"
           /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
 
@@ -100,13 +103,13 @@ jobs:
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP_PATH" Payload/AfterEffects.app
-          /usr/bin/zip -qry artifacts/After-Effects-4.0.0-unsigned.ipa Payload
-          shasum -a 256 artifacts/After-Effects-4.0.0-unsigned.ipa > artifacts/After-Effects-4.0.0-unsigned.ipa.sha256
+          /usr/bin/zip -qry artifacts/After-Effects-5.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-5.0.0-unsigned.ipa > artifacts/After-Effects-5.0.0-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: After-Effects-4.0.0-unsigned-ipa
+          name: After-Effects-5.0.0-unsigned-ipa
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30
