@@ -3,6 +3,10 @@ import Testing
 @testable import VertexProject
 import VertexCore
 
+private enum JournalPreparationFailure: Error {
+    case injected
+}
+
 @Test("A command increments revision exactly once and is idempotent")
 func commandRevisionAndIdentity() throws {
     let project = try ProjectDocument.makeNew(name: "Command", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
@@ -46,6 +50,47 @@ func undoRedoRoundTrip() throws {
     #expect(controller.canRedo)
     try controller.redo()
     #expect(controller.project.renderSettings.exposure == 2)
+}
+
+@Test("Undo journal preparation occurs before project mutation")
+func undoPreparationPrecedesMutation() throws {
+    let controller = try ProjectHistoryController(project: .makeNew(name: "WAL"))
+    try controller.perform(
+        .setRenderParameter(.exposure, before: 0, after: 1),
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000022")
+    )
+    var observedExposure = -1.0
+    let transition = try controller.undo(
+        timestamp: Date(timeIntervalSince1970: 30),
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000023")
+    ) { record in
+        observedExposure = controller.project.renderSettings.exposure
+        #expect(record.baseRevision == controller.project.revision)
+    }
+    #expect(observedExposure == 1)
+    #expect(transition.forwardOperation == .setRenderParameter(.exposure, before: 1, after: 0))
+    #expect(controller.project.renderSettings.exposure == 0)
+}
+
+@Test("Failed undo journal preparation leaves state and history untouched")
+func failedUndoPreparationIsNonMutating() throws {
+    let controller = try ProjectHistoryController(project: .makeNew(name: "WAL Failure"))
+    try controller.perform(
+        .setRenderParameter(.exposure, before: 0, after: 1),
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000024")
+    )
+    let revisionBefore = controller.project.revision
+    #expect(throws: JournalPreparationFailure.self) {
+        try controller.undo(
+            commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000025")
+        ) { _ in
+            throw JournalPreparationFailure.injected
+        }
+    }
+    #expect(controller.project.renderSettings.exposure == 1)
+    #expect(controller.project.revision == revisionBefore)
+    #expect(controller.canUndo)
+    #expect(!controller.canRedo)
 }
 
 @Test("Slider commands coalesce into one undo entry")
