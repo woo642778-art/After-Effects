@@ -3,17 +3,21 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension UTType {
-    static let afterEffectsProject = UTType(exportedAs: "com.woo642778.aftereffects.project", conformingTo: .package)
+    static let afterEffectsProject = UTType(
+        exportedAs: "com.woo642778.aftereffects.project",
+        conformingTo: .package
+    )
 }
 
-struct ProjectPackageFileDocument: FileDocument {
+struct ProjectPackageFileDocument: FileDocument, @unchecked Sendable {
     static var readableContentTypes: [UTType] { [.afterEffectsProject] }
 
     private let wrapper: FileWrapper
 
     init(packageURL: URL) throws {
-        wrapper = try FileWrapper(url: packageURL, options: [.immediate])
+        let wrapper = try FileWrapper(url: packageURL, options: [.immediate])
         wrapper.preferredFilename = packageURL.lastPathComponent
+        self.wrapper = wrapper
     }
 
     init(configuration: ReadConfiguration) throws {
