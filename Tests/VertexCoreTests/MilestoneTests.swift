@@ -1,15 +1,15 @@
 import Testing
 @testable import VertexCore
 
-@Test("Phase 3 is the active implemented milestone")
-func phaseThreeIsActiveMilestone() {
+@Test("Phase 4 is the active implemented milestone")
+func phaseFourIsActiveMilestone() {
     let milestone = MilestoneCatalog.current
 
-    #expect(milestone.number == 3)
+    #expect(milestone.number == 4)
     #expect(milestone.status == .implemented)
-    #expect(milestone.title == "Media Input and Output Foundation")
-    #expect(milestone.deliverables.contains { $0.contains("AVFoundation metadata inspection") })
-    #expect(milestone.deliverables.contains { $0.contains("3.0.0") })
+    #expect(milestone.title == "GPU Render Graph")
+    #expect(milestone.deliverables.contains { $0.contains("Native Metal compute backend") })
+    #expect(milestone.deliverables.contains { $0.contains("4.0.0") })
 }
 
 @Test("Core source candidates retain explicit adoption boundaries")
@@ -18,10 +18,21 @@ func sourceCandidatesHaveBoundaries() {
     let repositories = Set(sources.map(\.repository))
 
     #expect(repositories.contains("Apple AVFoundation"))
+    #expect(repositories.contains("Apple Metal"))
     #expect(repositories.contains("MetalPetal/MetalPetal"))
     #expect(repositories.contains("MetalPetal/VideoIO"))
     #expect(repositories.contains("ruanjx/VideoLab"))
     #expect(sources.allSatisfy { !$0.license.isEmpty && !$0.purpose.isEmpty })
+}
+
+@Test("Third-party GPU candidates remain unlinked research dependencies")
+func gpuCandidatesRemainIsolated() {
+    let sources = MilestoneCatalog.current.sourceAdoptions
+    let metalPetal = sources.first { $0.repository == "MetalPetal/MetalPetal" }
+    let videoIO = sources.first { $0.repository == "MetalPetal/VideoIO" }
+
+    #expect(metalPetal?.mode == .researchOnly)
+    #expect(videoIO?.mode == .researchOnly)
 }
 
 @Test("GPL UI source remains isolated to behavioral reference")
@@ -33,7 +44,7 @@ func gplSourceIsNotAdoptedIntoProduct() {
 @Test("Artifact policy fixes the phase-major version and signing boundary")
 func artifactPolicyIsExplicit() {
     let policy = MilestoneCatalog.current.artifactPolicy.lowercased()
-    #expect(policy.contains("after-effects-3.0.0-unsigned.ipa"))
+    #expect(policy.contains("after-effects-4.0.0-unsigned.ipa"))
     #expect(policy.contains("signing credentials"))
     #expect(policy.contains("major version"))
 }

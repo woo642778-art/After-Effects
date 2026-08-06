@@ -10,7 +10,9 @@ let package = Package(
     products: [
         .library(name: "VertexCore", targets: ["VertexCore"]),
         .library(name: "VertexMedia", targets: ["VertexMedia"]),
-        .library(name: "VertexMediaAVFoundation", targets: ["VertexMediaAVFoundation"])
+        .library(name: "VertexMediaAVFoundation", targets: ["VertexMediaAVFoundation"]),
+        .library(name: "VertexRender", targets: ["VertexRender"]),
+        .library(name: "VertexRenderMetal", targets: ["VertexRenderMetal"])
     ],
     targets: [
         .target(name: "VertexCore"),
@@ -22,6 +24,15 @@ let package = Package(
             name: "VertexMediaAVFoundation",
             dependencies: ["VertexCore", "VertexMedia"]
         ),
+        .target(
+            name: "VertexRender",
+            dependencies: ["VertexCore", "VertexMedia"]
+        ),
+        .target(
+            name: "VertexRenderMetal",
+            dependencies: ["VertexCore", "VertexMedia", "VertexRender"],
+            resources: [.process("Shaders")]
+        ),
         .testTarget(
             name: "VertexCoreTests",
             dependencies: ["VertexCore"]
@@ -29,6 +40,14 @@ let package = Package(
         .testTarget(
             name: "VertexMediaTests",
             dependencies: ["VertexMedia", "VertexCore"]
+        ),
+        .testTarget(
+            name: "VertexRenderTests",
+            dependencies: ["VertexRender", "VertexMedia", "VertexCore"]
+        ),
+        .testTarget(
+            name: "VertexRenderMetalTests",
+            dependencies: ["VertexRenderMetal", "VertexRender", "VertexMedia", "VertexCore"]
         )
     ]
 )
