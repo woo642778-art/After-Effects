@@ -54,9 +54,9 @@ private func injectLegacyState(
         media[index]["locator"] = locator
     }
     changed["mediaRegistry"] = media
-    changed["appliedCommandIDs"] = [[
-        "rawValue": "57000000-0000-0000-0000-000000000099"
-    ]]
+    changed["appliedCommandIDs"] = [
+        "57000000-0000-0000-0000-000000000099"
+    ]
 
     let changedData = try JSONSerialization.data(withJSONObject: changed, options: [.sortedKeys, .withoutEscapingSlashes])
     try changedData.write(to: projectURL)
