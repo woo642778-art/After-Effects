@@ -43,10 +43,17 @@ struct CompositionHeaderView: View {
                 Button(role: .destructive) { workspace.removeActiveComposition() } label: {
                     Label("Delete", systemImage: "trash")
                 }
-                .disabled((workspace.project?.compositionRegistry.count ?? 0) <= 1)
+                .disabled(workspace.activeCompositionDeletionBlockReason != nil)
             }
             .buttonStyle(.bordered)
             .tint(AfterEffectsTheme.accent)
+
+            if let reason = workspace.activeCompositionDeletionBlockReason {
+                Label(reason, systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 10) {
                 valueField("W", value: $width)
