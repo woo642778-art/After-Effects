@@ -86,17 +86,17 @@ public struct ProjectPackageStore {
         let validatedDocument = try document.validated()
         let projectData = try projectCodec.encode(validatedDocument)
         let decodedProject = try projectCodec.decode(projectData)
-        guard decodedProject == validatedDocument.normalized() else {
-            throw ProjectError.deterministicEncodingFailure("The project changed during encode/decode verification.")
+        guard try projectCodec.encode(decodedProject) == projectData else {
+            throw ProjectError.deterministicEncodingFailure("The project did not produce identical canonical bytes after decode and re-encode.")
         }
         let checksum = projectCodec.checksum(data: projectData)
         let historyData = try encodeHistory(history)
         _ = try decodeHistory(historyData)
         let manifest = ProjectManifest(
-            document: validatedDocument,
+            document: decodedProject,
             projectChecksum: checksum,
             committedJournalSequence: committedJournalSequence,
-            lastSuccessfulSave: validatedDocument.metadata.modifiedAt,
+            lastSuccessfulSave: decodedProject.metadata.modifiedAt,
             integrityStatus: .valid
         )
         let manifestData = try encodeManifest(manifest)
