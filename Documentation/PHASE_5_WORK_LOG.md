@@ -21,6 +21,7 @@ Project schema, deterministic serialization, command history, write-ahead journa
 13. A post-build review found that Undo and Redo changed memory before journal append. Added tests proving journal preparation runs first and that a preparation failure leaves state and stacks unchanged; updated the app to append in that callback.
 14. Another review found that backup project data could be paired with a newer current history file. Added a regression test and changed backup candidates to use empty history unless a revision-matched backup history is introduced.
 15. Render Lab was changed to observe project revision so Undo and Redo update visible controls as well as persistent project data.
+16. A final downloaded-artifact inspection found that an earlier draft IPA checksum had been recorded in documentation. The final artifact ZIP and its bundled checksum file both identify the final IPA SHA-256 as `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`; all completion records were corrected before handoff.
 
 ## Final verification
 
@@ -32,8 +33,9 @@ Project schema, deterministic serialization, command history, write-ahead journa
 - Native Metal tests: 2 passed
 - iOS 17 arm64 Release build: passed
 - Artifact ID: `8955148634`
-- Artifact API digest: `sha256:f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
-- IPA SHA-256: `395e67c262fa24cb7f9b75f459ced1bf4673d6edbdc24d622d1456342f18d366`
+- Artifact ZIP SHA-256: `f43efd3c17e018f17781f5e92cda888de6a223061e4703c136f7492659da1ea8`
+- IPA SHA-256: `c938b34ed987acd03610984b8592da74009f8e03297ee2c9556152e6b0cd33d2`
+- IPA size: 884,969 bytes
 
 ## Result
 
