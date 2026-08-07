@@ -14,17 +14,15 @@ private func legacyJournalDocument(name: String = "Legacy Journal") throws -> Pr
     )
 }
 
-private func exposureRecord(
+private func renameRecord(
     sequence: UInt64,
     project: ProjectDocument,
-    from: Double,
-    to: Double
+    to name: String
 ) throws -> ProjectJournalRecord {
-    let command = ProjectCommandRecord.settingExposure(
+    let command = ProjectCommandRecord(
         project: project,
         commandID: VertexID(rawValue: String(format: "56000000-0000-0000-0000-%012llu", sequence + 100)),
-        from: from,
-        to: to,
+        operation: .renameProject(before: project.metadata.name, after: name),
         timestamp: Date(timeIntervalSince1970: 1_700_000_000 + Double(sequence))
     )
     return try ProjectJournalRecord(sequence: sequence, command: command)
@@ -37,11 +35,11 @@ private func applied(_ record: ProjectJournalRecord, to project: ProjectDocument
 @Test("Legacy journal starts after committed sequence and applies only contiguous records")
 func legacyJournalStartsAfterCommittedSequence() throws {
     let initial = try legacyJournalDocument()
-    let first = try exposureRecord(sequence: 1, project: initial, from: 0, to: 1)
+    let first = try renameRecord(sequence: 1, project: initial, to: "One")
     let committed = try applied(first, to: initial)
-    let second = try exposureRecord(sequence: 2, project: committed, from: 1, to: 2)
+    let second = try renameRecord(sequence: 2, project: committed, to: "Two")
     let afterSecond = try applied(second, to: committed)
-    let third = try exposureRecord(sequence: 3, project: afterSecond, from: 2, to: 3)
+    let third = try renameRecord(sequence: 3, project: afterSecond, to: "Three")
     let data = try ProjectJournalCodec().encodeLines([first, second, third])
 
     let result = LegacyJournalReader().read(
@@ -50,7 +48,7 @@ func legacyJournalStartsAfterCommittedSequence() throws {
         document: committed
     )
 
-    #expect(result.document.renderSettings.exposure == 3)
+    #expect(result.document.metadata.name == "Three")
     #expect(result.document.revision == 3)
     #expect(result.lastSequence == 3)
     #expect(result.validJournalRecordCount == 2)
@@ -60,16 +58,16 @@ func legacyJournalStartsAfterCommittedSequence() throws {
 @Test("A truncated final legacy journal line is ignored without losing the valid prefix")
 func legacyJournalIgnoresTruncatedTail() throws {
     let initial = try legacyJournalDocument()
-    let first = try exposureRecord(sequence: 1, project: initial, from: 0, to: 1)
+    let first = try renameRecord(sequence: 1, project: initial, to: "One")
     let afterFirst = try applied(first, to: initial)
-    let second = try exposureRecord(sequence: 2, project: afterFirst, from: 1, to: 2)
+    let second = try renameRecord(sequence: 2, project: afterFirst, to: "Two")
     var data = try ProjectJournalCodec().encodeLine(first)
     let secondLine = try ProjectJournalCodec().encodeLine(second)
     data.append(secondLine.prefix(secondLine.count / 2))
 
     let result = LegacyJournalReader().read(data, committedSequence: 0, document: initial)
 
-    #expect(result.document.renderSettings.exposure == 1)
+    #expect(result.document.metadata.name == "One")
     #expect(result.lastSequence == 1)
     #expect(result.validJournalRecordCount == 1)
     #expect(result.ignoredJournalRecordCount == 1)
@@ -79,15 +77,15 @@ func legacyJournalIgnoresTruncatedTail() throws {
 @Test("A sequence gap stops replay and prohibits all later records")
 func legacyJournalStopsAtFirstGap() throws {
     let initial = try legacyJournalDocument()
-    let first = try exposureRecord(sequence: 1, project: initial, from: 0, to: 1)
+    let first = try renameRecord(sequence: 1, project: initial, to: "One")
     let afterFirst = try applied(first, to: initial)
-    let gap = try exposureRecord(sequence: 3, project: afterFirst, from: 1, to: 3)
-    let later = try exposureRecord(sequence: 4, project: afterFirst, from: 1, to: 4)
+    let gap = try renameRecord(sequence: 3, project: afterFirst, to: "Three")
+    let later = try renameRecord(sequence: 4, project: afterFirst, to: "Four")
     let data = try ProjectJournalCodec().encodeLines([first, gap, later])
 
     let result = LegacyJournalReader().read(data, committedSequence: 0, document: initial)
 
-    #expect(result.document.renderSettings.exposure == 1)
+    #expect(result.document.metadata.name == "One")
     #expect(result.lastSequence == 1)
     #expect(result.validJournalRecordCount == 1)
     #expect(result.ignoredJournalRecordCount == 2)
@@ -97,10 +95,10 @@ func legacyJournalStopsAtFirstGap() throws {
 @Test("Checksum failure stops replay before later valid records")
 func legacyJournalStopsAtChecksumFailure() throws {
     let initial = try legacyJournalDocument()
-    let first = try exposureRecord(sequence: 1, project: initial, from: 0, to: 1)
+    let first = try renameRecord(sequence: 1, project: initial, to: "One")
     let afterFirst = try applied(first, to: initial)
-    let second = try exposureRecord(sequence: 2, project: afterFirst, from: 1, to: 2)
-    let third = try exposureRecord(sequence: 3, project: afterFirst, from: 1, to: 3)
+    let second = try renameRecord(sequence: 2, project: afterFirst, to: "Two")
+    let third = try renameRecord(sequence: 3, project: afterFirst, to: "Three")
     var corrupt = try ProjectJournalCodec().encodeLine(second)
     let marker = Data(second.checksum.utf8)
     let range = try #require(corrupt.range(of: marker))
@@ -111,7 +109,7 @@ func legacyJournalStopsAtChecksumFailure() throws {
     data.append(try ProjectJournalCodec().encodeLine(third))
 
     let result = LegacyJournalReader().read(data, committedSequence: 0, document: initial)
-    #expect(result.document.renderSettings.exposure == 1)
+    #expect(result.document.metadata.name == "One")
     #expect(result.validJournalRecordCount == 1)
     #expect(result.ignoredJournalRecordCount == 2)
     #expect(result.failureSequence == 2)
@@ -120,9 +118,9 @@ func legacyJournalStopsAtChecksumFailure() throws {
 @Test("Unknown commands and invalid transitions stop replay")
 func legacyJournalStopsAtUnknownOrInvalidTransition() throws {
     let initial = try legacyJournalDocument()
-    let first = try exposureRecord(sequence: 1, project: initial, from: 0, to: 1)
+    let first = try renameRecord(sequence: 1, project: initial, to: "One")
     let afterFirst = try applied(first, to: initial)
-    let third = try exposureRecord(sequence: 3, project: afterFirst, from: 1, to: 3)
+    let third = try renameRecord(sequence: 3, project: afterFirst, to: "Three")
 
     let unknown = Data("{\"sequence\":2,\"command\":{\"unknownCommand\":true},\"checksum\":\"bad\"}\n".utf8)
     var unknownData = try ProjectJournalCodec().encodeLine(first)
