@@ -177,11 +177,106 @@ jobs:
 
   unsigned-ipa:
     name: Final Phase 7 IPA publish gate
-    if: ${{ false }}
     runs-on: macos-15
+    timeout-minutes: 120
     needs:
       - portable-tests
       - ios-app-tests
       - native-regression-tests
     steps:
-      - run: echo "Enabled only after audited AI models and final artifact inventory are wired."
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Verify pinned model lock and licenses
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
+      - name: Fetch pinned model sources with SHA-256 verification
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+      - name: Compile audited Core ML models and runtime manifest
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+          cat App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+          test -d App/GeneratedAIResources/AIModels/DepthAnythingV2SmallF16.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3-denoise.mlmodelc
+      - name: Run real Core ML inference fixtures
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -euo pipefail
+          swift test --filter VertexAICoreMLTests
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate app assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Build unsigned iOS 17 arm64 Release application
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$PWD/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build | tee "$RUNNER_TEMP/phase7-release-build.log"
+      - name: Inspect built application before packaging
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
+          test -d "$APP"
+          test -f "$APP/Assets.car"
+          test -f "$APP/AI_MODEL_MANIFEST.json"
+          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
+          test -f "$APP/Vertex_VertexRenderMetal.bundle/default.metallib"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = "After Effects"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "7.0.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = "7"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.woo642778.aftereffects"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")" = "17.0"
+          /usr/bin/file "$APP/AfterEffects" | /usr/bin/grep -q arm64
+          test ! -d "$APP/_CodeSignature"
+          test ! -f "$APP/embedded.mobileprovision"
+          du -ah "$APP/AIModels" | sort -h | tail -40
+      - name: Package and independently audit final unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
+          rm -rf Payload artifacts
+          mkdir -p Payload artifacts
+          cp -R "$APP" Payload/AfterEffects.app
+          /usr/bin/zip -qry artifacts/After-Effects-7.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-7.0.0-unsigned.ipa > artifacts/After-Effects-7.0.0-unsigned.ipa.sha256
+          python3 Tools/ai/audit_ipa.py \
+            artifacts/After-Effects-7.0.0-unsigned.ipa \
+            --inventory artifacts/After-Effects-7.0.0-artifact-inventory.json
+          cat artifacts/After-Effects-7.0.0-artifact-inventory.json
+      - name: Upload final Phase 7 IPA and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: After-Effects-7.0.0-unsigned-ipa
+          path: |
+            artifacts/After-Effects-7.0.0-unsigned.ipa
+            artifacts/After-Effects-7.0.0-unsigned.ipa.sha256
+            artifacts/After-Effects-7.0.0-artifact-inventory.json
+            App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+          if-no-files-found: error
+          retention-days: 30
