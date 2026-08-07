@@ -15,6 +15,12 @@ jobs:
   export:
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout common ancestor
+        uses: actions/checkout@v4
+        with:
+          ref: ec42dcd79116ff215b7913be278c554284a89f07
+          path: base
+
       - name: Checkout corrected Phase 5
         uses: actions/checkout@v4
         with:
@@ -29,13 +35,14 @@ jobs:
 
       - name: Remove repository metadata
         run: |
-          rm -rf phase5/.git phase6/.git
+          rm -rf base/.git phase5/.git phase6/.git
 
       - name: Upload source trees
         uses: actions/upload-artifact@v4
         with:
-          name: phase-5-6-source-trees
+          name: phase-5-6-three-way-source-trees
           path: |
+            base
             phase5
             phase6
           if-no-files-found: error
