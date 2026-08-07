@@ -12,18 +12,21 @@ permissions:
 
 concurrency:
   group: phase9-sdd-apply-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-and-test:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
       - name: Apply Phase 9 task scripts
         run: |
           set -euo pipefail
