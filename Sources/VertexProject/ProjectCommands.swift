@@ -27,11 +27,16 @@ public struct ProjectCommandEngine: Sendable {
 
         case .removeMedia(let mediaID):
             guard let reference = document.mediaRegistry.first(where: { $0.id == mediaID }) else { throw ProjectError.missingMedia(mediaID.rawValue) }
-            let referenced = document.layerRegistry.contains { layer in
+            let layerReferenced = document.layerRegistry.contains { layer in
                 if case .media(let id, _) = layer.source { return id == mediaID }
                 return false
             }
-            guard !referenced else { throw ProjectError.invalidOperation("Media referenced by a layer cannot be removed.") }
+            let aiReferenced = document.aiAssetRegistry.contains {
+                $0.sourceMediaID == mediaID || $0.outputMediaID == mediaID
+            }
+            guard !layerReferenced, !aiReferenced else {
+                throw ProjectError.invalidOperation("Media referenced by a layer or AI asset cannot be removed.")
+            }
             forward = .removeMedia(reference)
 
         case .relinkMedia(let mediaID, let locator):
@@ -43,6 +48,20 @@ public struct ProjectCommandEngine: Sendable {
             guard let reference = document.mediaRegistry.first(where: { $0.id == mediaID }) else { throw ProjectError.missingMedia(mediaID.rawValue) }
             guard reference.locator.embeddedPath != path else { throw ProjectError.invalidOperation("Embedded path is unchanged.") }
             forward = .setEmbeddedPath(mediaID: mediaID, before: reference.locator.embeddedPath, after: path)
+
+        case .registerAIAsset(let asset):
+            guard !document.aiAssetRegistry.contains(where: { $0.id == asset.id }) else { throw ProjectError.duplicateIdentity("AI asset") }
+            guard !document.aiAssetRegistry.contains(where: { $0.outputMediaID == asset.outputMediaID }) else {
+                throw ProjectError.invalidOperation("AI output media is already registered by another AI asset.")
+            }
+            _ = try asset.validated(in: document)
+            forward = .registerAIAsset(asset)
+
+        case .removeAIAsset(let id):
+            guard let asset = document.aiAsset(id: id) else {
+                throw ProjectError.invalidOperation("AI asset is missing.")
+            }
+            forward = .removeAIAsset(asset)
 
         case .setRenderParameter(let parameter, let value):
             guard value.isFinite else { throw ProjectError.invalidValue("Render parameter must be finite.") }
@@ -223,6 +242,9 @@ public struct ProjectCommandEngine: Sendable {
             document.mediaRegistry.append(try reference.validated())
         case .removeMedia(let reference):
             guard let index = document.mediaRegistry.firstIndex(of: reference) else { throw ProjectError.invalidOperation("Media removal precondition did not match.") }
+            guard !document.aiAssetRegistry.contains(where: { $0.sourceMediaID == reference.id || $0.outputMediaID == reference.id }) else {
+                throw ProjectError.invalidOperation("AI-referenced media cannot be removed before its AI asset.")
+            }
             document.mediaRegistry.remove(at: index)
             if document.selectedMediaID == reference.id { document.selectedMediaID = nil }
         case .relinkMedia(let id, let before, let after):
@@ -236,6 +258,17 @@ public struct ProjectCommandEngine: Sendable {
         case .selectMedia(let before, let after):
             guard document.selectedMediaID == before else { throw ProjectError.invalidOperation("Selected media precondition did not match.") }
             document.selectedMediaID = after
+        case .registerAIAsset(let asset):
+            guard !document.aiAssetRegistry.contains(where: { $0.id == asset.id || $0.outputMediaID == asset.outputMediaID }) else {
+                throw ProjectError.invalidOperation("AI asset registration precondition did not match.")
+            }
+            _ = try asset.validated(in: document)
+            document.aiAssetRegistry.append(asset)
+        case .removeAIAsset(let asset):
+            guard let index = document.aiAssetRegistry.firstIndex(of: asset) else {
+                throw ProjectError.invalidOperation("AI asset removal precondition did not match.")
+            }
+            document.aiAssetRegistry.remove(at: index)
         case .setRenderParameter(let parameter, let before, let after):
             var settings = document.renderSettings
             guard settings.value(for: parameter) == before else { throw ProjectError.invalidOperation("Render parameter precondition did not match.") }
