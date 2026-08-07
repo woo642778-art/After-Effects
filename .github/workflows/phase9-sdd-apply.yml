@@ -1,29 +1,29 @@
 name: Phase 9 SDD Apply
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
     branches:
-      - agent/phase-9-ae-workspace-ai-effects
-    paths:
-      - 'Tools/phase9_tasks/**'
-      - '.github/workflows/phase9-sdd-apply.yml'
+      - agent/phase9-sdd-runner
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
-  group: phase9-sdd-apply
+  group: phase9-sdd-apply-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   apply-and-test:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: agent/phase-9-ae-workspace-ai-effects
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Apply Phase 9 task scripts
         run: |
           set -euo pipefail
@@ -41,6 +41,8 @@ jobs:
           git diff --check
           git status --short
       - name: Commit generated task implementation
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
           git config user.name 'vertex2-phase9-bot'
@@ -51,4 +53,4 @@ jobs:
             exit 0
           fi
           git commit -m 'feat(project): add schema 5 timeline primitives'
-          git push origin HEAD:agent/phase-9-ae-workspace-ai-effects
+          git push origin HEAD:"$HEAD_BRANCH"
