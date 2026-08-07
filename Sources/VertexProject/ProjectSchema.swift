@@ -24,22 +24,6 @@ public struct MediaLocator: Codable, Equatable, Sendable {
         self.relativeHint = relativeHint
         self.embeddedPath = embeddedPath
     }
-
-    @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
-    public init(
-        relativeHint: String? = nil,
-        bookmarkData: Data?,
-        embeddedPath: String? = nil
-    ) {
-        self.relativeHint = relativeHint
-        self.embeddedPath = embeddedPath
-    }
-
-    @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
-    public var bookmarkData: Data? {
-        get { nil }
-        set { }
-    }
 }
 
 public struct MediaReference: Codable, Equatable, Sendable, Identifiable {
@@ -295,42 +279,6 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.renderSettings = renderSettings
     }
 
-    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
-    public init(
-        schemaVersion: Int = ProjectDocument.currentSchemaVersion,
-        minimumReaderVersion: Int = ProjectDocument.currentSchemaVersion,
-        projectID: VertexID,
-        revision: UInt64,
-        metadata: ProjectMetadata,
-        settings: ProjectSettings,
-        mediaRegistry: [MediaReference],
-        compositionRegistry: [ProjectCompositionPlaceholder],
-        activeCompositionID: VertexID?,
-        selectedMediaID: VertexID?,
-        renderSettings: ProjectRenderSettings,
-        appliedCommandIDs: [VertexID]
-    ) {
-        self.init(
-            schemaVersion: schemaVersion,
-            minimumReaderVersion: minimumReaderVersion,
-            projectID: projectID,
-            revision: revision,
-            metadata: metadata,
-            settings: settings,
-            mediaRegistry: mediaRegistry,
-            compositionRegistry: compositionRegistry,
-            activeCompositionID: activeCompositionID,
-            selectedMediaID: selectedMediaID,
-            renderSettings: renderSettings
-        )
-    }
-
-    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
-    public var appliedCommandIDs: [VertexID] {
-        get { [] }
-        set { }
-    }
-
     public static func makeNew(
         id: VertexID = VertexID(),
         name: String,
@@ -405,43 +353,5 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             throw ProjectError.invalidValue("Active composition must exist in the composition registry.")
         }
         return self
-    }
-}
-
-public enum ProjectIntegrityStatus: String, Codable, CaseIterable, Sendable {
-    case valid
-    case recovered
-    case damaged
-}
-
-public struct ProjectManifest: Codable, Equatable, Sendable {
-    public var schemaVersion: Int
-    public var minimumReaderVersion: Int
-    public var projectID: VertexID
-    public var createdByAppVersion: String
-    public var lastSavedByAppVersion: String
-    public var projectRevision: UInt64
-    public var projectChecksum: String
-    public var committedJournalSequence: UInt64
-    public var lastSuccessfulSave: Date
-    public var integrityStatus: ProjectIntegrityStatus
-
-    public init(
-        document: ProjectDocument,
-        projectChecksum: String,
-        committedJournalSequence: UInt64,
-        lastSuccessfulSave: Date,
-        integrityStatus: ProjectIntegrityStatus = .valid
-    ) {
-        schemaVersion = document.schemaVersion
-        minimumReaderVersion = document.minimumReaderVersion
-        projectID = document.projectID
-        createdByAppVersion = document.metadata.createdByAppVersion
-        lastSavedByAppVersion = document.metadata.lastSavedByAppVersion
-        projectRevision = document.revision
-        self.projectChecksum = projectChecksum
-        self.committedJournalSequence = committedJournalSequence
-        self.lastSuccessfulSave = lastSuccessfulSave
-        self.integrityStatus = integrityStatus
     }
 }
