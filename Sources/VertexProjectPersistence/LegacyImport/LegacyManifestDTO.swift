@@ -2,6 +2,12 @@ import Foundation
 import VertexCore
 import VertexProject
 
+package enum LegacyProjectIntegrityStatus: String, Codable, Equatable, Sendable {
+    case valid
+    case recovered
+    case damaged
+}
+
 package struct LegacyManifestDTO: Codable, Equatable, Sendable {
     package var schemaVersion: Int
     package var minimumReaderVersion: Int
@@ -12,7 +18,7 @@ package struct LegacyManifestDTO: Codable, Equatable, Sendable {
     package var projectChecksum: String
     package var committedJournalSequence: UInt64
     package var lastSuccessfulSave: Date
-    package var integrityStatus: ProjectIntegrityStatus
+    package var integrityStatus: LegacyProjectIntegrityStatus
 
     package static func decode(_ data: Data) throws -> LegacyManifestDTO {
         let decoder = JSONDecoder()
