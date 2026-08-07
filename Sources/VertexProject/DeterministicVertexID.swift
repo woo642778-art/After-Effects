@@ -24,6 +24,19 @@ public enum DeterministicVertexID {
         }
         bytes[6] = (bytes[6] & 0x0f) | 0x50
         bytes[8] = (bytes[8] & 0x3f) | 0x80
-        return try VertexID(uuidBytes: bytes)
+
+        let hex = bytes.map { String(format: "%02x", $0) }.joined()
+        let raw = [
+            String(hex.prefix(8)),
+            String(hex.dropFirst(8).prefix(4)),
+            String(hex.dropFirst(12).prefix(4)),
+            String(hex.dropFirst(16).prefix(4)),
+            String(hex.dropFirst(20).prefix(12))
+        ].joined(separator: "-")
+        do {
+            return try VertexID(parsing: raw)
+        } catch {
+            throw ProjectError.deterministicEncodingFailure("Derived UUID bytes were invalid.")
+        }
     }
 }
