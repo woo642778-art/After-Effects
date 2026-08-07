@@ -26,6 +26,9 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setCompositionDuration(id: VertexID, duration: RationalTime)
     case setCompositionFrameRate(id: VertexID, frameRate: RationalTime)
     case setCompositionBackground(id: VertexID, color: ProjectRGBAColor)
+    case setCompositionWorkArea(id: VertexID, workArea: ProjectWorkArea?)
+    case setCompositionMarkers(id: VertexID, markers: [ProjectMarker])
+    case applyTimelineEdit(compositionID: VertexID, result: TimelineProjectMutation)
 
     case insertLayer(ProjectLayer, index: Int)
     case removeLayer(id: VertexID)
@@ -38,6 +41,8 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setLayerTransform(id: VertexID, transform: LayerTransform)
     case setLayerBlendMode(id: VertexID, mode: LayerBlendMode)
     case setLayerSource(id: VertexID, source: LayerSource)
+    case setLayerMarkers(id: VertexID, markers: [ProjectMarker])
+    case setLayerParent(id: VertexID, parentLayerID: VertexID?)
     case setLayerOperations(id: VertexID, operations: [LayerOperation])
     case setLayerMotionState(
         id: VertexID,

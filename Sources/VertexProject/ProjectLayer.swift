@@ -287,6 +287,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
     public var masks: [ProjectMask]
     public var trackMatte: ProjectTrackMatte?
     public var parentLayerID: VertexID?
+    public var markers: [ProjectMarker]
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -304,6 +305,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         case masks
         case trackMatte
         case parentLayerID
+        case markers
     }
 
     public init(
@@ -321,7 +323,8 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         animationChannels: [ProjectAnimationChannel] = [],
         masks: [ProjectMask] = [],
         trackMatte: ProjectTrackMatte? = nil,
-        parentLayerID: VertexID? = nil
+        parentLayerID: VertexID? = nil,
+        markers: [ProjectMarker] = []
     ) {
         self.id = id
         self.compositionID = compositionID
@@ -338,6 +341,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         self.masks = masks
         self.trackMatte = trackMatte
         self.parentLayerID = parentLayerID
+        self.markers = markers
     }
 
     public init(from decoder: Decoder) throws {
@@ -357,6 +361,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         masks = try container.decodeIfPresent([ProjectMask].self, forKey: .masks) ?? []
         trackMatte = try container.decodeIfPresent(ProjectTrackMatte.self, forKey: .trackMatte)
         parentLayerID = try container.decodeIfPresent(VertexID.self, forKey: .parentLayerID)
+        markers = try container.decodeIfPresent([ProjectMarker].self, forKey: .markers) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -376,6 +381,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         try container.encode(masks, forKey: .masks)
         try container.encodeIfPresent(trackMatte, forKey: .trackMatte)
         try container.encodeIfPresent(parentLayerID, forKey: .parentLayerID)
+        try container.encode(markers, forKey: .markers)
     }
 
     public func validated(in document: ProjectDocument) throws -> Self {
@@ -390,6 +396,10 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         for operation in operations { _ = try operation.validated() }
         _ = try masks.validatedMasks()
         _ = try animationChannels.validatedAnimationChannels(for: masks)
+        guard Set(markers.map(\.id)).count == markers.count else {
+            throw ProjectError.duplicateIdentity("layer marker")
+        }
+        for marker in markers { _ = try marker.validated(compositionDuration: composition.duration) }
         try validateAnimationRanges()
 
         switch source {

@@ -215,6 +215,11 @@ public struct TimelineEngine: Sendable {
             }
             return try shiftedChannel.validated()
         }
+        result.markers = try result.markers.map { marker in
+            var shiftedMarker = marker
+            shiftedMarker.time = try add(marker.time, delta)
+            return try shiftedMarker.validated(compositionDuration: composition.duration)
+        }
         return result
     }
 

@@ -141,6 +141,35 @@ public struct ProjectCommandEngine: Sendable {
             _ = try color.validated()
             forward = .setCompositionBackground(compositionID: id, before: composition.backgroundColor, after: color)
 
+        case .setCompositionWorkArea(let id, let workArea):
+            guard let composition = document.composition(id: id), composition.workArea != workArea else {
+                throw ProjectError.invalidOperation("Composition work area is unchanged or composition is missing.")
+            }
+            if let workArea { _ = try workArea.validated(compositionDuration: composition.duration) }
+            forward = .setCompositionWorkArea(compositionID: id, before: composition.workArea, after: workArea)
+
+        case .setCompositionMarkers(let id, let markers):
+            guard let composition = document.composition(id: id), composition.markers != markers else {
+                throw ProjectError.invalidOperation("Composition markers are unchanged or composition is missing.")
+            }
+            guard Set(markers.map(\.id)).count == markers.count else { throw ProjectError.duplicateIdentity("composition marker") }
+            for marker in markers { _ = try marker.validated(compositionDuration: composition.duration) }
+            forward = .setCompositionMarkers(compositionID: id, before: composition.markers, after: markers)
+
+        case .applyTimelineEdit(let compositionID, let result):
+            _ = try result.validated(compositionID: compositionID)
+            guard let composition = document.composition(id: compositionID),
+                  composition.layerIDs == result.beforeLayerOrder,
+                  document.layers(in: compositionID) == result.beforeLayers,
+                  document.selectedLayerID == result.beforeSelectedLayerID else {
+                throw ProjectError.invalidOperation("Timeline mutation precondition does not match the current project.")
+            }
+            let mutation = ProjectMutation.applyTimelineEdit(compositionID: compositionID, change: result)
+            var candidate = document
+            try apply(mutation, to: &candidate)
+            _ = try candidate.validated()
+            forward = mutation
+
         case .insertLayer(let layer, let index):
             guard !document.layerRegistry.contains(where: { $0.id == layer.id }), let composition = document.composition(id: layer.compositionID) else { throw ProjectError.invalidOperation("Layer already exists or owner composition is missing.") }
             guard composition.layerIDs.indices.contains(index) || index == composition.layerIDs.endIndex else { throw ProjectError.invalidOperation("Layer insertion index is invalid.") }
@@ -152,6 +181,9 @@ public struct ProjectCommandEngine: Sendable {
             guard !layer.locked else { throw ProjectError.invalidOperation("Unlock the layer before removing it.") }
             guard !document.layerRegistry.contains(where: { $0.trackMatte?.sourceLayerID == id }) else {
                 throw ProjectError.invalidOperation("A layer used as a track matte cannot be removed until matte references are cleared.")
+            }
+            guard !document.layerRegistry.contains(where: { $0.parentLayerID == id }) else {
+                throw ProjectError.invalidOperation("A parent layer cannot be removed until child parent links are cleared.")
             }
             forward = .removeLayer(layer, compositionID: composition.id, index: index)
 
@@ -201,6 +233,28 @@ public struct ProjectCommandEngine: Sendable {
             let layer = try editableLayer(id, in: document)
             guard source != layer.source else { throw ProjectError.invalidOperation("Layer source is unchanged.") }
             forward = .setLayerSource(layerID: id, before: layer.source, after: source)
+
+
+        case .setLayerMarkers(let id, let markers):
+            let layer = try editableLayer(id, in: document)
+            guard layer.markers != markers, let composition = document.composition(id: layer.compositionID) else {
+                throw ProjectError.invalidOperation("Layer markers are unchanged or owner composition is missing.")
+            }
+            guard Set(markers.map(\.id)).count == markers.count else { throw ProjectError.duplicateIdentity("layer marker") }
+            for marker in markers { _ = try marker.validated(compositionDuration: composition.duration) }
+            forward = .setLayerMarkers(layerID: id, before: layer.markers, after: markers)
+
+        case .setLayerParent(let id, let parentLayerID):
+            let layer = try editableLayer(id, in: document)
+            guard layer.parentLayerID != parentLayerID else { throw ProjectError.invalidOperation("Layer parent is unchanged.") }
+            var candidate = layer
+            candidate.parentLayerID = parentLayerID
+            var candidateDocument = document
+            if let index = candidateDocument.layerRegistry.firstIndex(where: { $0.id == id }) {
+                candidateDocument.layerRegistry[index] = candidate
+            }
+            _ = try candidate.validated(in: candidateDocument)
+            forward = .setLayerParent(layerID: id, before: layer.parentLayerID, after: parentLayerID)
 
         case .setLayerOperations(let id, let operations):
             let layer = try editableLayer(id, in: document)
@@ -327,6 +381,25 @@ public struct ProjectCommandEngine: Sendable {
             let index = try compositionIndex(id, in: document); guard document.compositionRegistry[index].frameRate == before else { throw ProjectError.invalidOperation("Composition frame-rate precondition did not match.") }; document.compositionRegistry[index].frameRate = after
         case .setCompositionBackground(let id, let before, let after):
             let index = try compositionIndex(id, in: document); guard document.compositionRegistry[index].backgroundColor == before else { throw ProjectError.invalidOperation("Composition background precondition did not match.") }; document.compositionRegistry[index].backgroundColor = after
+        case .setCompositionWorkArea(let id, let before, let after):
+            let index = try compositionIndex(id, in: document)
+            guard document.compositionRegistry[index].workArea == before else { throw ProjectError.invalidOperation("Composition work-area precondition did not match.") }
+            document.compositionRegistry[index].workArea = after
+        case .setCompositionMarkers(let id, let before, let after):
+            let index = try compositionIndex(id, in: document)
+            guard document.compositionRegistry[index].markers == before else { throw ProjectError.invalidOperation("Composition-marker precondition did not match.") }
+            document.compositionRegistry[index].markers = after
+        case .applyTimelineEdit(let compositionID, let change):
+            let compIndex = try compositionIndex(compositionID, in: document)
+            guard document.compositionRegistry[compIndex].layerIDs == change.beforeLayerOrder,
+                  document.layers(in: compositionID) == change.beforeLayers,
+                  document.selectedLayerID == change.beforeSelectedLayerID else {
+                throw ProjectError.invalidOperation("Timeline mutation apply precondition did not match.")
+            }
+            document.layerRegistry.removeAll { $0.compositionID == compositionID }
+            document.layerRegistry.append(contentsOf: change.afterLayers)
+            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
+            document.selectedLayerID = change.afterSelectedLayerID
         case .insertLayer(let layer, let compositionID, let index):
             let compIndex = try compositionIndex(compositionID, in: document); guard document.compositionRegistry[compIndex].layerIDs.indices.contains(index) || index == document.compositionRegistry[compIndex].layerIDs.endIndex else { throw ProjectError.invalidOperation("Layer insertion index changed.") }; document.layerRegistry.append(layer); document.compositionRegistry[compIndex].layerIDs.insert(layer.id, at: index)
         case .removeLayer(let layer, let compositionID, let index):
@@ -342,6 +415,8 @@ public struct ProjectCommandEngine: Sendable {
         case .setLayerTransform(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].transform == before else { throw ProjectError.invalidOperation("Layer transform precondition did not match.") }; document.layerRegistry[index].transform = after
         case .setLayerBlendMode(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].blendMode == before else { throw ProjectError.invalidOperation("Layer blend-mode precondition did not match.") }; document.layerRegistry[index].blendMode = after
         case .setLayerSource(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].source == before else { throw ProjectError.invalidOperation("Layer source precondition did not match.") }; document.layerRegistry[index].source = after
+        case .setLayerMarkers(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].markers == before else { throw ProjectError.invalidOperation("Layer-marker precondition did not match.") }; document.layerRegistry[index].markers = after
+        case .setLayerParent(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].parentLayerID == before else { throw ProjectError.invalidOperation("Layer-parent precondition did not match.") }; document.layerRegistry[index].parentLayerID = after
         case .setLayerOperations(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].operations == before else { throw ProjectError.invalidOperation("Layer operations precondition did not match.") }; document.layerRegistry[index].operations = after
         case .setLayerMotionState(
             let id,
