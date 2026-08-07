@@ -67,3 +67,33 @@ func emptyRestorationRejected() {
         _ = try RestorationModelPlan.resolve(recipe: RestorationRecipe(), qualityTier: .balanced)
     }
 }
+
+#if canImport(CoreImage) && canImport(CoreML) && canImport(CoreVideo)
+import CoreImage
+import CoreML
+import CoreVideo
+
+@Test("Bundled Real-ESRGAN denoise model performs real local restoration inference when CI provides the model root")
+func bundledRealESRGANDenoiseInference() throws {
+    guard let root = preparedAIModelRoot() else { return }
+    let manifest = try preparedAIManifest(root: root)
+    guard manifest.models.contains(where: { $0.modelID == "realesrgan-x4v3-denoise-f16" }) else {
+        Issue.record("VERTEX_AI_MODEL_ROOT was supplied but the Real-ESRGAN denoise model is missing")
+        return
+    }
+
+    let registry = try AIModelRegistry(resourceRoot: root, manifest: manifest)
+    let engine = RestorationInferenceEngine(registry: registry)
+    let input = try syntheticBGRA(width: 12, height: 8)
+    let output = try engine.infer(
+        pixelBuffer: input,
+        recipe: RestorationRecipe(denoise: 1),
+        qualityTier: .balanced,
+        tileOverlap: 8
+    )
+
+    #expect(CVPixelBufferGetWidth(output) == 12)
+    #expect(CVPixelBufferGetHeight(output) == 8)
+    #expect(try pixelVariance(output) > 0)
+}
+#endif
