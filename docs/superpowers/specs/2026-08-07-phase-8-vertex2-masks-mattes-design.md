@@ -51,14 +51,14 @@ Mask semantics run before the layer transform so a mask stays attached to the la
 
 ## Track mattes
 
-A pixel-producing layer may reference another layer in the same composition as a track matte:
+A pixel-producing layer may consume another **media or nested-composition layer** in the same composition as a track matte:
 
 - Alpha
 - Alpha Inverted
 - Luma
 - Luma Inverted
 
-The matte source is rendered using its own source, effects, masks and transform but is not separately composited when consumed as a matte. Matte references must exist, remain in the same composition, reference a pixel-producing layer, not self-reference, and form no cycles.
+The matte source is rendered using its own source, effects, masks and transform but is not separately composited when consumed as a matte. Matte references must exist, remain in the same composition, reference another media/nested-composition layer, not self-reference, and form no cycles. Adjustment and model-only layers cannot serve as matte sources in Phase 8 because their semantics depend on the current accumulator rather than a standalone source texture.
 
 Luma coverage uses Rec.709 coefficients on straight RGB and is multiplied by matte alpha. Inverted modes use `1 - coverage`.
 
@@ -109,7 +109,7 @@ Reject:
 - animated path topology mismatch
 - property/value type mismatch
 - mask property address referencing a missing mask
-- invalid matte source, self reference, cross-composition reference, model-only source, or matte cycle
+- invalid matte source, self reference, cross-composition reference, model-only source, adjustment-layer source, or matte cycle
 
 ## Limits
 
