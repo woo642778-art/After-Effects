@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apply-and-test:
+  portable-tasks-3-to-7:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,45 +27,127 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: '6.0'
-      - name: Detect completed Task 2 review fix
-        id: task-state
+      - name: Configure task commits
         run: |
-          if grep -q 'private func shiftedLayer' Sources/VertexTimeline/TimelineEngine.swift; then
-            echo 'applied=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'applied=false' >> "$GITHUB_OUTPUT"
-          fi
-      - name: Apply Task 2 review RED test
-        if: steps.task-state.outputs.applied != 'true'
-        run: python3 Tools/phase9_tasks/task02_review_red.py
-      - name: Verify keyframe placement RED
-        if: steps.task-state.outputs.applied != 'true'
-        run: |
-          set -euo pipefail
-          set +e
-          swift test --filter moveShiftsLayerAnimationKeyframes > "$RUNNER_TEMP/task2-review-red.log" 2>&1
-          status=$?
-          set -e
-          cat "$RUNNER_TEMP/task2-review-red.log"
-          if [ "$status" -eq 0 ]; then
-            echo 'Expected moving a layer to fail the attached-keyframe placement test before the fix.'
-            exit 1
-          fi
-      - name: Apply Task 2 review GREEN fix
-        if: steps.task-state.outputs.applied != 'true'
-        run: python3 Tools/phase9_tasks/task02_review_green.py
-      - name: Run reviewed Task 2 tests
-        run: swift test --filter VertexTimelineTests
-      - name: Verify diff hygiene
-        run: git diff --check
-      - name: Commit Task 2 review fix
-        if: steps.task-state.outputs.applied != 'true'
-        env:
-          HEAD_BRANCH: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
           git config user.name 'vertex2-phase9-bot'
           git config user.email 'actions@users.noreply.github.com'
+
+      - name: Task 3 RED - snapping and selection
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task03_red.py
+          set +e
+          swift test --filter TimelineSnapEngineTests > "$RUNNER_TEMP/task3-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task3-red.log"
+          test "$status" -ne 0
+      - name: Task 3 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task03_green.py
+          swift test --filter TimelineSnapEngineTests
+          swift test --filter TimelineSelectionTests
+          git diff --check
           git add Sources/VertexTimeline Tests/VertexTimelineTests
-          git commit -m 'fix(timeline): move keyframes with layer placement'
-          git push origin HEAD:"$HEAD_BRANCH"
+          git commit -m 'feat(timeline): add deterministic snapping and selection'
+
+      - name: Task 4 RED - transactional timeline commands
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task04_red.py
+          set +e
+          swift test --filter ProjectTimelineCommandTests > "$RUNNER_TEMP/task4-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task4-red.log"
+          test "$status" -ne 0
+      - name: Task 4 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task04_green.py
+          swift test --filter ProjectTimelineCommandTests
+          swift test --filter VertexTimelineTests
+          git diff --check
+          git add Sources/VertexProject Sources/VertexTimeline App/ProjectWorkspaceViewModel.swift project.yml Tests/VertexProjectTests/ProjectTimelineCommandTests.swift
+          git commit -m 'feat(project): make timeline edits transactional'
+
+      - name: Task 5 RED - typed ordered effects
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task05_red.py
+          python3 Tools/phase9_tasks/task05_testfix.py
+          set +e
+          swift test --filter ProjectEffectTests > "$RUNNER_TEMP/task5-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task5-red.log"
+          test "$status" -ne 0
+      - name: Task 5 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task05_green.py
+          swift test --filter ProjectEffectTests
+          swift test --filter ProjectEffectCommandTests
+          swift test --filter ProjectTimelineCommandTests
+          git diff --check
+          git add Sources/VertexProject Tests/VertexProjectTests/ProjectEffectTests.swift Tests/VertexProjectTests/ProjectEffectCommandTests.swift
+          git commit -m 'feat(effects): add typed ordered layer effect stack'
+
+      - name: Task 6 RED - composition effect evaluation
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task06_red.py
+          python3 Tools/phase9_tasks/task06_testfix.py
+          set +e
+          swift test --filter EffectGraphCompilerTests > "$RUNNER_TEMP/task6-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task6-red.log"
+          test "$status" -ne 0
+      - name: Task 6 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task06_green.py
+          swift test --filter EffectGraphCompilerTests
+          swift test --filter Phase8CompositionGraphTests
+          git diff --check
+          git add Sources/VertexComposition Tests/VertexCompositionTests/EffectGraphCompilerTests.swift
+          git commit -m 'feat(composition): evaluate layer effects before masks'
+
+      - name: Task 7 RED - deterministic AI frame key
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task07_red.py
+          set +e
+          swift test --filter AIFrameEffectKeyTests > "$RUNNER_TEMP/task7-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task7-red.log"
+          test "$status" -ne 0
+      - name: Task 7 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task07_green.py
+          swift test --filter AIFrameEffectKeyTests
+          swift test --filter VertexAITests
+          git diff --check
+          git add Sources/VertexAI Tests/VertexAITests/AIFrameEffectKeyTests.swift
+          git commit -m 'feat(ai): add deterministic frame effect cache keys'
+
+      - name: Portable regression gate
+        run: |
+          set -euo pipefail
+          swift test --filter VertexTimelineTests
+          swift test --filter ProjectTimelineSchemaTests
+          swift test --filter ProjectTimelineCommandTests
+          swift test --filter ProjectEffectTests
+          swift test --filter ProjectEffectCommandTests
+          swift test --filter EffectGraphCompilerTests
+          swift test --filter AIFrameEffectKeyTests
+          git diff --check
+          test -z "$(git status --porcelain)"
+      - name: Push task commit stack
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: git push origin HEAD:"$HEAD_BRANCH"
