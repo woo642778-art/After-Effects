@@ -28,22 +28,46 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Verify persistence module boundary
+      - name: Verify corrected persistence contract
         run: |
           set -euo pipefail
           if swift package dump-package | grep -q '"name" : "VertexProjectFoundation"'; then
             echo "VertexProjectFoundation remains in the package graph"
             exit 1
           fi
-          if grep -R "import VertexProjectFoundation" App Sources/VertexProjectPersistence Tests/VertexProjectPersistenceTests; then
+          test ! -d Sources/VertexProjectFoundation
+          test ! -d Tests/VertexProjectFoundationTests
+          test ! -d Sources/VertexProjectPersistence/LegacyDraftCompatibility
+          test ! -f Sources/VertexProject/ProjectJournal.swift
+          if grep -R "import VertexProjectFoundation" Package.swift project.yml App Sources Tests; then
             echo "Active code still imports VertexProjectFoundation"
+            exit 1
+          fi
+          if grep -R "bookmarkData" Sources/VertexProject; then
+            echo "Canonical project model still stores bookmark bytes"
+            exit 1
+          fi
+          if grep -R "appliedCommandIDs" Sources/VertexProject; then
+            echo "Canonical project model still stores applied command IDs"
+            exit 1
+          fi
+          if grep -R "legacyRenderSettings" Sources/VertexProject; then
+            echo "Canonical project model still stores legacy render settings"
+            exit 1
+          fi
+          if grep -R --exclude-dir=LegacyImport --exclude='*.md' "operations.log" Sources/VertexProjectPersistence App; then
+            echo "Writable operation WAL remains outside read-only legacy import"
+            exit 1
+          fi
+          if grep -R --exclude-dir=LegacyImport --exclude='*.md' "history.json" Sources/VertexProjectPersistence App; then
+            echo "Persistent history remains outside read-only legacy import"
             exit 1
           fi
       - name: Run deterministic portable tests
         run: swift test
 
   ios-app-tests:
-    name: Compile iOS app session tests
+    name: Run iOS app session tests
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -55,33 +79,55 @@ jobs:
         run: bash Tools/generate_app_assets.sh
       - name: Generate Xcode project
         run: xcodegen generate
-      - name: Compile iOS app session tests
+      - name: Select and boot iPhone Simulator
         run: |
           set -euo pipefail
-          TEST_BUILD_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
-          echo "TEST_BUILD_LOG=$TEST_BUILD_LOG" >> "$GITHUB_ENV"
+          SIM_UDID="$(python3 - <<'PY'
+          import json, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              if 'iOS' not in runtime:
+                  continue
+              for device in devices:
+                  if device.get('isAvailable') and device.get('name','').startswith('iPhone'):
+                      candidates.append((runtime, device['name'], device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPhone Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][2])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Run iOS app session tests
+        run: |
+          set -euo pipefail
+          TEST_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
+          echo "TEST_LOG=$TEST_LOG" >> "$GITHUB_ENV"
           if ! xcodebuild \
             -project Vertex.xcodeproj \
             -scheme Vertex \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
+            -destination "id=$SIM_UDID" \
             -derivedDataPath "$PWD/DerivedDataTests" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build-for-testing >"$TEST_BUILD_LOG" 2>&1; then
-            echo "iOS test compilation failed. Compiler diagnostics:"
-            /usr/bin/grep -n -C 4 "error:" "$TEST_BUILD_LOG" || /usr/bin/tail -n 250 "$TEST_BUILD_LOG"
+            test >"$TEST_LOG" 2>&1; then
+            echo "iOS app tests failed. Diagnostics:"
+            /usr/bin/grep -n -C 4 -E "error:|failed|Test Case" "$TEST_LOG" || /usr/bin/tail -n 300 "$TEST_LOG"
             exit 1
           fi
-          /usr/bin/tail -n 80 "$TEST_BUILD_LOG"
-      - name: Upload iOS app test compiler log
+          /usr/bin/tail -n 120 "$TEST_LOG"
+      - name: Upload iOS app test log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-app-test-compiler-log
-          path: ${{ env.TEST_BUILD_LOG }}
+          name: ios-app-test-log
+          path: ${{ env.TEST_LOG }}
           if-no-files-found: warn
           retention-days: 7
 
