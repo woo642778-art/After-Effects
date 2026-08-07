@@ -64,7 +64,13 @@ def download_verified(url: str, destination: Path, expected_sha256: str) -> None
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lock", default="AI/AI_MODEL_LOCK.json")
-    parser.add_argument("--output", default=".build/ai-source")
+    parser.add_argument(
+        "--output",
+        "--destination",
+        dest="output",
+        default=".build/ai-source",
+        help="Directory used for verified pinned model sources.",
+    )
     args = parser.parse_args()
 
     lock_path = Path(args.lock)
