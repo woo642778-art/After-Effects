@@ -2,11 +2,16 @@ import Foundation
 import VertexAI
 
 #if canImport(CoreML)
-import CoreML
+@preconcurrency import CoreML
 
-public actor AIModelRegistry {
+/// Core ML model objects are intentionally kept behind a synchronous locked
+/// boundary. `MLModel` is not Sendable in Swift 6, so it must never cross an
+/// actor isolation boundary. The closure executes while the registry owns the
+/// model reference and returns only the caller's result.
+public final class AIModelRegistry: @unchecked Sendable {
     public let resourceRoot: URL
     private let entriesByID: [String: AIModelManifestEntry]
+    private let lock = NSLock()
     private var resident: [String: MLModel] = [:]
 
     public init(resourceRoot: URL, manifest: AIModelManifest) throws {
@@ -16,10 +21,35 @@ public actor AIModelRegistry {
     }
 
     public var residentModelIDs: [String] {
-        resident.keys.sorted()
+        lock.lock()
+        defer { lock.unlock() }
+        return resident.keys.sorted()
     }
 
-    public func model(for modelID: String, computeUnits: MLComputeUnits = .all) async throws -> MLModel {
+    public func withModel<T>(
+        for modelID: String,
+        computeUnits: MLComputeUnits = .all,
+        _ body: (MLModel) throws -> T
+    ) throws -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        let model = try loadLocked(modelID: modelID, computeUnits: computeUnits)
+        return try body(model)
+    }
+
+    public func unload(modelID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        resident.removeValue(forKey: modelID)
+    }
+
+    public func unloadAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        resident.removeAll(keepingCapacity: false)
+    }
+
+    private func loadLocked(modelID: String, computeUnits: MLComputeUnits) throws -> MLModel {
         if let cached = resident[modelID] { return cached }
         guard let entry = entriesByID[modelID] else { throw AIError.modelUnavailable(modelID) }
         let url = resourceRoot.appendingPathComponent(entry.bundleRelativePath)
@@ -36,20 +66,12 @@ public actor AIModelRegistry {
             throw AIError.inferenceFailed("Core ML could not load \(modelID): \(error.localizedDescription)")
         }
     }
-
-    public func unload(modelID: String) {
-        resident.removeValue(forKey: modelID)
-    }
-
-    public func unloadAll() {
-        resident.removeAll(keepingCapacity: false)
-    }
 }
 
 #else
 
-/// Linux/portable compile stub. Native inference is unavailable by contract.
-public actor AIModelRegistry {
+/// Portable compile stub. Native inference is unavailable by contract.
+public final class AIModelRegistry: @unchecked Sendable {
     public init(resourceRoot: URL, manifest: AIModelManifest) throws {
         _ = try manifest.validated()
     }
