@@ -59,11 +59,18 @@ final class CompositionPreviewController: ObservableObject {
 
     func step(by frames: Int64, composition: ProjectComposition) {
         let sum = frameIndex.addingReportingOverflow(frames)
-        setFrameIndex(sum.overflow ? (frames < 0 ? 0 : Int64.max) : sum.partialValue, composition: composition)
+        setFrameIndex(
+            sum.overflow ? (frames < 0 ? 0 : Int64.max) : sum.partialValue,
+            composition: composition
+        )
     }
 
     func resetForComposition(_ composition: ProjectComposition) {
         setFrameIndex(0, composition: composition)
+    }
+
+    func currentTime(for composition: ProjectComposition) throws -> RationalTime {
+        try exactTime(frameIndex: frameIndex, frameRate: composition.frameRate)
     }
 
     func render(project: ProjectDocument, packageURL: URL?) {
@@ -86,7 +93,7 @@ final class CompositionPreviewController: ObservableObject {
         renderTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let time = try self.exactTime(frameIndex: self.frameIndex, frameRate: composition.frameRate)
+                let time = try self.currentTime(for: composition)
                 let output = try RenderOutputSpecification(
                     width: composition.width,
                     height: composition.height,
@@ -98,7 +105,10 @@ final class CompositionPreviewController: ObservableObject {
                     time: time,
                     output: output
                 )
-                let resolver = CompositionMediaFrameResolver(project: project, packageURL: packageURL)
+                let resolver = CompositionMediaFrameResolver(
+                    project: project,
+                    packageURL: packageURL
+                )
                 let renderRequest = try await CompositionGraphCompiler().compile(
                     compositionRequest,
                     resolver: resolver,
@@ -129,19 +139,33 @@ final class CompositionPreviewController: ObservableObject {
     }
 
     func lastFrameIndex(for composition: ProjectComposition) -> Int64 {
-        let count = floor(composition.duration.seconds * composition.frameRate.seconds + 0.0000001)
+        let count = floor(
+            composition.duration.seconds * composition.frameRate.seconds + 0.0000001
+        )
         guard count.isFinite, count > 1 else { return 0 }
         return Int64(min(count - 1, Double(Int64.max)))
     }
 
-    private func exactTime(frameIndex: Int64, frameRate: RationalTime) throws -> RationalTime {
+    private func exactTime(
+        frameIndex: Int64,
+        frameRate: RationalTime
+    ) throws -> RationalTime {
         guard frameRate.value > 0, frameRate.value <= Int64(Int32.max) else {
-            throw CompositionError.invalidTimingRange("Frame rate cannot be represented as an exact frame denominator.")
+            throw CompositionError.invalidTimingRange(
+                "Frame rate cannot be represented as an exact frame denominator."
+            )
         }
-        let numerator = frameIndex.multipliedReportingOverflow(by: Int64(frameRate.timescale))
+        let numerator = frameIndex.multipliedReportingOverflow(
+            by: Int64(frameRate.timescale)
+        )
         guard !numerator.overflow else {
-            throw CompositionError.invalidTimingRange("Frame index overflowed exact time conversion.")
+            throw CompositionError.invalidTimingRange(
+                "Frame index overflowed exact time conversion."
+            )
         }
-        return RationalTime(value: numerator.partialValue, timescale: Int32(frameRate.value))
+        return RationalTime(
+            value: numerator.partialValue,
+            timescale: Int32(frameRate.value)
+        )
     }
 }
