@@ -62,3 +62,31 @@ func animeProfileRequiresValidatedModel() {
     #expect(UpscaleModelSelection.modelID(for: .general) == "realesrgan-x4v3-f16")
     #expect(UpscaleModelSelection.modelID(for: .animeGame) == nil)
 }
+
+#if canImport(CoreImage) && canImport(CoreML) && canImport(CoreVideo)
+import CoreImage
+import CoreML
+import CoreVideo
+
+@Test("Bundled Real-ESRGAN general model performs real local tiled inference when CI provides the model root")
+func bundledRealESRGANInference() throws {
+    guard let root = preparedAIModelRoot() else { return }
+    let manifest = try preparedAIManifest(root: root)
+    guard manifest.models.contains(where: { $0.modelID == "realesrgan-x4v3-f16" }) else {
+        Issue.record("VERTEX_AI_MODEL_ROOT was supplied but the Real-ESRGAN general model is missing")
+        return
+    }
+
+    let registry = try AIModelRegistry(resourceRoot: root, manifest: manifest)
+    let engine = UpscaleInferenceEngine(registry: registry)
+    let input = try syntheticBGRA(width: 12, height: 8)
+    let output = try engine.infer(
+        pixelBuffer: input,
+        recipe: UpscaleRecipe(profile: .general, scale: 2, tileOverlap: 8)
+    )
+
+    #expect(CVPixelBufferGetWidth(output) == 24)
+    #expect(CVPixelBufferGetHeight(output) == 16)
+    #expect(try pixelVariance(output) > 0)
+}
+#endif
