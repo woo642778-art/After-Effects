@@ -133,7 +133,7 @@ public struct ProjectSettings: Codable, Equatable, Sendable {
     }
 }
 
-// Schema-1 decoding/migration compatibility only. Schema 2 does not persist this
+// Schema-1 decoding/migration compatibility only. Schema 3 does not persist this
 // object as project-global edit state.
 public enum ProjectRenderParameter: String, Codable, CaseIterable, Sendable {
     case exposure
@@ -229,8 +229,8 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 }
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
-    public static let currentAppVersion = "6.0.0"
+    public static let currentSchemaVersion = 3
+    public static let currentAppVersion = "7.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int
@@ -241,6 +241,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var mediaRegistry: [MediaReference]
     public var compositionRegistry: [ProjectComposition]
     public var layerRegistry: [ProjectLayer]
+    public var aiAssetRegistry: [ProjectAIAsset]
     public var activeCompositionID: VertexID?
     public var selectedLayerID: VertexID?
     public var selectedMediaID: VertexID?
@@ -255,6 +256,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         mediaRegistry: [MediaReference],
         compositionRegistry: [ProjectComposition],
         layerRegistry: [ProjectLayer],
+        aiAssetRegistry: [ProjectAIAsset] = [],
         activeCompositionID: VertexID?,
         selectedLayerID: VertexID?,
         selectedMediaID: VertexID?
@@ -268,6 +270,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.mediaRegistry = mediaRegistry
         self.compositionRegistry = compositionRegistry
         self.layerRegistry = layerRegistry
+        self.aiAssetRegistry = aiAssetRegistry
         self.activeCompositionID = activeCompositionID
         self.selectedLayerID = selectedLayerID
         self.selectedMediaID = selectedMediaID
@@ -307,6 +310,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             mediaRegistry: [],
             compositionRegistry: [composition],
             layerRegistry: [],
+            aiAssetRegistry: [],
             activeCompositionID: composition.id,
             selectedLayerID: nil,
             selectedMediaID: nil
@@ -329,6 +333,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
 
     public func layer(id: VertexID) -> ProjectLayer? {
         layerRegistry.first { $0.id == id }
+    }
+
+    public func aiAsset(id: VertexID) -> ProjectAIAsset? {
+        aiAssetRegistry.first { $0.id == id }
     }
 
     public func layers(in compositionID: VertexID) -> [ProjectLayer] {
@@ -411,6 +419,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         copy.mediaRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.compositionRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.layerRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+        copy.aiAssetRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         return copy
     }
 
@@ -472,6 +481,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         guard !compositionRegistry.isEmpty else { throw ProjectError.invalidValue("A project must contain at least one composition.") }
         guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else { throw ProjectError.duplicateIdentity("composition") }
         guard Set(layerRegistry.map(\.id)).count == layerRegistry.count else { throw ProjectError.duplicateIdentity("layer") }
+        guard Set(aiAssetRegistry.map(\.id)).count == aiAssetRegistry.count else { throw ProjectError.duplicateIdentity("AI asset") }
+        guard Set(aiAssetRegistry.map(\.outputMediaID)).count == aiAssetRegistry.count else {
+            throw ProjectError.invalidValue("Each AI asset must own a unique output media reference.")
+        }
 
         let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
         var owned = Set<VertexID>()
@@ -487,6 +500,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             throw ProjectError.invalidValue("Every layer must appear exactly once in its owner composition order.")
         }
         for layer in layerRegistry { _ = try layer.validated(in: self) }
+        for aiAsset in aiAssetRegistry { _ = try aiAsset.validated(in: self) }
 
         if let selectedMediaID, !mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
             throw ProjectError.invalidValue("Selected media must exist in the media registry.")
