@@ -1,7 +1,7 @@
 # Vertex2 9.0 — AE-Style Workspace, Professional Timeline, and Layer-Integrated AI Effects
 
 Date: 2026-08-07
-Status: Approved design specification
+Status: Conversational design approved; written specification pending final user review
 Target release: Vertex2 9.0.0 (build 9)
 Target artifact: `Vertex2-9.0.0-unsigned.ipa`
 Base: `agent/phase-8-vertex2-motion-masks`
@@ -136,7 +136,7 @@ The left timeline region must support the AE-style concepts needed by Vertex2, i
 - Track Matte
 - Blend Mode
 
-Shy and future 3D switches may be represented when their backing semantics exist, but a visible control must not pretend to work if the engine does not support it.
+Shy and future 3D switches may be represented only when their backing semantics exist. A visible control must not pretend to work if the engine does not support it.
 
 ## 6. Professional timeline behavior
 
@@ -266,25 +266,29 @@ Each effect instance must have at least:
 - Stable ID
 - Effect type/version
 - Enabled state
-- Ordered parameters
+- Canonically ordered/encoded parameters
 - Parameter animation references/channels where applicable
 - Persisted effect configuration
 
 Transient cache/progress state must not be mixed into the canonical project effect definition.
 
-### 8.2 Render semantics
+### 8.2 Phase 9 render stage
 
-The effect stack is ordered. Reordering effects changes render order deterministically.
+9.0 introduces AI effects as **source-processing layer effects**. They operate on the layer source before the existing Phase 8 mask/transform/matte stages.
 
-For normal pixel-producing layers, the conceptual Phase 9 order is:
+The required 9.0 order for a normal pixel-producing layer is:
 
-`Source -> Ordered Effects -> Masks -> Transform -> Track Matte -> Composite`
+`Source -> Ordered AI Effects -> Masks -> Transform -> Track Matte -> Composite`
 
-If an existing architecture requires a different order for a specific established effect class, that exception must be explicitly tested and documented. UI order and render order must never silently disagree.
+This preserves the established Phase 8 relationship among masks, transform, and mattes while inserting the approved AI processing at a single explicit stage. Multiple AI effects are evaluated in their user-visible stack order.
+
+The implementation must not create a second hidden effect order that differs from Effect Controls.
+
+A future general-effects phase may add other stage types, but 9.0 does not need a broad arbitrary-stage effect system merely to satisfy this release.
 
 ### 8.3 Minimal Phase 9 effect architecture
 
-The roadmap previously places the broad professional effects architecture in a later phase. Phase 9 therefore introduces only the minimum typed/versioned effect container and evaluator required for the approved 9.0 workflow, especially AI effects.
+The roadmap places the broad professional effects architecture in a later phase. Phase 9 therefore introduces only the minimum typed/versioned effect container and evaluator required for the approved 9.0 workflow, especially AI effects.
 
 This does not claim completion of the later general-effects milestone. Later phases can extend the same container with larger GPU effect families, preset migration, and broader typed parameter systems.
 
@@ -303,7 +307,7 @@ Required first-class AI effects:
 
 Adding Depth Map to a layer must not replace the source media registry entry.
 
-The selected layer's current rendered pixel source becomes the effect result whenever a valid result is available.
+The selected layer's current source-processing result becomes the depth result whenever a valid frame result is available.
 
 Minimum parameters:
 
@@ -316,13 +320,13 @@ Minimum parameters:
 - Temporal smoothing
 - Output mode
 
-Initial output modes should include at least a visible depth output. Additional depth-as-alpha/data modes may be added only when their render/export semantics are fully implemented.
+Initial output modes include at least a visible depth output. Additional depth-as-alpha/data modes may be added only when their render/export semantics are fully implemented.
 
 Disabling/deleting the Depth Map effect removes it from evaluation and reveals the pre-effect layer immediately.
 
 ### 9.2 Cutout
 
-Cutout is an alpha-producing layer effect.
+Cutout is an alpha-producing source-processing layer effect.
 
 Its normal effect-mode behavior changes the effective layer alpha rather than requiring the user to import a separate matte file.
 
@@ -331,6 +335,8 @@ Existing foreground/prompt controls may be surfaced through Effect Controls when
 ### 9.3 Upscale and Restore
 
 Upscale/Restore use the same effect UX, but their interactive preview may use reduced resolution or a faster tier.
+
+As live effects they preserve the layer's logical local bounds and timing. Upscale may use a higher-resolution intermediate texture, but it must not unexpectedly change the layer's composition-space size or transform semantics. Explicit Extract/Bake may create higher-resolution derived media while preserving the corresponding layer's intended visual extent.
 
 The effect definition remains identical between preview and final rendering. Preview quality may differ; effect meaning may not.
 
@@ -401,7 +407,7 @@ Expected behavior:
 
 ## 11. Extract / Bake to Layer
 
-Every supported AI effect may expose an explicit `Extract / Bake to Layer` action when a durable media representation exists.
+Every supported AI effect exposes an explicit `Extract / Bake to Layer` action when a durable media representation exists.
 
 The workflow is transactional:
 
@@ -448,7 +454,7 @@ For interactive preview:
 
 Timeline and effect UI never mutate `ProjectDocument` directly.
 
-New command families should cover at least:
+New command families cover at least:
 
 - Set layer timing
 - Split layer
@@ -522,7 +528,7 @@ Reject unknown/corrupt parameter encodings during validation/migration. Disabled
 
 AI failures expose useful state while preserving source safety.
 
-Interactive preview may show original input with a visible failure indicator. Export and Bake must fail rather than claim success with missing required AI output.
+Interactive preview may show original input with a visible failure indicator. Export and Bake fail rather than claim success with missing required AI output.
 
 Cancellation must be distinguishable from inference/model/file failures.
 
@@ -553,7 +559,7 @@ Cover:
 
 Cover:
 
-- Ordered evaluation
+- Ordered AI evaluation
 - Reorder changes graph order
 - Enable/disable
 - Delete restores pre-effect source semantics
@@ -588,7 +594,7 @@ Verify:
 
 ### 16.5 Render tests
 
-Verify deterministic ordering between effects, masks, transform, matte, and composite.
+Verify deterministic ordering among ordered AI effects, masks, transform, matte, and composite.
 
 Add actual Metal/pixel tests where render behavior cannot be proven by graph shape alone.
 
@@ -681,7 +687,7 @@ Vertex2 9.0 is accepted only when all of the following are true:
 - iPhone opens and edits the same project through a compact adaptation.
 - The Layer Timeline performs real exact-time trim, split, snapping, multi-selection, and the required Phase 9 NLE edit operations through project commands.
 - Existing transform/mask/matte animation is editable from timeline property rows.
-- Depth Map, Cutout, Upscale, and Restore are real ordered layer effects, not detached file-picker-only utilities.
+- Depth Map, Cutout, Upscale, and Restore are real ordered source-processing layer effects, not detached file-picker-only utilities.
 - Depth Map visibly affects the selected layer when enabled and immediately reveals pre-effect content when disabled/deleted.
 - AI cache invalidation and current-frame scheduling react correctly to playhead and parameter changes.
 - Extract/Bake creates a validated derived media asset and a new timeline layer atomically.
