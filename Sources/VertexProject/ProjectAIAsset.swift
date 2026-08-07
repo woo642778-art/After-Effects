@@ -52,6 +52,9 @@ public struct ProjectAIAsset: Codable, Equatable, Sendable, Identifiable {
     public let kind: ProjectAIAssetKind
     public let sourceMediaID: VertexID
     public let outputMediaID: VertexID
+    /// Optional relative path for non-preview data such as float depth chunks.
+    /// Runtime caches are never stored here; this points only to verified project-usable output.
+    public let auxiliaryRelativePath: String?
     public let recipe: ProjectAIRecipeReference
 
     public init(
@@ -59,12 +62,14 @@ public struct ProjectAIAsset: Codable, Equatable, Sendable, Identifiable {
         kind: ProjectAIAssetKind,
         sourceMediaID: VertexID,
         outputMediaID: VertexID,
+        auxiliaryRelativePath: String? = nil,
         recipe: ProjectAIRecipeReference
     ) {
         self.id = id
         self.kind = kind
         self.sourceMediaID = sourceMediaID
         self.outputMediaID = outputMediaID
+        self.auxiliaryRelativePath = auxiliaryRelativePath
         self.recipe = recipe
     }
 
@@ -77,6 +82,12 @@ public struct ProjectAIAsset: Codable, Equatable, Sendable, Identifiable {
         }
         guard document.mediaRegistry.contains(where: { $0.id == outputMediaID }) else {
             throw ProjectError.missingMedia(outputMediaID.rawValue)
+        }
+        if let path = auxiliaryRelativePath {
+            let parts = path.split(separator: "/")
+            guard !path.hasPrefix("/"), !parts.contains(".."), !parts.isEmpty else {
+                throw ProjectError.invalidPackagePath("AI auxiliary asset paths must remain relative.")
+            }
         }
         _ = try recipe.validated()
         return self
