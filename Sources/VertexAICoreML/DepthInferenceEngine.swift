@@ -173,8 +173,37 @@ public final class DepthInferenceEngine: @unchecked Sendable {
         }
     }
 
-    private static func extractDepth(provider: MLFeatureProvider) throws -> (width: Int, height: Int, values: [Float]) {
-        let array = try AIImageTensorAdapter.firstMultiArrayOutput(from: provider)
+    static func extractDepth(provider: MLFeatureProvider) throws -> (width: Int, height: Int, values: [Float]) {
+        if let namedDepth = provider.featureValue(for: "depth"),
+           namedDepth.type == .image,
+           let buffer = namedDepth.imageBufferValue {
+            return try depthValues(from: buffer)
+        }
+
+        for name in provider.featureNames.sorted() {
+            if let value = provider.featureValue(for: name),
+               value.type == .image,
+               let buffer = value.imageBufferValue {
+                return try depthValues(from: buffer)
+            }
+        }
+
+        for name in provider.featureNames.sorted() {
+            if let value = provider.featureValue(for: name),
+               value.type == .multiArray,
+               let array = value.multiArrayValue {
+                return try depthValues(from: array)
+            }
+        }
+
+        let outputs = provider.featureNames.sorted().map { name -> String in
+            guard let value = provider.featureValue(for: name) else { return "\(name):missing" }
+            return "\(name):\(value.type.rawValue)"
+        }.joined(separator: ", ")
+        throw AIError.inferenceFailed("Core ML depth prediction contained no supported image or multi-array output. Features: [\(outputs)]")
+    }
+
+    static func depthValues(from array: MLMultiArray) throws -> (width: Int, height: Int, values: [Float]) {
         let shape = array.shape.map(\.intValue)
         guard shape.count >= 2, let width = shape.last, let height = shape.dropLast().last,
               width > 0, height > 0 else {
@@ -194,6 +223,81 @@ public final class DepthInferenceEngine: @unchecked Sendable {
             throw AIError.inferenceFailed("Depth model returned no finite values.")
         }
         return (width, height, result)
+    }
+
+    static func depthValues(from pixelBuffer: CVPixelBuffer) throws -> (width: Int, height: Int, values: [Float]) {
+        let planeCount = CVPixelBufferGetPlaneCount(pixelBuffer)
+        let width = planeCount > 0 ? CVPixelBufferGetWidthOfPlane(pixelBuffer, 0) : CVPixelBufferGetWidth(pixelBuffer)
+        let height = planeCount > 0 ? CVPixelBufferGetHeightOfPlane(pixelBuffer, 0) : CVPixelBufferGetHeight(pixelBuffer)
+        guard width > 0, height > 0 else {
+            throw AIError.inferenceFailed("Depth image output has invalid dimensions \(width)x\(height).")
+        }
+
+        let status = CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        guard status == kCVReturnSuccess else {
+            throw AIError.inferenceFailed("Could not lock depth image output (\(status)).")
+        }
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        let baseAddress = planeCount > 0
+            ? CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)
+            : CVPixelBufferGetBaseAddress(pixelBuffer)
+        let rowBytes = planeCount > 0
+            ? CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+            : CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard let baseAddress, rowBytes > 0 else {
+            throw AIError.inferenceFailed("Could not access depth image output bytes.")
+        }
+
+        let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        var values = Array(repeating: Float.zero, count: width * height)
+
+        let isFloat32 = pixelFormat == kCVPixelFormatType_OneComponent32Float
+            || pixelFormat == kCVPixelFormatType_DepthFloat32
+            || pixelFormat == kCVPixelFormatType_DisparityFloat32
+        let isFloat16 = pixelFormat == kCVPixelFormatType_OneComponent16Half
+            || pixelFormat == kCVPixelFormatType_DepthFloat16
+            || pixelFormat == kCVPixelFormatType_DisparityFloat16
+
+        if isFloat32 {
+            guard rowBytes >= width * MemoryLayout<Float32>.stride else {
+                throw AIError.inferenceFailed("Depth Float32 row stride is smaller than the image width.")
+            }
+            for y in 0..<height {
+                let row = baseAddress.advanced(by: y * rowBytes).assumingMemoryBound(to: Float32.self)
+                for x in 0..<width {
+                    values[y * width + x] = Float(row[x])
+                }
+            }
+        } else if isFloat16 {
+            guard rowBytes >= width * MemoryLayout<Float16>.stride else {
+                throw AIError.inferenceFailed("Depth Float16 row stride is smaller than the image width.")
+            }
+            for y in 0..<height {
+                let row = baseAddress.advanced(by: y * rowBytes).assumingMemoryBound(to: Float16.self)
+                for x in 0..<width {
+                    values[y * width + x] = Float(row[x])
+                }
+            }
+        } else {
+            let fourCC = String(bytes: [
+                UInt8((pixelFormat >> 24) & 0xff),
+                UInt8((pixelFormat >> 16) & 0xff),
+                UInt8((pixelFormat >> 8) & 0xff),
+                UInt8(pixelFormat & 0xff)
+            ].map { (32...126).contains($0) ? $0 : 46 }, encoding: .ascii) ?? "????"
+            throw AIError.inferenceFailed(
+                "Depth image output pixel format \(pixelFormat) ('\(fourCC)') is not a high-precision Float16/Float32 single-channel format."
+            )
+        }
+
+        guard values.allSatisfy(\.isFinite) else {
+            throw AIError.inferenceFailed("Depth image output contained non-finite values.")
+        }
+        guard let minimum = values.min(), let maximum = values.max(), maximum > minimum else {
+            throw AIError.inferenceFailed("Depth image output is constant.")
+        }
+        return (width, height, values)
     }
 
     private static func align(
