@@ -42,6 +42,20 @@ func completedChunksSurviveResume() throws {
     #expect(resumed.progress == 0.5)
 }
 
+@Test("Corrupt or missing completed chunk is invalidated for deterministic reprocessing")
+func completedChunkCanBeInvalidated() throws {
+    let id = try identity()
+    var value = try job(identity: id)
+    try value.beginChunk(index: 0)
+    try value.completeChunk(index: 0, artifactDigest: String(repeating: "c", count: 64))
+    try value.invalidateChunk(index: 0)
+
+    #expect(value.chunks[0].state == .pending)
+    #expect(value.chunks[0].artifactDigest == nil)
+    #expect(value.nextPendingChunk?.index == 0)
+    #expect(value.terminalState == nil)
+}
+
 @Test("Resume rejects changed model identity")
 func resumeRejectsDifferentIdentity() throws {
     let original = try identity(model: "a")
