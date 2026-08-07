@@ -35,15 +35,15 @@ private func schema2FixtureBytes() throws -> Data {
     return try Schema2ProjectCodec.encode(schema2)
 }
 
-@Test("Schema 2 migrates to schema 3 without inventing AI assets")
-func schema2MigratesToSchema3() throws {
+@Test("Current codec migrates schema 2 through schema 4 without inventing AI or motion state")
+func schema2MigratesThroughCurrentSchema() throws {
     let source = try schema2FixtureBytes()
     let codec = DeterministicProjectCodec()
     let migrated = try codec.decode(source)
 
-    #expect(migrated.schemaVersion == 3)
-    #expect(migrated.minimumReaderVersion == 3)
-    #expect(migrated.metadata.lastSavedByAppVersion == "7.0.0")
+    #expect(migrated.schemaVersion == 4)
+    #expect(migrated.minimumReaderVersion == 4)
+    #expect(migrated.metadata.lastSavedByAppVersion == "8.0.0")
     #expect(migrated.revision == 12)
     #expect(migrated.mediaRegistry.count == 1)
     #expect(migrated.compositionRegistry.count == 1)
@@ -51,7 +51,7 @@ func schema2MigratesToSchema3() throws {
     #expect(migrated.aiAssetRegistry.isEmpty)
 }
 
-@Test("Schema 2 migration is byte deterministic")
+@Test("Schema 2 to 3 intermediate migration remains byte deterministic")
 func schema2MigrationIsDeterministic() throws {
     let source = try schema2FixtureBytes()
     let registry = ProjectMigrationRegistry.current
@@ -61,4 +61,7 @@ func schema2MigrationIsDeterministic() throws {
     #expect(first.data == second.data)
     #expect(first.reports == second.reports)
     #expect(first.reports.map(\.destinationVersion) == [3])
+    let intermediate = try Schema3ProjectCodec.decode(first.data)
+    #expect(intermediate.schemaVersion == 3)
+    #expect(intermediate.metadata.lastSavedByAppVersion == "7.0.0")
 }
