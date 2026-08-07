@@ -39,6 +39,12 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setLayerBlendMode(id: VertexID, mode: LayerBlendMode)
     case setLayerSource(id: VertexID, source: LayerSource)
     case setLayerOperations(id: VertexID, operations: [LayerOperation])
+    case setLayerMotionState(
+        id: VertexID,
+        animationChannels: [ProjectAnimationChannel],
+        masks: [ProjectMask],
+        trackMatte: ProjectTrackMatte?
+    )
 }
 
 public struct ProjectCommandRequest: Equatable, Sendable, Identifiable {
