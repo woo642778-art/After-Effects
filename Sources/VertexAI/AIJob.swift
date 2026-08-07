@@ -138,6 +138,19 @@ public struct AIJob: Codable, Equatable, Sendable, Identifiable {
         chunks[index].errorMessage = message
     }
 
+    public mutating func invalidateChunk(index: Int) throws {
+        guard chunks.indices.contains(index), chunks[index].state == .completed else {
+            throw AIError.invalidJobState("Only a completed chunk can be invalidated.")
+        }
+        chunks[index].state = .pending
+        chunks[index].artifactDigest = nil
+        chunks[index].errorMessage = nil
+        if terminalState == .completed {
+            terminalState = nil
+            terminalMessage = nil
+        }
+    }
+
     public mutating func cancel() {
         guard terminalState == nil else { return }
         for index in chunks.indices where chunks[index].state == .processing {
