@@ -243,6 +243,7 @@ public struct ProjectRenderSettings: Codable, Equatable, Sendable {
     }
 }
 
+@available(*, deprecated, message: "Legacy schema construction compatibility only.")
 public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Identifiable {
     public var id: VertexID
     public var name: String
@@ -254,8 +255,8 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 }
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
-    public static let currentAppVersion = "5.0.0"
+    public static let currentSchemaVersion = 2
+    public static let currentAppVersion = "6.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int
@@ -264,10 +265,31 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var metadata: ProjectMetadata
     public var settings: ProjectSettings
     public var mediaRegistry: [MediaReference]
-    public var compositionRegistry: [ProjectCompositionPlaceholder]
+    public var compositionRegistry: [ProjectComposition]
+    public var layerRegistry: [ProjectLayer]
     public var activeCompositionID: VertexID?
+    public var selectedLayerID: VertexID?
     public var selectedMediaID: VertexID?
-    public var renderSettings: ProjectRenderSettings
+
+    // Phase 5 Render Lab API remains session-local only while the Phase 6 UI is
+    // reconnected. It is deliberately absent from CodingKeys and therefore can
+    // never enter canonical project.json, autosaves, or pending snapshots.
+    private var renderCompatibility: ProjectRenderSettings
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case minimumReaderVersion
+        case projectID
+        case revision
+        case metadata
+        case settings
+        case mediaRegistry
+        case compositionRegistry
+        case layerRegistry
+        case activeCompositionID
+        case selectedLayerID
+        case selectedMediaID
+    }
 
     public init(
         schemaVersion: Int = ProjectDocument.currentSchemaVersion,
@@ -277,10 +299,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         metadata: ProjectMetadata,
         settings: ProjectSettings,
         mediaRegistry: [MediaReference],
-        compositionRegistry: [ProjectCompositionPlaceholder],
+        compositionRegistry: [ProjectComposition],
+        layerRegistry: [ProjectLayer],
         activeCompositionID: VertexID?,
-        selectedMediaID: VertexID?,
-        renderSettings: ProjectRenderSettings
+        selectedLayerID: VertexID?,
+        selectedMediaID: VertexID?
     ) {
         self.schemaVersion = schemaVersion
         self.minimumReaderVersion = minimumReaderVersion
@@ -290,12 +313,20 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.settings = settings
         self.mediaRegistry = mediaRegistry
         self.compositionRegistry = compositionRegistry
+        self.layerRegistry = layerRegistry
         self.activeCompositionID = activeCompositionID
+        self.selectedLayerID = selectedLayerID
         self.selectedMediaID = selectedMediaID
-        self.renderSettings = renderSettings
+        let active = activeCompositionID.flatMap { id in
+            compositionRegistry.first { $0.id == id }
+        }
+        self.renderCompatibility = ProjectRenderSettings(
+            outputWidth: active?.width ?? 1080,
+            outputHeight: active?.height ?? 1080
+        )
     }
 
-    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
+    @available(*, deprecated, message: "Legacy Phase 5 construction compatibility only; values are not serialized as a render-settings field.")
     public init(
         schemaVersion: Int = ProjectDocument.currentSchemaVersion,
         minimumReaderVersion: Int = ProjectDocument.currentSchemaVersion,
@@ -304,12 +335,46 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         metadata: ProjectMetadata,
         settings: ProjectSettings,
         mediaRegistry: [MediaReference],
-        compositionRegistry: [ProjectCompositionPlaceholder],
+        compositionRegistry placeholders: [ProjectCompositionPlaceholder],
         activeCompositionID: VertexID?,
         selectedMediaID: VertexID?,
         renderSettings: ProjectRenderSettings,
-        appliedCommandIDs: [VertexID]
+        appliedCommandIDs: [VertexID] = []
     ) {
+        _ = appliedCommandIDs
+        var compositions = placeholders.map {
+            ProjectComposition(
+                id: $0.id,
+                name: $0.name,
+                width: renderSettings.outputWidth,
+                height: renderSettings.outputHeight,
+                duration: RationalTime(value: 10, timescale: 1),
+                frameRate: settings.frameRate,
+                color: settings.color,
+                backgroundColor: .transparent,
+                layerIDs: []
+            )
+        }
+        if compositions.isEmpty {
+            let fallbackID = (try? DeterministicVertexID.derive(
+                domain: "vertex.project.main-composition",
+                components: [projectID.rawValue]
+            )) ?? projectID
+            compositions = [ProjectComposition(
+                id: fallbackID,
+                name: "Main Composition",
+                width: renderSettings.outputWidth,
+                height: renderSettings.outputHeight,
+                duration: RationalTime(value: 10, timescale: 1),
+                frameRate: settings.frameRate,
+                color: settings.color,
+                backgroundColor: .transparent,
+                layerIDs: []
+            )]
+        }
+        let normalizedActive = activeCompositionID.flatMap { candidate in
+            compositions.contains(where: { $0.id == candidate }) ? candidate : nil
+        } ?? compositions.first?.id
         self.init(
             schemaVersion: schemaVersion,
             minimumReaderVersion: minimumReaderVersion,
@@ -318,11 +383,68 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             metadata: metadata,
             settings: settings,
             mediaRegistry: mediaRegistry,
-            compositionRegistry: compositionRegistry,
-            activeCompositionID: activeCompositionID,
-            selectedMediaID: selectedMediaID,
-            renderSettings: renderSettings
+            compositionRegistry: compositions,
+            layerRegistry: [],
+            activeCompositionID: normalizedActive,
+            selectedLayerID: nil,
+            selectedMediaID: selectedMediaID
         )
+        self.renderCompatibility = renderSettings
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        minimumReaderVersion = try container.decode(Int.self, forKey: .minimumReaderVersion)
+        projectID = try container.decode(VertexID.self, forKey: .projectID)
+        revision = try container.decode(UInt64.self, forKey: .revision)
+        metadata = try container.decode(ProjectMetadata.self, forKey: .metadata)
+        settings = try container.decode(ProjectSettings.self, forKey: .settings)
+        mediaRegistry = try container.decode([MediaReference].self, forKey: .mediaRegistry)
+        compositionRegistry = try container.decode([ProjectComposition].self, forKey: .compositionRegistry)
+        layerRegistry = try container.decodeIfPresent([ProjectLayer].self, forKey: .layerRegistry) ?? []
+        activeCompositionID = try container.decodeIfPresent(VertexID.self, forKey: .activeCompositionID)
+        selectedLayerID = try container.decodeIfPresent(VertexID.self, forKey: .selectedLayerID)
+        selectedMediaID = try container.decodeIfPresent(VertexID.self, forKey: .selectedMediaID)
+        let active = activeCompositionID.flatMap { id in
+            compositionRegistry.first { $0.id == id }
+        }
+        renderCompatibility = ProjectRenderSettings(
+            outputWidth: active?.width ?? compositionRegistry.first?.width ?? 1080,
+            outputHeight: active?.height ?? compositionRegistry.first?.height ?? 1080
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        let canonical = normalized()
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(canonical.schemaVersion, forKey: .schemaVersion)
+        try container.encode(canonical.minimumReaderVersion, forKey: .minimumReaderVersion)
+        try container.encode(canonical.projectID, forKey: .projectID)
+        try container.encode(canonical.revision, forKey: .revision)
+        try container.encode(canonical.metadata, forKey: .metadata)
+        try container.encode(canonical.settings, forKey: .settings)
+        try container.encode(canonical.mediaRegistry, forKey: .mediaRegistry)
+        try container.encode(canonical.compositionRegistry, forKey: .compositionRegistry)
+        try container.encode(canonical.layerRegistry, forKey: .layerRegistry)
+        try container.encodeIfPresent(canonical.activeCompositionID, forKey: .activeCompositionID)
+        try container.encodeIfPresent(canonical.selectedLayerID, forKey: .selectedLayerID)
+        try container.encodeIfPresent(canonical.selectedMediaID, forKey: .selectedMediaID)
+    }
+
+    public static func == (lhs: ProjectDocument, rhs: ProjectDocument) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion
+            && lhs.minimumReaderVersion == rhs.minimumReaderVersion
+            && lhs.projectID == rhs.projectID
+            && lhs.revision == rhs.revision
+            && lhs.metadata == rhs.metadata
+            && lhs.settings == rhs.settings
+            && lhs.mediaRegistry == rhs.mediaRegistry
+            && lhs.compositionRegistry == rhs.compositionRegistry
+            && lhs.layerRegistry == rhs.layerRegistry
+            && lhs.activeCompositionID == rhs.activeCompositionID
+            && lhs.selectedLayerID == rhs.selectedLayerID
+            && lhs.selectedMediaID == rhs.selectedMediaID
     }
 
     @available(*, deprecated, message: "Applied command IDs are active-session state only.")
@@ -331,11 +453,48 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         set { }
     }
 
+    public var renderSettings: ProjectRenderSettings {
+        get {
+            var value = renderCompatibility
+            if let activeCompositionID,
+               let active = composition(id: activeCompositionID) {
+                value.outputWidth = active.width
+                value.outputHeight = active.height
+            }
+            return value
+        }
+        set {
+            renderCompatibility = newValue
+            guard let activeCompositionID,
+                  let index = compositionRegistry.firstIndex(where: { $0.id == activeCompositionID }) else {
+                return
+            }
+            compositionRegistry[index].width = newValue.outputWidth
+            compositionRegistry[index].height = newValue.outputHeight
+        }
+    }
+
     public static func makeNew(
         id: VertexID = VertexID(),
         name: String,
         timestamp: Date = Date()
     ) throws -> ProjectDocument {
+        let compositionID = try DeterministicVertexID.derive(
+            domain: "vertex.project.main-composition",
+            components: [id.rawValue]
+        )
+        let settings = ProjectSettings()
+        let composition = ProjectComposition(
+            id: compositionID,
+            name: "Main Composition",
+            width: 1080,
+            height: 1080,
+            duration: RationalTime(value: 10, timescale: 1),
+            frameRate: settings.frameRate,
+            color: settings.color,
+            backgroundColor: .transparent,
+            layerIDs: []
+        )
         let document = ProjectDocument(
             projectID: id,
             revision: 0,
@@ -346,12 +505,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
                 createdByAppVersion: currentAppVersion,
                 lastSavedByAppVersion: currentAppVersion
             ),
-            settings: ProjectSettings(),
+            settings: settings,
             mediaRegistry: [],
-            compositionRegistry: [],
-            activeCompositionID: nil,
-            selectedMediaID: nil,
-            renderSettings: ProjectRenderSettings()
+            compositionRegistry: [composition],
+            layerRegistry: [],
+            activeCompositionID: composition.id,
+            selectedLayerID: nil,
+            selectedMediaID: nil
         )
         return try document.validated()
     }
@@ -369,11 +529,98 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         return try document.validated()
     }
 
+    public func composition(id: VertexID) -> ProjectComposition? {
+        compositionRegistry.first { $0.id == id }
+    }
+
+    public func layer(id: VertexID) -> ProjectLayer? {
+        layerRegistry.first { $0.id == id }
+    }
+
+    public func layers(in compositionID: VertexID) -> [ProjectLayer] {
+        guard let composition = composition(id: compositionID) else { return [] }
+        let byID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
+        return composition.layerIDs.compactMap { byID[$0] }
+    }
+
     public func normalized() -> ProjectDocument {
         var copy = self
         copy.mediaRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.compositionRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+        copy.layerRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+
+        let canonicalActive: VertexID?
+        if let candidate = copy.activeCompositionID,
+           copy.compositionRegistry.contains(where: { $0.id == candidate }) {
+            canonicalActive = candidate
+        } else {
+            canonicalActive = copy.compositionRegistry.first?.id
+        }
+        copy.activeCompositionID = canonicalActive
+
+        if let selectedMediaID = copy.selectedMediaID,
+           !copy.mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
+            copy.selectedMediaID = nil
+        }
+        if let selectedLayerID = copy.selectedLayerID {
+            guard let selected = copy.layerRegistry.first(where: { $0.id == selectedLayerID }),
+                  selected.compositionID == canonicalActive else {
+                copy.selectedLayerID = nil
+                return copy
+            }
+        }
+        if let canonicalActive,
+           let active = copy.compositionRegistry.first(where: { $0.id == canonicalActive }) {
+            copy.renderCompatibility.outputWidth = active.width
+            copy.renderCompatibility.outputHeight = active.height
+        }
         return copy
+    }
+
+    public func nestedCompositionCycle() -> [VertexID]? {
+        let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
+        var edges: [VertexID: [VertexID]] = [:]
+        for composition in compositionRegistry {
+            edges[composition.id] = composition.layerIDs.compactMap { layerID in
+                guard let layer = layerByID[layerID],
+                      case .composition(let target, _) = layer.source else {
+                    return nil
+                }
+                return target
+            }
+        }
+
+        var visited = Set<VertexID>()
+        var active = Set<VertexID>()
+        var stack: [VertexID] = []
+
+        func visit(_ id: VertexID) -> [VertexID]? {
+            if let index = stack.firstIndex(of: id) {
+                return Array(stack[index...]) + [id]
+            }
+            if visited.contains(id) { return nil }
+            visited.insert(id)
+            active.insert(id)
+            stack.append(id)
+            for target in edges[id] ?? [] {
+                if active.contains(target), let index = stack.firstIndex(of: target) {
+                    return Array(stack[index...]) + [target]
+                }
+                if let cycle = visit(target) {
+                    return cycle
+                }
+            }
+            _ = stack.popLast()
+            active.remove(id)
+            return nil
+        }
+
+        for composition in compositionRegistry {
+            if let cycle = visit(composition.id) {
+                return cycle
+            }
+        }
+        return nil
     }
 
     public func validated() throws -> ProjectDocument {
@@ -386,23 +633,57 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         guard !metadata.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectError.invalidValue("Project name must not be empty.")
         }
-        _ = try renderSettings.validated()
+        guard settings.frameRate > .zero else {
+            throw ProjectError.invalidValue("Project frame rate must be positive.")
+        }
+        _ = try renderCompatibility.validated()
         for reference in mediaRegistry {
             _ = try reference.validated()
         }
         guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else {
             throw ProjectError.duplicateIdentity("media")
         }
+        guard !compositionRegistry.isEmpty else {
+            throw ProjectError.invalidValue("A project must contain at least one composition.")
+        }
         guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else {
             throw ProjectError.duplicateIdentity("composition")
+        }
+        guard Set(layerRegistry.map(\.id)).count == layerRegistry.count else {
+            throw ProjectError.duplicateIdentity("layer")
+        }
+
+        let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
+        for composition in compositionRegistry {
+            _ = try composition.validated(layerByID: layerByID)
+        }
+        let orderedIDs = compositionRegistry.flatMap(\.layerIDs)
+        guard orderedIDs.count == layerRegistry.count,
+              Set(orderedIDs) == Set(layerRegistry.map(\.id)) else {
+            throw ProjectError.invalidValue("Every layer must appear exactly once in its owning composition order.")
+        }
+        for layer in layerRegistry {
+            _ = try layer.validated(in: self)
+        }
+
+        guard let activeCompositionID,
+              compositionRegistry.contains(where: { $0.id == activeCompositionID }) else {
+            throw ProjectError.invalidValue("An active composition must exist in the composition registry.")
         }
         if let selectedMediaID,
            !mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
             throw ProjectError.invalidValue("Selected media must exist in the media registry.")
         }
-        if let activeCompositionID,
-           !compositionRegistry.contains(where: { $0.id == activeCompositionID }) {
-            throw ProjectError.invalidValue("Active composition must exist in the composition registry.")
+        if let selectedLayerID {
+            guard let selected = layer(id: selectedLayerID),
+                  selected.compositionID == activeCompositionID else {
+                throw ProjectError.invalidValue("Selected layer must exist in the active composition.")
+            }
+        }
+        if let cycle = nestedCompositionCycle() {
+            throw ProjectError.invalidValue(
+                "Nested composition cycle: \(cycle.map(\.rawValue).joined(separator: " -> "))."
+            )
         }
         return self
     }
