@@ -201,9 +201,7 @@ func nestedCompositionRendersThroughMetal() async throws {
         layerRegistry: [nestedLayer, mediaLayer],
         activeCompositionID: parentID,
         selectedLayerID: nestedLayerID,
-        selectedMediaID: mediaID,
-        legacyRenderSettings: nil,
-        appliedCommandIDs: []
+        selectedMediaID: mediaID
     ).validated()
 
     let sourceImage = try MetalImageCodec.encodePNG(
