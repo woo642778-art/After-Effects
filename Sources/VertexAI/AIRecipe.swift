@@ -86,18 +86,27 @@ public struct CutoutRecipe: Codable, Equatable, Sendable {
     public var prompts: [CutoutPrompt]
     public var feather: Float
     public var edgeCleanup: Float
+    public var temporalSmoothing: Float
 
-    public init(mode: CutoutMode = .foregroundFast, prompts: [CutoutPrompt] = [], feather: Float = 0, edgeCleanup: Float = 0) {
+    public init(
+        mode: CutoutMode = .foregroundFast,
+        prompts: [CutoutPrompt] = [],
+        feather: Float = 0,
+        edgeCleanup: Float = 0,
+        temporalSmoothing: Float = 0.15
+    ) {
         self.mode = mode
         self.prompts = prompts
         self.feather = feather
         self.edgeCleanup = edgeCleanup
+        self.temporalSmoothing = temporalSmoothing
     }
 
     public func validated() throws -> Self {
-        guard feather.isFinite, edgeCleanup.isFinite,
-              (0...1).contains(feather), (0...1).contains(edgeCleanup) else {
-            throw AIError.invalidRecipe("Cutout feather and edge cleanup must be within 0...1.")
+        guard feather.isFinite, edgeCleanup.isFinite, temporalSmoothing.isFinite,
+              (0...1).contains(feather), (0...1).contains(edgeCleanup),
+              (0...1).contains(temporalSmoothing) else {
+            throw AIError.invalidRecipe("Cutout feather, edge cleanup, and temporal smoothing must be within 0...1.")
         }
         if mode == .promptQuality, prompts.isEmpty {
             throw AIError.invalidRecipe("Prompt Quality cutout requires at least one prompt.")
