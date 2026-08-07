@@ -78,7 +78,7 @@ private struct LegacyImportContext: Sendable {
         return LegacyImportInspection(
             sourceDigest: sourceDigest,
             compositionCount: replay.document.compositionRegistry.count,
-            layerCount: 0,
+            layerCount: replay.document.layerRegistry.count,
             mediaCount: replay.document.mediaRegistry.count,
             embeddedMediaEligibleCount: embeddedSourceURLs.count,
             bookmarkSuccessCount: bookmarkPayloads.values.filter { !$0.isEmpty }.count,
@@ -149,7 +149,7 @@ public struct LegacyProjectImporter: Sendable {
                     packageURL: staging
                 )
             }
-            document = try document.validated()
+            document = try document.normalized().validated()
             _ = try packageStore.save(document, to: staging)
             try VertexProjectPackageLayout(root: staging).validateAllowlist(mode: .steadyState)
 
@@ -269,7 +269,7 @@ public struct LegacyProjectImporter: Sendable {
                 document.mediaRegistry[index].availabilityStatus = .missing
             }
         }
-        return try document.validated()
+        return try document.normalized().validated()
     }
 
     private func readHistoryCounts(at url: URL) -> (undo: Int, redo: Int) {
