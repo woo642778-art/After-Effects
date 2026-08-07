@@ -1,54 +1,154 @@
 name: Phase 9 SDD Apply
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
     branches:
-      - agent/phase-9-ae-workspace-ai-effects
-    paths:
-      - 'Tools/phase9_tasks/**'
-      - '.github/workflows/phase9-sdd-apply.yml'
+      - agent/phase9-sdd-runner
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
-  group: phase9-sdd-apply
-  cancel-in-progress: false
+  group: phase9-sdd-apply-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  apply-and-test:
-    runs-on: macos-latest
-    timeout-minutes: 45
+  portable-tasks-3-to-7:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: agent/phase-9-ae-workspace-ai-effects
-      - name: Apply Phase 9 task scripts
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+      - name: Configure task commits
         run: |
-          set -euo pipefail
-          for script in Tools/phase9_tasks/task*.py; do
-            echo "==> $script"
-            python3 "$script"
-          done
-      - name: Run portable task tests
-        run: |
-          set -euo pipefail
-          swift test --filter ProjectTimelineSchemaTests
-          swift test --filter Schema4To5MigrationTests
-      - name: Verify diff hygiene
-        run: |
-          git diff --check
-          git status --short
-      - name: Commit generated task implementation
-        run: |
-          set -euo pipefail
           git config user.name 'vertex2-phase9-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add App Sources Tests Package.swift Package@swift-6.0.swift project.yml .github/workflows Tools/phase9_tasks 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo 'No generated changes to commit.'
-            exit 0
-          fi
-          git commit -m 'feat(project): add schema 5 timeline primitives'
-          git push origin HEAD:agent/phase-9-ae-workspace-ai-effects
+
+      - name: Task 3 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task03_red.py
+          set +e
+          swift test --filter TimelineSnapEngineTests >/tmp/task3-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/task3-red.log
+          test "$status" -ne 0
+      - name: Task 3 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task03_green.py
+          swift test --filter TimelineSnapEngineTests
+          swift test --filter TimelineSelectionTests
+          git diff --check
+          git add Sources/VertexTimeline Tests/VertexTimelineTests
+          git commit -m 'feat(timeline): add deterministic snapping and selection'
+
+      - name: Task 4 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task04_red.py
+          set +e
+          swift test --filter ProjectTimelineCommandTests >/tmp/task4-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/task4-red.log
+          test "$status" -ne 0
+      - name: Task 4 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task04_green.py
+          swift test --filter ProjectTimelineCommandTests
+          swift test --filter VertexTimelineTests
+          git diff --check
+          git add Sources/VertexProject Sources/VertexTimeline App/ProjectWorkspaceViewModel.swift project.yml Tests/VertexProjectTests/ProjectTimelineCommandTests.swift
+          git commit -m 'feat(project): make timeline edits transactional'
+
+      - name: Task 5 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task05_red.py
+          python3 Tools/phase9_tasks/task05_testfix.py
+          set +e
+          swift test --filter ProjectEffectTests >/tmp/task5-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/task5-red.log
+          test "$status" -ne 0
+      - name: Task 5 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task05_green.py
+          swift test --filter ProjectEffectTests
+          swift test --filter ProjectEffectCommandTests
+          swift test --filter ProjectTimelineCommandTests
+          git diff --check
+          git add Sources/VertexProject Tests/VertexProjectTests/ProjectEffectTests.swift Tests/VertexProjectTests/ProjectEffectCommandTests.swift
+          git commit -m 'feat(effects): add typed ordered layer effect stack'
+
+      - name: Task 6 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task06_red.py
+          python3 Tools/phase9_tasks/task06_testfix.py
+          set +e
+          swift test --filter EffectGraphCompilerTests >/tmp/task6-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/task6-red.log
+          test "$status" -ne 0
+      - name: Task 6 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task06_green.py
+          python3 Tools/phase9_tasks/task06_green_fix.py
+          swift test --filter EffectGraphCompilerTests
+          swift test --filter Phase8CompositionGraphTests
+          git diff --check
+          git add Sources/VertexComposition Tests/VertexCompositionTests/EffectGraphCompilerTests.swift
+          git commit -m 'feat(composition): evaluate layer effects before masks'
+
+      - name: Task 7 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task07_red.py
+          set +e
+          swift test --filter AIFrameEffectKeyTests >/tmp/task7-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/task7-red.log
+          test "$status" -ne 0
+      - name: Task 7 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task07_green.py
+          swift test --filter AIFrameEffectKeyTests
+          swift test --filter VertexAITests
+          git diff --check
+          git add Sources/VertexAI Tests/VertexAITests/AIFrameEffectKeyTests.swift
+          git commit -m 'feat(ai): add deterministic frame effect cache keys'
+
+      - name: Portable regression gate
+        run: |
+          set -euo pipefail
+          swift test --filter VertexTimelineTests
+          swift test --filter ProjectTimelineSchemaTests
+          swift test --filter ProjectTimelineCommandTests
+          swift test --filter ProjectEffectTests
+          swift test --filter ProjectEffectCommandTests
+          swift test --filter EffectGraphCompilerTests
+          swift test --filter AIFrameEffectKeyTests
+          git diff --check
+          test -z "$(git status --porcelain)"
+      - name: Push task commit stack
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: git push origin HEAD:"$HEAD_BRANCH"
