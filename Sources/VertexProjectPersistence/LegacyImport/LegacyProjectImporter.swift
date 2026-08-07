@@ -273,14 +273,13 @@ public struct LegacyProjectImporter: Sendable {
     }
 
     private func readHistoryCounts(at url: URL) -> (undo: Int, redo: Int) {
-        guard let data = try? Data(contentsOf: url) else { return (0, 0) }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom(ProjectDateCodec.decode)
-        decoder.nonConformingFloatDecodingStrategy = .throw
-        guard let history = try? decoder.decode(ProjectHistorySnapshot.self, from: data) else {
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return (0, 0)
         }
-        return (history.undo.count, history.redo.count)
+        let undo = (object["undo"] as? [Any])?.count ?? 0
+        let redo = (object["redo"] as? [Any])?.count ?? 0
+        return (undo, redo)
     }
 
     private func countFiles(in directory: URL) -> Int {
