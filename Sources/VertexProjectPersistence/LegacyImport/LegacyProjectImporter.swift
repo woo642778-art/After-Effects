@@ -63,7 +63,7 @@ public struct LegacyImportResult: Sendable {
 
 private struct LegacyImportContext: Sendable {
     let sourceURL: URL
-    let sourceLayout: ProjectPackageLayout
+    let sourceLayout: LegacyProjectPackageLayout
     let sourceDigest: String
     let dto: LegacyProjectDTO
     let manifest: LegacyManifestDTO
@@ -192,7 +192,7 @@ public struct LegacyProjectImporter: Sendable {
                 found: source.pathExtension.lowercased()
             )
         }
-        let layout = try ProjectPackageLayout(root: source)
+        let layout = try LegacyProjectPackageLayout(root: source)
         let digest = try LegacySourceTreeDigest().digest(of: source)
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: layout.projectURL.path),
