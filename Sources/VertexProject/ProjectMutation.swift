@@ -34,6 +34,15 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
     case setLayerBlendMode(layerID: VertexID, before: LayerBlendMode, after: LayerBlendMode)
     case setLayerSource(layerID: VertexID, before: LayerSource, after: LayerSource)
     case setLayerOperations(layerID: VertexID, before: [LayerOperation], after: [LayerOperation])
+    case setLayerMotionState(
+        layerID: VertexID,
+        beforeAnimationChannels: [ProjectAnimationChannel],
+        afterAnimationChannels: [ProjectAnimationChannel],
+        beforeMasks: [ProjectMask],
+        afterMasks: [ProjectMask],
+        beforeTrackMatte: ProjectTrackMatte?,
+        afterTrackMatte: ProjectTrackMatte?
+    )
 
     public var inverse: ProjectMutation {
         switch self {
@@ -68,6 +77,24 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
         case .setLayerBlendMode(let id, let before, let after): .setLayerBlendMode(layerID: id, before: after, after: before)
         case .setLayerSource(let id, let before, let after): .setLayerSource(layerID: id, before: after, after: before)
         case .setLayerOperations(let id, let before, let after): .setLayerOperations(layerID: id, before: after, after: before)
+        case .setLayerMotionState(
+            let id,
+            let beforeChannels,
+            let afterChannels,
+            let beforeMasks,
+            let afterMasks,
+            let beforeMatte,
+            let afterMatte
+        ):
+            .setLayerMotionState(
+                layerID: id,
+                beforeAnimationChannels: afterChannels,
+                afterAnimationChannels: beforeChannels,
+                beforeMasks: afterMasks,
+                afterMasks: beforeMasks,
+                beforeTrackMatte: afterMatte,
+                afterTrackMatte: beforeMatte
+            )
         }
     }
 }
