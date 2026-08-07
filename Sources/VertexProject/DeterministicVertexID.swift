@@ -26,13 +26,16 @@ public enum DeterministicVertexID {
         bytes[8] = (bytes[8] & 0x3f) | 0x80
 
         let hex = bytes.map { String(format: "%02x", $0) }.joined()
-        let raw = [
-            String(hex.prefix(8)),
-            String(hex.dropFirst(8).prefix(4)),
-            String(hex.dropFirst(12).prefix(4)),
-            String(hex.dropFirst(16).prefix(4)),
-            String(hex.dropFirst(20).prefix(12))
-        ].joined(separator: "-")
+        let firstEnd = hex.index(hex.startIndex, offsetBy: 8)
+        let secondEnd = hex.index(firstEnd, offsetBy: 4)
+        let thirdEnd = hex.index(secondEnd, offsetBy: 4)
+        let fourthEnd = hex.index(thirdEnd, offsetBy: 4)
+        let group1 = String(hex[hex.startIndex..<firstEnd])
+        let group2 = String(hex[firstEnd..<secondEnd])
+        let group3 = String(hex[secondEnd..<thirdEnd])
+        let group4 = String(hex[thirdEnd..<fourthEnd])
+        let group5 = String(hex[fourthEnd..<hex.endIndex])
+        let raw = group1 + "-" + group2 + "-" + group3 + "-" + group4 + "-" + group5
         do {
             return try VertexID(parsing: raw)
         } catch {
