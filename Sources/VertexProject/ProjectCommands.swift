@@ -262,6 +262,61 @@ public struct ProjectCommandEngine: Sendable {
             for operation in operations { _ = try operation.validated() }
             forward = .setLayerOperations(layerID: id, before: layer.operations, after: operations)
 
+
+        case .setLayerEffects(let id, let effects):
+            let layer = try editableLayer(id, in: document)
+            guard effects != layer.effects else { throw ProjectError.invalidOperation("Layer effect stack is unchanged.") }
+            var candidate = layer
+            candidate.effects = effects
+            _ = try candidate.validated(in: document)
+            forward = .setLayerEffects(layerID: id, before: layer.effects, after: effects)
+
+        case .insertLayerEffect(let id, let effect, let index):
+            let layer = try editableLayer(id, in: document)
+            guard !layer.effects.contains(where: { $0.id == effect.id }),
+                  layer.effects.indices.contains(index) || index == layer.effects.endIndex else {
+                throw ProjectError.invalidOperation("Effect insertion index or identity is invalid.")
+            }
+            _ = try effect.validated()
+            var next = layer.effects
+            next.insert(effect, at: index)
+            var candidate = layer; candidate.effects = next
+            _ = try candidate.validated(in: document)
+            forward = .setLayerEffects(layerID: id, before: layer.effects, after: next)
+
+        case .removeLayerEffect(let id, let effectID):
+            let layer = try editableLayer(id, in: document)
+            guard let index = layer.effects.firstIndex(where: { $0.id == effectID }) else {
+                throw ProjectError.invalidOperation("Effect is missing.")
+            }
+            guard !layer.animationChannels.contains(where: {
+                if case .effect(let referenced, _, _) = $0.property { return referenced == effectID }
+                return false
+            }) else {
+                throw ProjectError.invalidOperation("Remove effect animation channels before deleting the effect.")
+            }
+            var next = layer.effects; next.remove(at: index)
+            forward = .setLayerEffects(layerID: id, before: layer.effects, after: next)
+
+        case .moveLayerEffect(let id, let effectID, let toIndex):
+            let layer = try editableLayer(id, in: document)
+            guard let from = layer.effects.firstIndex(where: { $0.id == effectID }),
+                  layer.effects.indices.contains(toIndex), from != toIndex else {
+                throw ProjectError.invalidOperation("Effect reorder is invalid or unchanged.")
+            }
+            var next = layer.effects
+            let effect = next.remove(at: from)
+            next.insert(effect, at: toIndex)
+            forward = .setLayerEffects(layerID: id, before: layer.effects, after: next)
+
+        case .setLayerEffectEnabled(let id, let effectID, let value):
+            let layer = try editableLayer(id, in: document)
+            guard let index = layer.effects.firstIndex(where: { $0.id == effectID }), layer.effects[index].enabled != value else {
+                throw ProjectError.invalidOperation("Effect enabled state is unchanged or effect is missing.")
+            }
+            var next = layer.effects; next[index].enabled = value
+            forward = .setLayerEffects(layerID: id, before: layer.effects, after: next)
+
         case .setLayerMotionState(let id, let animationChannels, let masks, let trackMatte):
             let layer = try editableLayer(id, in: document)
             guard layer.animationChannels != animationChannels || layer.masks != masks || layer.trackMatte != trackMatte else {
@@ -418,6 +473,7 @@ public struct ProjectCommandEngine: Sendable {
         case .setLayerMarkers(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].markers == before else { throw ProjectError.invalidOperation("Layer-marker precondition did not match.") }; document.layerRegistry[index].markers = after
         case .setLayerParent(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].parentLayerID == before else { throw ProjectError.invalidOperation("Layer-parent precondition did not match.") }; document.layerRegistry[index].parentLayerID = after
         case .setLayerOperations(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].operations == before else { throw ProjectError.invalidOperation("Layer operations precondition did not match.") }; document.layerRegistry[index].operations = after
+        case .setLayerEffects(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].effects == before else { throw ProjectError.invalidOperation("Layer effects precondition did not match.") }; document.layerRegistry[index].effects = after
         case .setLayerMotionState(
             let id,
             let beforeChannels,

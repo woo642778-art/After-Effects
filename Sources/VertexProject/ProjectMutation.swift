@@ -39,6 +39,7 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
     case setLayerMarkers(layerID: VertexID, before: [ProjectMarker], after: [ProjectMarker])
     case setLayerParent(layerID: VertexID, before: VertexID?, after: VertexID?)
     case setLayerOperations(layerID: VertexID, before: [LayerOperation], after: [LayerOperation])
+    case setLayerEffects(layerID: VertexID, before: [ProjectEffect], after: [ProjectEffect])
     case setLayerMotionState(
         layerID: VertexID,
         beforeAnimationChannels: [ProjectAnimationChannel],
@@ -87,6 +88,7 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
         case .setLayerMarkers(let id, let before, let after): .setLayerMarkers(layerID: id, before: after, after: before)
         case .setLayerParent(let id, let before, let after): .setLayerParent(layerID: id, before: after, after: before)
         case .setLayerOperations(let id, let before, let after): .setLayerOperations(layerID: id, before: after, after: before)
+        case .setLayerEffects(let id, let before, let after): .setLayerEffects(layerID: id, before: after, after: before)
         case .setLayerMotionState(
             let id,
             let beforeChannels,

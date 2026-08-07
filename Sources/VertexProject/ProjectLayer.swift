@@ -283,6 +283,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
     public var transform: LayerTransform
     public var blendMode: LayerBlendMode
     public var operations: [LayerOperation]
+    public var effects: [ProjectEffect]
     public var animationChannels: [ProjectAnimationChannel]
     public var masks: [ProjectMask]
     public var trackMatte: ProjectTrackMatte?
@@ -301,6 +302,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         case transform
         case blendMode
         case operations
+        case effects
         case animationChannels
         case masks
         case trackMatte
@@ -320,6 +322,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         transform: LayerTransform = .identity,
         blendMode: LayerBlendMode = .normal,
         operations: [LayerOperation] = [],
+        effects: [ProjectEffect] = [],
         animationChannels: [ProjectAnimationChannel] = [],
         masks: [ProjectMask] = [],
         trackMatte: ProjectTrackMatte? = nil,
@@ -337,6 +340,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         self.transform = transform
         self.blendMode = blendMode
         self.operations = operations
+        self.effects = effects
         self.animationChannels = animationChannels
         self.masks = masks
         self.trackMatte = trackMatte
@@ -357,6 +361,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         transform = try container.decode(LayerTransform.self, forKey: .transform)
         blendMode = try container.decode(LayerBlendMode.self, forKey: .blendMode)
         operations = try container.decode([LayerOperation].self, forKey: .operations)
+        effects = try container.decodeIfPresent([ProjectEffect].self, forKey: .effects) ?? []
         animationChannels = try container.decodeIfPresent([ProjectAnimationChannel].self, forKey: .animationChannels) ?? []
         masks = try container.decodeIfPresent([ProjectMask].self, forKey: .masks) ?? []
         trackMatte = try container.decodeIfPresent(ProjectTrackMatte.self, forKey: .trackMatte)
@@ -377,6 +382,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         try container.encode(transform, forKey: .transform)
         try container.encode(blendMode, forKey: .blendMode)
         try container.encode(operations, forKey: .operations)
+        try container.encode(effects, forKey: .effects)
         try container.encode(animationChannels, forKey: .animationChannels)
         try container.encode(masks, forKey: .masks)
         try container.encodeIfPresent(trackMatte, forKey: .trackMatte)
@@ -394,13 +400,20 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         _ = try timing.validated(for: composition)
         _ = try transform.validated()
         for operation in operations { _ = try operation.validated() }
+        _ = try effects.validatedEffects()
         _ = try masks.validatedMasks()
-        _ = try animationChannels.validatedAnimationChannels(for: masks)
+        _ = try animationChannels.validatedAnimationChannels(for: masks, effects: effects)
         guard Set(markers.map(\.id)).count == markers.count else {
             throw ProjectError.duplicateIdentity("layer marker")
         }
         for marker in markers { _ = try marker.validated(compositionDuration: composition.duration) }
         try validateAnimationRanges()
+
+        if !effects.isEmpty {
+            guard case .media = source else {
+                throw ProjectError.invalidValue("Phase 9 AI effects currently require a media layer.")
+            }
+        }
 
         switch source {
         case .media(let mediaID, let sourceStartTime):
@@ -416,17 +429,17 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         case .adjustment:
             guard blendMode == .normal else { throw ProjectError.invalidValue("Adjustment layers use Normal blend mode in schema 4.") }
         case .null, .guide:
-            guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
+            guard blendMode == .normal, operations.isEmpty, effects.isEmpty, masks.isEmpty, trackMatte == nil else {
                 throw ProjectError.invalidValue("Model-only layers use Normal blend mode and cannot own pixel operations, masks, or mattes.")
             }
         case .camera(let settings):
             _ = try settings.validated()
-            guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
+            guard blendMode == .normal, operations.isEmpty, effects.isEmpty, masks.isEmpty, trackMatte == nil else {
                 throw ProjectError.invalidValue("Camera layers use Normal blend mode and no pixel operations, masks, or mattes.")
             }
         case .light(let settings):
             _ = try settings.validated()
-            guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
+            guard blendMode == .normal, operations.isEmpty, effects.isEmpty, masks.isEmpty, trackMatte == nil else {
                 throw ProjectError.invalidValue("Light layers use Normal blend mode and no pixel operations, masks, or mattes.")
             }
         }

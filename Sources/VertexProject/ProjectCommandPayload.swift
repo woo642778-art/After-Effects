@@ -44,6 +44,11 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setLayerMarkers(id: VertexID, markers: [ProjectMarker])
     case setLayerParent(id: VertexID, parentLayerID: VertexID?)
     case setLayerOperations(id: VertexID, operations: [LayerOperation])
+    case setLayerEffects(id: VertexID, effects: [ProjectEffect])
+    case insertLayerEffect(id: VertexID, effect: ProjectEffect, index: Int)
+    case removeLayerEffect(id: VertexID, effectID: VertexID)
+    case moveLayerEffect(id: VertexID, effectID: VertexID, toIndex: Int)
+    case setLayerEffectEnabled(id: VertexID, effectID: VertexID, value: Bool)
     case setLayerMotionState(
         id: VertexID,
         animationChannels: [ProjectAnimationChannel],
