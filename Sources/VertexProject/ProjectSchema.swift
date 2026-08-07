@@ -344,17 +344,21 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     @available(*, deprecated, message: "Use composition and layer properties directly")
     public var renderSettings: ProjectRenderSettings {
         get {
-            let composition = activeCompositionID.flatMap { composition(id: $0) }
-            let layer = selectedLayerID.flatMap { layer(id: $0) }
-                ?? composition?.layerIDs.compactMap { self.layer(id: $0) }.first(where: {
-                    if case .media = $0.source { return true }
+            let activeComposition: ProjectComposition? = activeCompositionID.flatMap { self.composition(id: $0) }
+            let selectedEditLayer: ProjectLayer? = selectedLayerID.flatMap { self.layer(id: $0) }
+            let fallbackMediaLayer: ProjectLayer? = activeComposition?.layerIDs
+                .compactMap { self.layer(id: $0) }
+                .first { candidate in
+                    if case .media = candidate.source { return true }
                     return false
-                })
+                }
+            let editLayer = selectedEditLayer ?? fallbackMediaLayer
+
             var exposure = 0.0
             var saturation = 1.0
             var inverted = false
-            if let layer {
-                for operation in layer.operations {
+            if let editLayer {
+                for operation in editLayer.operations {
                     switch operation {
                     case .exposure(let value): exposure = value
                     case .saturation(let value): saturation = value
@@ -365,13 +369,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             return ProjectRenderSettings(
                 exposure: exposure,
                 saturation: saturation,
-                opacity: layer?.transform.opacity ?? 1,
+                opacity: editLayer?.transform.opacity ?? 1,
                 inverted: inverted,
-                scale: layer?.transform.scaleX ?? 1,
-                translationX: (layer?.transform.positionX ?? 0.5) - 0.5,
-                translationY: (layer?.transform.positionY ?? 0.5) - 0.5,
-                outputWidth: composition?.width ?? 1080,
-                outputHeight: composition?.height ?? 1080
+                scale: editLayer?.transform.scaleX ?? 1,
+                translationX: (editLayer?.transform.positionX ?? 0.5) - 0.5,
+                translationY: (editLayer?.transform.positionY ?? 0.5) - 0.5,
+                outputWidth: activeComposition?.width ?? 1080,
+                outputHeight: activeComposition?.height ?? 1080
             )
         }
         set {
@@ -382,8 +386,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             }
             guard let layerID = selectedLayerID
                     ?? activeCompositionID.flatMap({ id in
-                        composition(id: id)?.layerIDs.first(where: { candidate in
-                            guard let candidateLayer = layer(id: candidate) else { return false }
+                        self.composition(id: id)?.layerIDs.first(where: { candidate in
+                            guard let candidateLayer = self.layer(id: candidate) else { return false }
                             if case .media = candidateLayer.source { return true }
                             return false
                         })
