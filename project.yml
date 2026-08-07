@@ -53,14 +53,14 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
-        PRODUCT_NAME: AfterEffects
+        PRODUCT_NAME: Vertex2
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 7.0.0
-        CURRENT_PROJECT_VERSION: 7
+        MARKETING_VERSION: 8.0.0
+        CURRENT_PROJECT_VERSION: 8
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: After Effects
-        INFOPLIST_KEY_CFBundleName: AfterEffects
+        INFOPLIST_KEY_CFBundleDisplayName: Vertex2
+        INFOPLIST_KEY_CFBundleName: Vertex2
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photo-video
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -108,5 +108,5 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AfterEffects.app/AfterEffects
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Vertex2.app/Vertex2
         BUNDLE_LOADER: $(TEST_HOST)
