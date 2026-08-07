@@ -5,7 +5,7 @@ import VertexProject
 import VertexRender
 
 public struct CompositionGraphCompiler: Sendable {
-    public static let compilerVersion = 1
+    public static let compilerVersion = 2
 
     public init() {}
 
@@ -123,36 +123,48 @@ private final class CompilerState: @unchecked Sendable {
             project: project,
             time: time
         )
+        let visibleByID = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+        let consumedMatteIDs = Set(visible.compactMap { $0.trackMatte?.sourceLayerID })
 
         for layer in visible.reversed() {
             try await cancellationToken.throwIfCancelled()
+            if consumedMatteIDs.contains(layer.id) {
+                continue
+            }
             let layerPath = path + [layer.id.rawValue]
-            switch layer.source {
-            case .media(let mediaID, let sourceStartTime):
-                let sourceTime = try time.subtracting(layer.timing.startTime).adding(sourceStartTime)
-                guard sourceTime >= .zero else { continue }
-                let resolution = try await resolveFrame(mediaID: mediaID, time: sourceTime)
-                guard case .frame(let image) = resolution else { continue }
-                let sourceID = try nodeID(path: layerPath, role: "source")
-                try append(RenderNode(id: sourceID, dependencies: [], kind: .source(image)))
-                let prepared = try appendLayerOperations(layer, input: sourceID, path: layerPath)
-                accumulator = try appendComposite(layer, backdrop: accumulator, source: prepared, path: layerPath)
+            let evaluated = try LayerAnimationEvaluator.evaluate(layer: layer, at: time)
 
-            case .composition(let childID, let sourceStartTime):
-                let childTime = try time.subtracting(layer.timing.startTime).adding(sourceStartTime)
-                guard childTime >= .zero else { continue }
-                guard let child = project.composition(id: childID) else {
-                    throw CompositionError.missingComposition(childID.rawValue)
-                }
-                guard childTime < child.duration else { continue }
-                let childRoot = try await compileComposition(
-                    id: childID,
-                    time: childTime,
-                    path: layerPath + [childID.rawValue],
+            switch layer.source {
+            case .media, .composition:
+                guard var prepared = try await compileRenderableLayer(
+                    layer: layer,
+                    evaluated: evaluated,
+                    compositionTime: time,
+                    path: layerPath,
                     stack: stack + [id],
-                    depth: depth + 1
-                )
-                let prepared = try appendLayerOperations(layer, input: childRoot, path: layerPath)
+                    depth: depth,
+                    visibleByID: visibleByID,
+                    matteStack: []
+                ) else { continue }
+                if let matte = layer.trackMatte {
+                    let matteID = try await compileTrackMatteSource(
+                        targetLayer: layer,
+                        trackMatte: matte,
+                        compositionTime: time,
+                        path: layerPath,
+                        stack: stack + [id],
+                        depth: depth,
+                        visibleByID: visibleByID,
+                        matteStack: [layer.id]
+                    )
+                    let matteNodeID = try nodeID(path: layerPath, role: "matte")
+                    try append(RenderNode(
+                        id: matteNodeID,
+                        dependencies: [prepared, matteID],
+                        kind: .matte(renderTrackMatteMode(matte.mode))
+                    ))
+                    prepared = matteNodeID
+                }
                 accumulator = try appendComposite(layer, backdrop: accumulator, source: prepared, path: layerPath)
 
             case .adjustment:
@@ -160,15 +172,166 @@ private final class CompilerState: @unchecked Sendable {
                 try append(RenderNode(
                     id: adjustmentID,
                     dependencies: [accumulator],
-                    kind: .adjustment(renderOperations(layer.operations), mix: layer.transform.opacity)
+                    kind: .adjustment(renderOperations(layer.operations), mix: evaluated.transform.opacity)
                 ))
-                accumulator = adjustmentID
+                var prepared = adjustmentID
+                let hasMasking = !evaluated.masks.isEmpty
+                if hasMasking {
+                    prepared = try appendMasks(evaluated.masks, input: prepared, path: layerPath)
+                }
+                if let matte = layer.trackMatte {
+                    let matteID = try await compileTrackMatteSource(
+                        targetLayer: layer,
+                        trackMatte: matte,
+                        compositionTime: time,
+                        path: layerPath,
+                        stack: stack + [id],
+                        depth: depth,
+                        visibleByID: visibleByID,
+                        matteStack: [layer.id]
+                    )
+                    let matteNodeID = try nodeID(path: layerPath, role: "matte")
+                    try append(RenderNode(
+                        id: matteNodeID,
+                        dependencies: [prepared, matteID],
+                        kind: .matte(renderTrackMatteMode(matte.mode))
+                    ))
+                    prepared = matteNodeID
+                }
+                if hasMasking || layer.trackMatte != nil {
+                    accumulator = try appendComposite(layer, backdrop: accumulator, source: prepared, path: layerPath)
+                } else {
+                    accumulator = adjustmentID
+                }
 
             case .null, .guide, .camera, .light:
                 continue
             }
         }
         return accumulator
+    }
+
+    func compileRenderableLayer(
+        layer: ProjectLayer,
+        evaluated: EvaluatedLayerState,
+        compositionTime: RationalTime,
+        path: [String],
+        stack: [VertexID],
+        depth: Int,
+        visibleByID: [VertexID: ProjectLayer],
+        matteStack: [VertexID]
+    ) async throws -> VertexID? {
+        let sourceID: VertexID
+        switch layer.source {
+        case .media(let mediaID, let sourceStartTime):
+            let sourceTime = try compositionTime.subtracting(layer.timing.startTime).adding(sourceStartTime)
+            guard sourceTime >= .zero else { return nil }
+            let resolution = try await resolveFrame(mediaID: mediaID, time: sourceTime)
+            guard case .frame(let image) = resolution else { return nil }
+            sourceID = try nodeID(path: path, role: "source")
+            try append(RenderNode(id: sourceID, dependencies: [], kind: .source(image)))
+
+        case .composition(let childID, let sourceStartTime):
+            let childTime = try compositionTime.subtracting(layer.timing.startTime).adding(sourceStartTime)
+            guard childTime >= .zero else { return nil }
+            guard let child = project.composition(id: childID) else {
+                throw CompositionError.missingComposition(childID.rawValue)
+            }
+            guard childTime < child.duration else { return nil }
+            sourceID = try await compileComposition(
+                id: childID,
+                time: childTime,
+                path: path + [childID.rawValue],
+                stack: stack,
+                depth: depth + 1
+            )
+
+        case .adjustment, .null, .guide, .camera, .light:
+            throw CompositionError.graphCompilationFailed("Only media and nested-composition layers can be prepared as standalone pixels.")
+        }
+
+        var prepared = sourceID
+        if !evaluated.masks.isEmpty {
+            prepared = try appendMasks(evaluated.masks, input: prepared, path: path)
+        }
+        prepared = try appendLayerOperations(layer, transform: evaluated.transform, input: prepared, path: path)
+
+        if let matte = layer.trackMatte {
+            let nextStack = matteStack + [layer.id]
+            guard !nextStack.contains(matte.sourceLayerID) else {
+                throw CompositionError.graphCompilationFailed("Track matte cycle reached the graph compiler.")
+            }
+            let matteSourceID = try await compileTrackMatteSource(
+                targetLayer: layer,
+                trackMatte: matte,
+                compositionTime: compositionTime,
+                path: path,
+                stack: stack,
+                depth: depth,
+                visibleByID: visibleByID,
+                matteStack: nextStack
+            )
+            let matteNodeID = try nodeID(path: path, role: "nested-matte-\(nextStack.count)")
+            try append(RenderNode(
+                id: matteNodeID,
+                dependencies: [prepared, matteSourceID],
+                kind: .matte(renderTrackMatteMode(matte.mode))
+            ))
+            prepared = matteNodeID
+        }
+        return prepared
+    }
+
+    func compileTrackMatteSource(
+        targetLayer: ProjectLayer,
+        trackMatte: ProjectTrackMatte,
+        compositionTime: RationalTime,
+        path: [String],
+        stack: [VertexID],
+        depth: Int,
+        visibleByID: [VertexID: ProjectLayer],
+        matteStack: [VertexID]
+    ) async throws -> VertexID {
+        guard let matteLayer = project.layer(id: trackMatte.sourceLayerID),
+              matteLayer.compositionID == targetLayer.compositionID else {
+            throw CompositionError.graphCompilationFailed("Track matte source is missing or belongs to another composition.")
+        }
+        guard case .media = matteLayer.source || isCompositionSource(matteLayer.source) else {
+            throw CompositionError.graphCompilationFailed("Track matte sources must be media or nested-composition layers.")
+        }
+        guard visibleByID[matteLayer.id] != nil else {
+            let transparentID = try nodeID(path: path + ["matte", matteLayer.id.rawValue], role: "inactive")
+            try append(RenderNode(
+                id: transparentID,
+                dependencies: [],
+                kind: .solidColor(RenderRGBAColor(red: 0, green: 0, blue: 0, alpha: 0))
+            ))
+            return transparentID
+        }
+        guard !matteStack.contains(matteLayer.id) else {
+            throw CompositionError.graphCompilationFailed("Track matte relationships contain a cycle.")
+        }
+        let mattePath = path + ["matte", matteLayer.id.rawValue, String(matteStack.count)]
+        let evaluated = try LayerAnimationEvaluator.evaluate(layer: matteLayer, at: compositionTime)
+        guard let prepared = try await compileRenderableLayer(
+            layer: matteLayer,
+            evaluated: evaluated,
+            compositionTime: compositionTime,
+            path: mattePath,
+            stack: stack,
+            depth: depth,
+            visibleByID: visibleByID,
+            matteStack: matteStack
+        ) else {
+            let transparentID = try nodeID(path: mattePath, role: "empty")
+            try append(RenderNode(
+                id: transparentID,
+                dependencies: [],
+                kind: .solidColor(RenderRGBAColor(red: 0, green: 0, blue: 0, alpha: 0))
+            ))
+            return transparentID
+        }
+        return prepared
     }
 
     func resolveFrame(mediaID: VertexID, time: RationalTime) async throws -> CompositionFrameResolution {
@@ -199,20 +362,49 @@ private final class CompilerState: @unchecked Sendable {
         }
     }
 
-    func appendLayerOperations(_ layer: ProjectLayer, input: VertexID, path: [String]) throws -> VertexID {
+    func appendMasks(_ masks: [ProjectMask], input: VertexID, path: [String]) throws -> VertexID {
+        let definitions = try masks.map { mask -> RenderMaskDefinition in
+            let segments = try mask.flattenedSegments().map { segment in
+                RenderMaskSegment(
+                    start: RenderMaskPoint(x: segment.start.x, y: segment.start.y),
+                    end: RenderMaskPoint(x: segment.end.x, y: segment.end.y)
+                )
+            }
+            return RenderMaskDefinition(
+                segments: segments,
+                mode: renderMaskMode(mask.mode),
+                opacity: mask.opacity,
+                featherPixels: mask.featherPixels,
+                expansionPixels: mask.expansionPixels,
+                inverted: mask.inverted,
+                enabled: mask.enabled
+            )
+        }
+        let stack = try RenderMaskStack(masks: definitions).validated()
+        let maskID = try nodeID(path: path, role: "mask")
+        try append(RenderNode(id: maskID, dependencies: [input], kind: .mask(stack)))
+        return maskID
+    }
+
+    func appendLayerOperations(
+        _ layer: ProjectLayer,
+        transform: LayerTransform,
+        input: VertexID,
+        path: [String]
+    ) throws -> VertexID {
         let operationID = try nodeID(path: path, role: "operations")
-        let transform = RenderTransform2D(
-            positionX: layer.transform.positionX,
-            positionY: layer.transform.positionY,
-            anchorX: layer.transform.anchorX,
-            anchorY: layer.transform.anchorY,
-            scaleX: layer.transform.scaleX,
-            scaleY: layer.transform.scaleY,
-            rotationDegrees: layer.transform.rotationDegrees
+        let renderTransform = RenderTransform2D(
+            positionX: transform.positionX,
+            positionY: transform.positionY,
+            anchorX: transform.anchorX,
+            anchorY: transform.anchorY,
+            scaleX: transform.scaleX,
+            scaleY: transform.scaleY,
+            rotationDegrees: transform.rotationDegrees
         )
-        var operations: [RenderOperation] = [.transform2D(transform)]
+        var operations: [RenderOperation] = [.transform2D(renderTransform)]
         operations.append(contentsOf: renderOperations(layer.operations))
-        operations.append(.opacity(layer.transform.opacity))
+        operations.append(.opacity(transform.opacity))
         try append(RenderNode(id: operationID, dependencies: [input], kind: .operations(operations)))
         return operationID
     }
@@ -241,9 +433,14 @@ private final class CompilerState: @unchecked Sendable {
 
     func nodeID(path: [String], role: String) throws -> VertexID {
         try DeterministicVertexID.derive(
-            domain: "vertex.phase6.render-node",
+            domain: "vertex.phase8.render-node",
             components: [project.projectID.rawValue] + path + [role]
         )
+    }
+
+    private func isCompositionSource(_ source: LayerSource) -> Bool {
+        if case .composition = source { return true }
+        return false
     }
 
     private func renderColor(_ color: ProjectRGBAColor) -> RenderRGBAColor {
@@ -256,6 +453,24 @@ private final class CompilerState: @unchecked Sendable {
         case .add: .add
         case .multiply: .multiply
         case .screen: .screen
+        }
+    }
+
+    private func renderMaskMode(_ mode: ProjectMaskMode) -> RenderMaskMode {
+        switch mode {
+        case .add: .add
+        case .subtract: .subtract
+        case .intersect: .intersect
+        case .none: .none
+        }
+    }
+
+    private func renderTrackMatteMode(_ mode: ProjectTrackMatteMode) -> RenderTrackMatteMode {
+        switch mode {
+        case .alpha: .alpha
+        case .alphaInverted: .alphaInverted
+        case .luma: .luma
+        case .lumaInverted: .lumaInverted
         }
     }
 
