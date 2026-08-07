@@ -133,7 +133,7 @@ public struct ProjectSettings: Codable, Equatable, Sendable {
     }
 }
 
-// Schema-1 decoding/migration compatibility only. Schema 3 does not persist this
+// Schema-1 decoding/migration compatibility only. Schema 4 does not persist this
 // object as project-global edit state.
 public enum ProjectRenderParameter: String, Codable, CaseIterable, Sendable {
     case exposure
@@ -229,8 +229,8 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 }
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 3
-    public static let currentAppVersion = "7.0.0"
+    public static let currentSchemaVersion = 4
+    public static let currentAppVersion = "8.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int
@@ -345,10 +345,6 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         return composition.layerIDs.compactMap { byID[$0] }
     }
 
-    // Transitional, non-Codable compatibility adapter used only while the Phase 5
-    // workspace is being replaced by the Phase 6 layer inspector. It derives all
-    // values from actual schema-2 composition/layer state and stores no global
-    // Render Lab object in project JSON.
     @available(*, deprecated, message: "Use composition and layer properties directly")
     public var renderSettings: ProjectRenderSettings {
         get {
