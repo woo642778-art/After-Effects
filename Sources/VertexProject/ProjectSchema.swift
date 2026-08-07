@@ -26,11 +26,7 @@ public struct MediaLocator: Codable, Equatable, Sendable {
     }
 
     @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
-    public init(
-        relativeHint: String? = nil,
-        bookmarkData: Data?,
-        embeddedPath: String? = nil
-    ) {
+    public init(relativeHint: String? = nil, bookmarkData: Data?, embeddedPath: String? = nil) {
         self.relativeHint = relativeHint
         self.embeddedPath = embeddedPath
     }
@@ -86,8 +82,7 @@ public struct MediaReference: Codable, Equatable, Sendable, Identifiable {
             throw ProjectError.invalidValue("Media file size must not be negative.")
         }
         if let embeddedPath = locator.embeddedPath {
-            guard !embeddedPath.hasPrefix("/"),
-                  !embeddedPath.split(separator: "/").contains("..") else {
+            guard !embeddedPath.hasPrefix("/"), !embeddedPath.split(separator: "/").contains("..") else {
                 throw ProjectError.invalidPackagePath("Embedded media paths must remain inside the project package.")
             }
         }
@@ -121,13 +116,7 @@ public struct ProjectMetadata: Codable, Equatable, Sendable {
     public var createdByAppVersion: String
     public var lastSavedByAppVersion: String
 
-    public init(
-        name: String,
-        createdAt: Date,
-        modifiedAt: Date,
-        createdByAppVersion: String,
-        lastSavedByAppVersion: String
-    ) {
+    public init(name: String, createdAt: Date, modifiedAt: Date, createdByAppVersion: String, lastSavedByAppVersion: String) {
         self.name = name
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
@@ -196,12 +185,7 @@ public struct ProjectRenderSettings: Codable, Equatable, Sendable {
     }
 
     public var allValuesAreFinite: Bool {
-        exposure.isFinite
-            && saturation.isFinite
-            && opacity.isFinite
-            && scale.isFinite
-            && translationX.isFinite
-            && translationY.isFinite
+        exposure.isFinite && saturation.isFinite && opacity.isFinite && scale.isFinite && translationX.isFinite && translationY.isFinite
     }
 
     public func value(for parameter: ProjectRenderParameter) -> Double {
@@ -233,10 +217,7 @@ public struct ProjectRenderSettings: Codable, Equatable, Sendable {
         guard scale > 0 else {
             throw ProjectError.invalidValue("Render scale must be positive.")
         }
-        guard outputWidth > 0,
-              outputHeight > 0,
-              outputWidth <= 8192,
-              outputHeight <= 8192 else {
+        guard outputWidth > 0, outputHeight > 0, outputWidth <= 8192, outputHeight <= 8192 else {
             throw ProjectError.invalidValue("Output dimensions must be between 1 and 8192 pixels.")
         }
         return self
@@ -271,10 +252,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var selectedLayerID: VertexID?
     public var selectedMediaID: VertexID?
 
-    // Phase 5 Render Lab API remains session-local only while the Phase 6 UI is
-    // reconnected. It is deliberately absent from CodingKeys and therefore can
-    // never enter canonical project.json, autosaves, or pending snapshots.
-    private var renderCompatibility: ProjectRenderSettings
+    private var renderCompatibility = ProjectRenderSettings()
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -317,9 +295,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.activeCompositionID = activeCompositionID
         self.selectedLayerID = selectedLayerID
         self.selectedMediaID = selectedMediaID
-        let active = activeCompositionID.flatMap { id in
-            compositionRegistry.first { $0.id == id }
-        }
+        let active = activeCompositionID.flatMap { id in compositionRegistry.first { $0.id == id } }
         self.renderCompatibility = ProjectRenderSettings(
             outputWidth: active?.width ?? 1080,
             outputHeight: active?.height ?? 1080
@@ -406,9 +382,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         activeCompositionID = try container.decodeIfPresent(VertexID.self, forKey: .activeCompositionID)
         selectedLayerID = try container.decodeIfPresent(VertexID.self, forKey: .selectedLayerID)
         selectedMediaID = try container.decodeIfPresent(VertexID.self, forKey: .selectedMediaID)
-        let active = activeCompositionID.flatMap { id in
-            compositionRegistry.first { $0.id == id }
-        }
+        let active = activeCompositionID.flatMap { id in compositionRegistry.first { $0.id == id } }
         renderCompatibility = ProjectRenderSettings(
             outputWidth: active?.width ?? compositionRegistry.first?.width ?? 1080,
             outputHeight: active?.height ?? compositionRegistry.first?.height ?? 1080
@@ -456,8 +430,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var renderSettings: ProjectRenderSettings {
         get {
             var value = renderCompatibility
-            if let activeCompositionID,
-               let active = composition(id: activeCompositionID) {
+            if let activeCompositionID, let active = composition(id: activeCompositionID) {
                 value.outputWidth = active.width
                 value.outputHeight = active.height
             }
@@ -466,19 +439,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         set {
             renderCompatibility = newValue
             guard let activeCompositionID,
-                  let index = compositionRegistry.firstIndex(where: { $0.id == activeCompositionID }) else {
-                return
-            }
+                  let index = compositionRegistry.firstIndex(where: { $0.id == activeCompositionID }) else { return }
             compositionRegistry[index].width = newValue.outputWidth
             compositionRegistry[index].height = newValue.outputHeight
         }
     }
 
-    public static func makeNew(
-        id: VertexID = VertexID(),
-        name: String,
-        timestamp: Date = Date()
-    ) throws -> ProjectDocument {
+    public static func makeNew(id: VertexID = VertexID(), name: String, timestamp: Date = Date()) throws -> ProjectDocument {
         let compositionID = try DeterministicVertexID.derive(
             domain: "vertex.project.main-composition",
             components: [id.rawValue]
@@ -516,10 +483,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         return try document.validated()
     }
 
-    public static func makeFixture(
-        timestamp: Date,
-        media: [MediaReference]
-    ) throws -> ProjectDocument {
+    public static func makeFixture(timestamp: Date, media: [MediaReference]) throws -> ProjectDocument {
         var document = try makeNew(
             id: VertexID(rawValue: "50000000-0000-0000-0000-000000000001"),
             name: "Fixture",
@@ -549,28 +513,27 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         copy.compositionRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.layerRegistry.sort { $0.id.rawValue < $1.id.rawValue }
 
-        let canonicalActive: VertexID?
         if let candidate = copy.activeCompositionID,
            copy.compositionRegistry.contains(where: { $0.id == candidate }) {
-            canonicalActive = candidate
+            copy.activeCompositionID = candidate
         } else {
-            canonicalActive = copy.compositionRegistry.first?.id
+            copy.activeCompositionID = copy.compositionRegistry.first?.id
         }
-        copy.activeCompositionID = canonicalActive
 
         if let selectedMediaID = copy.selectedMediaID,
            !copy.mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
             copy.selectedMediaID = nil
         }
         if let selectedLayerID = copy.selectedLayerID {
-            guard let selected = copy.layerRegistry.first(where: { $0.id == selectedLayerID }),
-                  selected.compositionID == canonicalActive else {
+            if let selected = copy.layerRegistry.first(where: { $0.id == selectedLayerID }),
+               selected.compositionID == copy.activeCompositionID {
+                copy.selectedLayerID = selected.id
+            } else {
                 copy.selectedLayerID = nil
-                return copy
             }
         }
-        if let canonicalActive,
-           let active = copy.compositionRegistry.first(where: { $0.id == canonicalActive }) {
+        if let activeCompositionID = copy.activeCompositionID,
+           let active = copy.compositionRegistry.first(where: { $0.id == activeCompositionID }) {
             copy.renderCompatibility.outputWidth = active.width
             copy.renderCompatibility.outputHeight = active.height
         }
@@ -583,9 +546,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         for composition in compositionRegistry {
             edges[composition.id] = composition.layerIDs.compactMap { layerID in
                 guard let layer = layerByID[layerID],
-                      case .composition(let target, _) = layer.source else {
-                    return nil
-                }
+                      case .composition(let target, _) = layer.source else { return nil }
                 return target
             }
         }
@@ -606,9 +567,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
                 if active.contains(target), let index = stack.firstIndex(of: target) {
                     return Array(stack[index...]) + [target]
                 }
-                if let cycle = visit(target) {
-                    return cycle
-                }
+                if let cycle = visit(target) { return cycle }
             }
             _ = stack.popLast()
             active.remove(id)
@@ -616,9 +575,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         }
 
         for composition in compositionRegistry {
-            if let cycle = visit(composition.id) {
-                return cycle
-            }
+            if let cycle = visit(composition.id) { return cycle }
         }
         return nil
     }
@@ -637,9 +594,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             throw ProjectError.invalidValue("Project frame rate must be positive.")
         }
         _ = try renderCompatibility.validated()
-        for reference in mediaRegistry {
-            _ = try reference.validated()
-        }
+        for reference in mediaRegistry { _ = try reference.validated() }
         guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else {
             throw ProjectError.duplicateIdentity("media")
         }
@@ -654,17 +609,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         }
 
         let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
-        for composition in compositionRegistry {
-            _ = try composition.validated(layerByID: layerByID)
-        }
+        for composition in compositionRegistry { _ = try composition.validated(layerByID: layerByID) }
         let orderedIDs = compositionRegistry.flatMap(\.layerIDs)
         guard orderedIDs.count == layerRegistry.count,
               Set(orderedIDs) == Set(layerRegistry.map(\.id)) else {
             throw ProjectError.invalidValue("Every layer must appear exactly once in its owning composition order.")
         }
-        for layer in layerRegistry {
-            _ = try layer.validated(in: self)
-        }
+        for layer in layerRegistry { _ = try layer.validated(in: self) }
 
         guard let activeCompositionID,
               compositionRegistry.contains(where: { $0.id == activeCompositionID }) else {
@@ -681,9 +632,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             }
         }
         if let cycle = nestedCompositionCycle() {
-            throw ProjectError.invalidValue(
-                "Nested composition cycle: \(cycle.map(\.rawValue).joined(separator: " -> "))."
-            )
+            throw ProjectError.invalidValue("Nested composition cycle: \(cycle.map(\.rawValue).joined(separator: " -> ")).")
         }
         return self
     }
