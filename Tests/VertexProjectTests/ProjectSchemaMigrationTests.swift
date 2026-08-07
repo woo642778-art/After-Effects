@@ -43,19 +43,21 @@ private func schema1Bytes(selectedMedia: Bool) throws -> Data {
     return try encoder.encode(legacy)
 }
 
-@Test("Schema 1 migrates deterministically to canonical schema 2")
-func schema1MigratesToSchema2() throws {
+@Test("Schema 1 migrates deterministically through schema 2 to canonical schema 3")
+func schema1MigratesToSchema3() throws {
     let source = try schema1Bytes(selectedMedia: true)
     let codec = DeterministicProjectCodec()
     let first = try codec.decode(source)
     let second = try codec.decode(source)
 
     #expect(first == second)
-    #expect(first.schemaVersion == 2)
-    #expect(first.minimumReaderVersion == 2)
+    #expect(first.schemaVersion == 3)
+    #expect(first.minimumReaderVersion == 3)
+    #expect(first.metadata.lastSavedByAppVersion == "7.0.0")
     #expect(first.revision == 7)
     #expect(first.compositionRegistry.count == 1)
     #expect(first.layerRegistry.count == 1)
+    #expect(first.aiAssetRegistry.isEmpty)
     #expect(first.activeCompositionID == first.compositionRegistry[0].id)
     #expect(first.selectedLayerID == first.layerRegistry[0].id)
     #expect(first.selectedMediaID == first.mediaRegistry[0].id)
@@ -67,6 +69,7 @@ func schema1MigratesToSchema2() throws {
 
     let encoded = try codec.encode(first)
     let json = String(decoding: encoded, as: UTF8.self)
+    #expect(json.contains("\"aiAssetRegistry\":[]"))
     #expect(!json.contains("bookmarkData"))
     #expect(!json.contains("appliedCommandIDs"))
     #expect(!json.contains("legacyRenderSettings"))
@@ -76,9 +79,10 @@ func schema1MigratesToSchema2() throws {
 @Test("Schema 1 without selected media creates an empty composition")
 func schema1WithoutSelectionCreatesEmptyComposition() throws {
     let migrated = try DeterministicProjectCodec().decode(schema1Bytes(selectedMedia: false))
-    #expect(migrated.schemaVersion == 2)
+    #expect(migrated.schemaVersion == 3)
     #expect(migrated.compositionRegistry.count == 1)
     #expect(migrated.layerRegistry.isEmpty)
+    #expect(migrated.aiAssetRegistry.isEmpty)
     #expect(migrated.selectedLayerID == nil)
 }
 
