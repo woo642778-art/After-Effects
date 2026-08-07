@@ -59,22 +59,34 @@ public struct VertexProjectManifest: Codable, Equatable, Sendable {
         projectData: Data,
         savedAt: Date
     ) throws {
+        let codec = DeterministicProjectCodec()
         let validated = try document.validated()
-        let checksum = DeterministicProjectCodec().checksum(data: projectData)
-        let decoded = try DeterministicProjectCodec().decode(projectData)
-        guard decoded == validated else {
+
+        // Persistence is byte-canonical, not dependent on sub-millisecond Date
+        // precision that the on-disk ISO-8601 representation intentionally drops.
+        let canonicalInput = try codec.encode(validated)
+        guard canonicalInput == projectData else {
             throw ProjectPersistenceError.invalidManifest(
-                "Project bytes do not encode the supplied document."
+                "Project bytes are not the canonical encoding of the supplied document."
             )
         }
+
+        let decoded = try codec.decode(projectData)
+        let canonicalDecoded = try codec.encode(decoded)
+        guard canonicalDecoded == projectData else {
+            throw ProjectPersistenceError.invalidManifest(
+                "Project bytes do not round-trip to the canonical deterministic encoding."
+            )
+        }
+
         try self.init(
-            schemaVersion: validated.schemaVersion,
-            minimumReaderVersion: validated.minimumReaderVersion,
-            projectID: validated.projectID,
-            projectRevision: validated.revision,
-            projectChecksum: checksum,
-            createdByAppVersion: validated.metadata.createdByAppVersion,
-            lastSavedByAppVersion: validated.metadata.lastSavedByAppVersion,
+            schemaVersion: decoded.schemaVersion,
+            minimumReaderVersion: decoded.minimumReaderVersion,
+            projectID: decoded.projectID,
+            projectRevision: decoded.revision,
+            projectChecksum: codec.checksum(data: projectData),
+            createdByAppVersion: decoded.metadata.createdByAppVersion,
+            lastSavedByAppVersion: decoded.metadata.lastSavedByAppVersion,
             lastSuccessfulSave: savedAt
         )
     }
