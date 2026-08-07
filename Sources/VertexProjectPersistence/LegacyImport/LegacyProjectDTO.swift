@@ -37,42 +37,42 @@ package struct LegacyMediaReferenceDTO: Codable, Equatable, Sendable {
     }
 }
 
-private struct LegacyCompositionPlaceholderDTO: Codable, Equatable, Sendable {
-    var id: VertexID
-    var name: String
+package struct LegacyCompositionPlaceholderDTO: Codable, Equatable, Sendable {
+    package var id: VertexID
+    package var name: String
 }
 
-private struct LegacySchema1ProjectDTO: Codable, Equatable, Sendable {
-    var schemaVersion: Int
-    var minimumReaderVersion: Int
-    var projectID: VertexID
-    var revision: UInt64
-    var metadata: ProjectMetadata
-    var settings: ProjectSettings
-    var mediaRegistry: [LegacyMediaReferenceDTO]
-    var compositionRegistry: [LegacyCompositionPlaceholderDTO]
-    var activeCompositionID: VertexID?
-    var selectedMediaID: VertexID?
-    var renderSettings: ProjectRenderSettings
-    var legacyRenderSettings: ProjectRenderSettings?
-    var appliedCommandIDs: [VertexID]?
+package struct LegacySchema1ProjectDTO: Codable, Equatable, Sendable {
+    package var schemaVersion: Int
+    package var minimumReaderVersion: Int
+    package var projectID: VertexID
+    package var revision: UInt64
+    package var metadata: ProjectMetadata
+    package var settings: ProjectSettings
+    package var mediaRegistry: [LegacyMediaReferenceDTO]
+    package var compositionRegistry: [LegacyCompositionPlaceholderDTO]
+    package var activeCompositionID: VertexID?
+    package var selectedMediaID: VertexID?
+    package var renderSettings: ProjectRenderSettings
+    package var legacyRenderSettings: ProjectRenderSettings?
+    package var appliedCommandIDs: [VertexID]?
 }
 
-private struct LegacySchema2ProjectDTO: Codable, Equatable, Sendable {
-    var schemaVersion: Int
-    var minimumReaderVersion: Int
-    var projectID: VertexID
-    var revision: UInt64
-    var metadata: ProjectMetadata
-    var settings: ProjectSettings
-    var mediaRegistry: [LegacyMediaReferenceDTO]
-    var compositionRegistry: [ProjectComposition]
-    var layerRegistry: [ProjectLayer]
-    var activeCompositionID: VertexID?
-    var selectedLayerID: VertexID?
-    var selectedMediaID: VertexID?
-    var legacyRenderSettings: ProjectRenderSettings?
-    var appliedCommandIDs: [VertexID]?
+package struct LegacySchema2ProjectDTO: Codable, Equatable, Sendable {
+    package var schemaVersion: Int
+    package var minimumReaderVersion: Int
+    package var projectID: VertexID
+    package var revision: UInt64
+    package var metadata: ProjectMetadata
+    package var settings: ProjectSettings
+    package var mediaRegistry: [LegacyMediaReferenceDTO]
+    package var compositionRegistry: [ProjectComposition]
+    package var layerRegistry: [ProjectLayer]
+    package var activeCompositionID: VertexID?
+    package var selectedLayerID: VertexID?
+    package var selectedMediaID: VertexID?
+    package var legacyRenderSettings: ProjectRenderSettings?
+    package var appliedCommandIDs: [VertexID]?
 }
 
 package enum LegacyProjectDTO: Equatable, Sendable {
