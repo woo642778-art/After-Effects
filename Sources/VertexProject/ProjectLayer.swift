@@ -229,6 +229,23 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
     public var masks: [ProjectMask]
     public var trackMatte: ProjectTrackMatte?
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case compositionID
+        case name
+        case source
+        case enabled
+        case locked
+        case solo
+        case timing
+        case transform
+        case blendMode
+        case operations
+        case animationChannels
+        case masks
+        case trackMatte
+    }
+
     public init(
         id: VertexID = VertexID(),
         compositionID: VertexID,
@@ -259,6 +276,42 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         self.animationChannels = animationChannels
         self.masks = masks
         self.trackMatte = trackMatte
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(VertexID.self, forKey: .id)
+        compositionID = try container.decode(VertexID.self, forKey: .compositionID)
+        name = try container.decode(String.self, forKey: .name)
+        source = try container.decode(LayerSource.self, forKey: .source)
+        enabled = try container.decode(Bool.self, forKey: .enabled)
+        locked = try container.decode(Bool.self, forKey: .locked)
+        solo = try container.decode(Bool.self, forKey: .solo)
+        timing = try container.decode(LayerTiming.self, forKey: .timing)
+        transform = try container.decode(LayerTransform.self, forKey: .transform)
+        blendMode = try container.decode(LayerBlendMode.self, forKey: .blendMode)
+        operations = try container.decode([LayerOperation].self, forKey: .operations)
+        animationChannels = try container.decodeIfPresent([ProjectAnimationChannel].self, forKey: .animationChannels) ?? []
+        masks = try container.decodeIfPresent([ProjectMask].self, forKey: .masks) ?? []
+        trackMatte = try container.decodeIfPresent(ProjectTrackMatte.self, forKey: .trackMatte)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(compositionID, forKey: .compositionID)
+        try container.encode(name, forKey: .name)
+        try container.encode(source, forKey: .source)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(locked, forKey: .locked)
+        try container.encode(solo, forKey: .solo)
+        try container.encode(timing, forKey: .timing)
+        try container.encode(transform, forKey: .transform)
+        try container.encode(blendMode, forKey: .blendMode)
+        try container.encode(operations, forKey: .operations)
+        try container.encode(animationChannels, forKey: .animationChannels)
+        try container.encode(masks, forKey: .masks)
+        try container.encodeIfPresent(trackMatte, forKey: .trackMatte)
     }
 
     public func validated(in document: ProjectDocument) throws -> Self {
@@ -313,6 +366,14 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
                   matteLayer.compositionID == compositionID,
                   matteLayer.source.canProducePixels else {
                 throw ProjectError.invalidValue("Track matte must reference another pixel-producing layer in the same composition.")
+            }
+            var visited: Set<VertexID> = [id]
+            var candidate: ProjectLayer? = matteLayer
+            while let current = candidate {
+                guard visited.insert(current.id).inserted else {
+                    throw ProjectError.invalidValue("Track matte relationships must not contain a cycle.")
+                }
+                candidate = current.trackMatte.flatMap { document.layer(id: $0.sourceLayerID) }
             }
         }
         return self
