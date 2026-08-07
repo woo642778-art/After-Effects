@@ -64,9 +64,11 @@ public struct Schema2To3Migrator: ProjectMigrator {
     public func migrate(_ data: Data) throws -> ProjectMigrationStepResult {
         let legacy = try Schema2ProjectCodec.decode(data)
         var metadata = legacy.metadata
-        metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
+        // Keep this intermediate payload genuinely schema 3. The following
+        // Schema3To4Migrator updates app metadata to the current 8.0 release.
+        metadata.lastSavedByAppVersion = "7.0.0"
 
-        let migrated = try ProjectDocument(
+        let migrated = Schema3ProjectDocument(
             schemaVersion: 3,
             minimumReaderVersion: 3,
             projectID: legacy.projectID,
@@ -80,10 +82,10 @@ public struct Schema2To3Migrator: ProjectMigrator {
             activeCompositionID: legacy.activeCompositionID,
             selectedLayerID: legacy.selectedLayerID,
             selectedMediaID: legacy.selectedMediaID
-        ).validated()
+        )
 
         return ProjectMigrationStepResult(
-            data: try DeterministicProjectCodec().encode(migrated),
+            data: try Schema3ProjectCodec.encode(migrated),
             report: ProjectMigrationReport(
                 sourceVersion: 2,
                 destinationVersion: 3,
