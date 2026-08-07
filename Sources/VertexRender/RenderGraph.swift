@@ -6,6 +6,8 @@ public enum RenderNodeKind: Codable, Equatable, Sendable {
     case source(PortableImage)
     case solidColor(RenderRGBAColor)
     case operations([RenderOperation])
+    case mask(RenderMaskStack)
+    case matte(RenderTrackMatteMode)
     case composite(RenderBlendMode)
     case adjustment([RenderOperation], mix: Double)
     case output
@@ -160,6 +162,20 @@ public struct RenderGraph: Codable, Equatable, Sendable {
                 throw RenderError.invalidGraph("An operation node must have exactly one dependency.")
             }
             for operation in operations { _ = try operation.validated() }
+
+        case .mask(let stack):
+            guard node.dependencies.count == 1 else {
+                throw RenderError.invalidGraph("A mask node must have exactly one source dependency.")
+            }
+            _ = try stack.validated()
+
+        case .matte:
+            guard node.dependencies.count == 2 else {
+                throw RenderError.invalidGraph("A matte node must have ordered [source, matte] dependencies.")
+            }
+            guard node.dependencies[0] != node.dependencies[1] else {
+                throw RenderError.invalidGraph("Track-matte source and target dependencies must be different nodes.")
+            }
 
         case .composite:
             guard node.dependencies.count == 2 else {
