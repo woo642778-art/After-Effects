@@ -61,11 +61,16 @@ public struct LegacyImportResult: Sendable {
     }
 }
 
+private struct LegacyHistorySnapshotDTO: Decodable {
+    let undo: [ProjectCommandRecord]
+    let redo: [ProjectCommandRecord]
+}
+
 private struct LegacyImportContext: Sendable {
     let sourceURL: URL
     let sourceLayout: LegacyProjectPackageLayout
     let sourceDigest: String
-    let dto: LegacyProjectDTO
+    let project: DecodedLegacyProject
     let manifest: LegacyManifestDTO
     let replay: LegacyJournalReadResult
     let discardedUndoCount: Int
@@ -74,11 +79,11 @@ private struct LegacyImportContext: Sendable {
     let embeddedSourceURLs: [VertexID: URL]
 
     var inspection: LegacyImportInspection {
-        let bookmarkPayloads = dto.bookmarkPayloads
+        let bookmarkPayloads = project.bookmarkPayloads
         return LegacyImportInspection(
             sourceDigest: sourceDigest,
             compositionCount: replay.document.compositionRegistry.count,
-            layerCount: 0,
+            layerCount: replay.document.layerRegistry.count,
             mediaCount: replay.document.mediaRegistry.count,
             embeddedMediaEligibleCount: embeddedSourceURLs.count,
             bookmarkSuccessCount: bookmarkPayloads.values.filter { !$0.isEmpty }.count,
@@ -132,7 +137,7 @@ public struct LegacyProjectImporter: Sendable {
             _ = try packageStore.create(at: staging, document: document)
 
             let bookmarkStore = BookmarkSidecarStore()
-            for (mediaID, payload) in context.dto.bookmarkPayloads where !payload.isEmpty {
+            for (mediaID, payload) in context.project.bookmarkPayloads where !payload.isEmpty {
                 try bookmarkStore.write(payload, mediaID: mediaID, in: staging)
             }
 
@@ -213,21 +218,20 @@ public struct LegacyProjectImporter: Sendable {
             )
         }
 
-        let dto = try LegacyProjectDTO.decode(projectData)
+        let project = try DecodedLegacyProject.decode(projectData)
         let manifest = try LegacyManifestDTO.decode(manifestData)
-        try manifest.validate(project: dto, projectData: projectData)
-        let document = try dto.canonicalDocument()
+        try manifest.validate(project: project, projectData: projectData)
         let journalData = (try? Data(contentsOf: layout.journalURL)) ?? Data()
         let replay = LegacyJournalReader().read(
             journalData,
             committedSequence: manifest.committedJournalSequence,
-            document: document
+            document: project.document
         )
 
         let historyCounts = readHistoryCounts(at: layout.historyURL)
         let autosaveCount = countFiles(in: layout.autosavesDirectoryURL)
         var embeddedSourceURLs: [VertexID: URL] = [:]
-        for reference in dto.mediaRegistry {
+        for reference in project.mediaRegistry {
             guard let relativePath = reference.locator.embeddedPath,
                   let url = try? layout.embeddedMediaURL(relativePath: relativePath),
                   fileManager.fileExists(atPath: url.path) else {
@@ -240,7 +244,7 @@ public struct LegacyProjectImporter: Sendable {
             sourceURL: source,
             sourceLayout: layout,
             sourceDigest: digest,
-            dto: dto,
+            project: project,
             manifest: manifest,
             replay: replay,
             discardedUndoCount: historyCounts.undo,
@@ -254,7 +258,7 @@ public struct LegacyProjectImporter: Sendable {
         _ context: LegacyImportContext
     ) throws -> ProjectDocument {
         var document = context.replay.document
-        let bookmarks = context.dto.bookmarkPayloads
+        let bookmarks = context.project.bookmarkPayloads
         for index in document.mediaRegistry.indices {
             let mediaID = document.mediaRegistry[index].id
             document.mediaRegistry[index].locator = MediaLocator(
@@ -277,7 +281,7 @@ public struct LegacyProjectImporter: Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom(ProjectDateCodec.decode)
         decoder.nonConformingFloatDecodingStrategy = .throw
-        guard let history = try? decoder.decode(ProjectHistorySnapshot.self, from: data) else {
+        guard let history = try? decoder.decode(LegacyHistorySnapshotDTO.self, from: data) else {
             return (0, 0)
         }
         return (history.undo.count, history.redo.count)
