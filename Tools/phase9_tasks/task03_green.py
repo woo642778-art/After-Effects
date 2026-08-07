@@ -134,11 +134,11 @@ public struct TimelineSelection: Equatable, Sendable {
     }
 
     public mutating func toggleLayer(_ id: VertexID) {
-        if !layerIDs.remove(id) { layerIDs.insert(id) }
+        if layerIDs.remove(id) == nil { layerIDs.insert(id) }
     }
 
     public mutating func toggleKeyframe(_ id: VertexID) {
-        if !keyframeIDs.remove(id) { keyframeIDs.insert(id) }
+        if keyframeIDs.remove(id) == nil { keyframeIDs.insert(id) }
     }
 
     public mutating func replaceLayers(_ ids: [VertexID]) {
