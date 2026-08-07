@@ -8,6 +8,8 @@ internal final class MetalRenderResources: @unchecked Sendable {
     let commandQueue: any MTLCommandQueue
     let solidPipeline: any MTLComputePipelineState
     let layerPipeline: any MTLComputePipelineState
+    let maskPipeline: any MTLComputePipelineState
+    let mattePipeline: any MTLComputePipelineState
     let compositePipeline: any MTLComputePipelineState
     let adjustmentPipeline: any MTLComputePipelineState
 
@@ -21,6 +23,8 @@ internal final class MetalRenderResources: @unchecked Sendable {
         let library = try Self.makeLibrary(device: device)
         solidPipeline = try Self.makePipeline(named: "vertexSolidKernel", library: library, device: device)
         layerPipeline = try Self.makePipeline(named: "vertexLayerKernel", library: library, device: device)
+        maskPipeline = try Self.makePipeline(named: "vertexMaskKernel", library: library, device: device)
+        mattePipeline = try Self.makePipeline(named: "vertexMatteKernel", library: library, device: device)
         compositePipeline = try Self.makePipeline(named: "vertexCompositeKernel", library: library, device: device)
         adjustmentPipeline = try Self.makePipeline(named: "vertexAdjustmentKernel", library: library, device: device)
         self.device = device
