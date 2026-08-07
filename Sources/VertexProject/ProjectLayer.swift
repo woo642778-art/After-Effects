@@ -149,7 +149,16 @@ public struct LayerTransform: Codable, Equatable, Sendable {
     public var rotationDegrees: Double
     public var opacity: Double
 
-    public init(positionX: Double, positionY: Double, anchorX: Double, anchorY: Double, scaleX: Double, scaleY: Double, rotationDegrees: Double, opacity: Double) {
+    public init(
+        positionX: Double,
+        positionY: Double,
+        anchorX: Double,
+        anchorY: Double,
+        scaleX: Double,
+        scaleY: Double,
+        rotationDegrees: Double,
+        opacity: Double
+    ) {
         self.positionX = positionX
         self.positionY = positionY
         self.anchorX = anchorX
@@ -160,7 +169,16 @@ public struct LayerTransform: Codable, Equatable, Sendable {
         self.opacity = opacity
     }
 
-    public static let identity = LayerTransform(positionX: 0.5, positionY: 0.5, anchorX: 0.5, anchorY: 0.5, scaleX: 1, scaleY: 1, rotationDegrees: 0, opacity: 1)
+    public static let identity = LayerTransform(
+        positionX: 0.5,
+        positionY: 0.5,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        scaleX: 1,
+        scaleY: 1,
+        rotationDegrees: 0,
+        opacity: 1
+    )
 
     public func validated() throws -> Self {
         let values = [positionX, positionY, anchorX, anchorY, scaleX, scaleY, rotationDegrees, opacity]
@@ -209,6 +227,13 @@ public enum LayerSource: Codable, Equatable, Sendable {
         switch self {
         case .media, .composition, .adjustment: true
         case .null, .guide, .camera, .light: false
+        }
+    }
+
+    public var canServeAsTrackMatte: Bool {
+        switch self {
+        case .media, .composition: true
+        case .adjustment, .null, .guide, .camera, .light: false
         }
     }
 }
@@ -364,8 +389,8 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
             guard trackMatte.sourceLayerID != id,
                   let matteLayer = document.layer(id: trackMatte.sourceLayerID),
                   matteLayer.compositionID == compositionID,
-                  matteLayer.source.canProducePixels else {
-                throw ProjectError.invalidValue("Track matte must reference another pixel-producing layer in the same composition.")
+                  matteLayer.source.canServeAsTrackMatte else {
+                throw ProjectError.invalidValue("Track matte must reference another media or nested-composition layer in the same composition.")
             }
             var visited: Set<VertexID> = [id]
             var candidate: ProjectLayer? = matteLayer
