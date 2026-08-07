@@ -68,11 +68,23 @@ public struct DeterministicProjectCodec: Sendable {
         guard header.schemaVersion <= supportedSchema else {
             throw ProjectError.unsupportedSchema(found: header.schemaVersion, supported: supportedSchema)
         }
+
+        let canonicalData: Data
+        if header.schemaVersion < ProjectDocument.currentSchemaVersion {
+            canonicalData = try ProjectMigrationRegistry.current.migrate(
+                data,
+                from: header.schemaVersion,
+                to: ProjectDocument.currentSchemaVersion
+            ).data
+        } else {
+            canonicalData = data
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom(ProjectDateCodec.decode)
         decoder.nonConformingFloatDecodingStrategy = .throw
         do {
-            return try decoder.decode(ProjectDocument.self, from: data).normalized().validated()
+            return try decoder.decode(ProjectDocument.self, from: canonicalData).normalized().validated()
         } catch let error as ProjectError {
             throw error
         } catch {
