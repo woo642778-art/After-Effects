@@ -71,3 +71,33 @@ func maskCollectionLimits() throws {
 func trackMatteModes() {
     #expect(Set(ProjectTrackMatteMode.allCases) == Set([.alpha, .alphaInverted, .luma, .lumaInverted]))
 }
+
+@Test("Adjustment layers cannot serve as track matte sources")
+func adjustmentCannotServeAsTrackMatteSource() throws {
+    var project = try ProjectDocument.makeNew(
+        id: VertexID(rawValue: "82000000-0000-0000-0000-000000000100"),
+        name: "Matte validation",
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    var composition = project.compositionRegistry[0]
+    let timing = LayerTiming(startTime: .zero, inPoint: .zero, outPoint: composition.duration)
+    let adjustment = ProjectLayer(
+        id: VertexID(rawValue: "82000000-0000-0000-0000-000000000101"),
+        compositionID: composition.id,
+        name: "Adjustment",
+        source: .adjustment(scope: .belowAll),
+        timing: timing
+    )
+    let target = ProjectLayer(
+        id: VertexID(rawValue: "82000000-0000-0000-0000-000000000102"),
+        compositionID: composition.id,
+        name: "Target",
+        source: .adjustment(scope: .belowAll),
+        timing: timing,
+        trackMatte: ProjectTrackMatte(sourceLayerID: adjustment.id, mode: .alpha)
+    )
+    composition.layerIDs = [target.id, adjustment.id]
+    project.compositionRegistry = [composition]
+    project.layerRegistry = [target, adjustment]
+    #expect(throws: ProjectError.self) { try project.validated() }
+}
