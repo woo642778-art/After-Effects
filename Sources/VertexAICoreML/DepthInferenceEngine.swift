@@ -136,7 +136,7 @@ public enum DepthProcessing {
 @preconcurrency import CoreML
 import CoreVideo
 
-public actor DepthInferenceEngine {
+public final class DepthInferenceEngine: @unchecked Sendable {
     public static let defaultModelID = "depth-anything-v2-small-f16"
 
     private let registry: AIModelRegistry
@@ -151,7 +151,7 @@ public actor DepthInferenceEngine {
         pixelBuffer: CVPixelBuffer,
         recipe: DepthRecipe,
         previousFrame: DepthFrame? = nil
-    ) async throws -> DepthFrame {
+    ) throws -> DepthFrame {
         _ = try recipe.validated()
         return try registry.withModel(for: modelID) { model in
             let preprocessed = try AIImagePreprocessor.aspectFit(pixelBuffer: pixelBuffer, for: model)
