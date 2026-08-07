@@ -150,6 +150,9 @@ public struct ProjectCommandEngine: Sendable {
         case .removeLayer(let id):
             guard let layer = document.layer(id: id), let composition = document.composition(id: layer.compositionID), let index = composition.layerIDs.firstIndex(of: id) else { throw ProjectError.invalidOperation("Layer is missing from its composition order.") }
             guard !layer.locked else { throw ProjectError.invalidOperation("Unlock the layer before removing it.") }
+            guard !document.layerRegistry.contains(where: { $0.trackMatte?.sourceLayerID == id }) else {
+                throw ProjectError.invalidOperation("A layer used as a track matte cannot be removed until matte references are cleared.")
+            }
             forward = .removeLayer(layer, compositionID: composition.id, index: index)
 
         case .reorderLayer(let id, let toIndex):
@@ -204,6 +207,26 @@ public struct ProjectCommandEngine: Sendable {
             guard operations != layer.operations else { throw ProjectError.invalidOperation("Layer operations are unchanged.") }
             for operation in operations { _ = try operation.validated() }
             forward = .setLayerOperations(layerID: id, before: layer.operations, after: operations)
+
+        case .setLayerMotionState(let id, let animationChannels, let masks, let trackMatte):
+            let layer = try editableLayer(id, in: document)
+            guard layer.animationChannels != animationChannels || layer.masks != masks || layer.trackMatte != trackMatte else {
+                throw ProjectError.invalidOperation("Layer motion, mask, and matte state is unchanged.")
+            }
+            var candidate = layer
+            candidate.animationChannels = animationChannels
+            candidate.masks = masks
+            candidate.trackMatte = trackMatte
+            _ = try candidate.validated(in: document)
+            forward = .setLayerMotionState(
+                layerID: id,
+                beforeAnimationChannels: layer.animationChannels,
+                afterAnimationChannels: animationChannels,
+                beforeMasks: layer.masks,
+                afterMasks: masks,
+                beforeTrackMatte: layer.trackMatte,
+                afterTrackMatte: trackMatte
+            )
         }
 
         return ProjectTransition(commandID: request.commandID, projectID: request.projectID, baseRevision: request.baseRevision, timestamp: request.timestamp, mergeKey: request.mergeKey, forward: forward, inverse: forward.inverse)
@@ -320,6 +343,24 @@ public struct ProjectCommandEngine: Sendable {
         case .setLayerBlendMode(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].blendMode == before else { throw ProjectError.invalidOperation("Layer blend-mode precondition did not match.") }; document.layerRegistry[index].blendMode = after
         case .setLayerSource(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].source == before else { throw ProjectError.invalidOperation("Layer source precondition did not match.") }; document.layerRegistry[index].source = after
         case .setLayerOperations(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].operations == before else { throw ProjectError.invalidOperation("Layer operations precondition did not match.") }; document.layerRegistry[index].operations = after
+        case .setLayerMotionState(
+            let id,
+            let beforeChannels,
+            let afterChannels,
+            let beforeMasks,
+            let afterMasks,
+            let beforeMatte,
+            let afterMatte
+        ):
+            let index = try layerIndex(id, in: document)
+            guard document.layerRegistry[index].animationChannels == beforeChannels,
+                  document.layerRegistry[index].masks == beforeMasks,
+                  document.layerRegistry[index].trackMatte == beforeMatte else {
+                throw ProjectError.invalidOperation("Layer motion-state precondition did not match.")
+            }
+            document.layerRegistry[index].animationChannels = afterChannels
+            document.layerRegistry[index].masks = afterMasks
+            document.layerRegistry[index].trackMatte = afterMatte
         }
     }
 
