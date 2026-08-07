@@ -7,6 +7,8 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case removeMedia(id: VertexID)
     case relinkMedia(id: VertexID, locator: MediaLocator)
     case setEmbeddedPath(id: VertexID, path: String?)
+    case registerAIAsset(ProjectAIAsset)
+    case removeAIAsset(id: VertexID)
 
     // Transitional non-persistent Render Lab compatibility while the Phase 6
     // workspace is being reconnected. These mutate actual composition/layer
