@@ -79,28 +79,44 @@ jobs:
         run: bash Tools/generate_app_assets.sh
       - name: Generate Xcode project
         run: xcodegen generate
-      - name: Select and boot iPhone Simulator
+      - name: Select and boot newest iPhone Simulator
         run: |
           set -euo pipefail
           SIM_UDID="$(python3 - <<'PY'
-          import json, subprocess
+          import json, re, subprocess
           payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
           candidates = []
           for runtime, devices in payload.get('devices', {}).items():
-              if 'iOS' not in runtime:
+              match = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not match:
                   continue
+              version = (int(match.group(1)), int(match.group(2)))
               for device in devices:
                   if device.get('isAvailable') and device.get('name','').startswith('iPhone'):
-                      candidates.append((runtime, device['name'], device['udid']))
+                      candidates.append((version, device['name'], device['udid']))
           if not candidates:
               raise SystemExit('No available iPhone Simulator found')
-          candidates.sort(reverse=True)
+          candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
           print(candidates[0][2])
           PY
           )"
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
           xcrun simctl boot "$SIM_UDID" || true
-          xcrun simctl bootstatus "$SIM_UDID" -b
+          READY=0
+          for attempt in $(seq 1 60); do
+            state="$(xcrun simctl list devices -j | python3 -c 'import json,sys; p=json.load(sys.stdin); u=sys.argv[1]; print(next((d.get("state","") for ds in p.get("devices",{}).values() for d in ds if d.get("udid")==u), ""))' "$SIM_UDID")"
+            if [ "$state" = "Booted" ]; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$READY" -ne 1 ]; then
+            echo "Simulator did not boot within 120 seconds"
+            xcrun simctl list devices
+            exit 1
+          fi
       - name: Run iOS app session tests
         run: |
           set -euo pipefail
