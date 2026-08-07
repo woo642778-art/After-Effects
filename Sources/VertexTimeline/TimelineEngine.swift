@@ -45,8 +45,7 @@ public struct TimelineEngine: Sendable {
                 throw ProjectError.invalidOperation("Move requires a nonempty set of unique layer IDs.")
             }
             for id in layerIDs {
-                var layer = try current(id)
-                layer.timing = try shifted(layer.timing, by: delta, composition: composition)
+                let layer = try shiftedLayer(try current(id), by: delta, composition: composition)
                 try store(layer)
             }
 
@@ -121,8 +120,7 @@ public struct TimelineEngine: Sendable {
             try store(target)
             let delta = try subtract(time, oldBoundary)
             for id in affectedLayerIDs {
-                var layer = try current(id)
-                layer.timing = try shifted(layer.timing, by: delta, composition: composition)
+                let layer = try shiftedLayer(try current(id), by: delta, composition: composition)
                 try store(layer)
             }
 
@@ -162,7 +160,7 @@ public struct TimelineEngine: Sendable {
             }
             let oldIn = selected.timing.inPoint
             let oldOut = selected.timing.outPoint
-            selected.timing = try shifted(selected.timing, by: delta, composition: composition)
+            selected = try shiftedLayer(selected, by: delta, composition: composition)
 
             if let previousLayerID {
                 guard previousLayerID != layerID else {
@@ -196,6 +194,28 @@ public struct TimelineEngine: Sendable {
             removedLayerIDs: [],
             resultingLayerOrder: order
         )
+    }
+
+    private func shiftedLayer(
+        _ layer: ProjectLayer,
+        by delta: RationalTime,
+        composition: ProjectComposition
+    ) throws -> ProjectLayer {
+        var result = layer
+        result.timing = try shifted(result.timing, by: delta, composition: composition)
+        result.animationChannels = try result.animationChannels.map { channel in
+            var shiftedChannel = channel
+            shiftedChannel.keyframes = try channel.keyframes.map { keyframe in
+                var shiftedKeyframe = keyframe
+                shiftedKeyframe.time = try add(keyframe.time, delta)
+                guard shiftedKeyframe.time >= .zero else {
+                    throw ProjectError.invalidOperation("Moving the layer would place an animation keyframe before composition time zero.")
+                }
+                return shiftedKeyframe
+            }
+            return try shiftedChannel.validated()
+        }
+        return result
     }
 
     private func shifted(

@@ -79,6 +79,36 @@ func moveDoesNotRippleUnrelatedLayers() throws {
     #expect(result.updatedLayers.contains(where: { $0.id == b.id }) == false)
 }
 
+@Test("Moving a layer shifts its attached animation keyframes")
+func moveShiftsLayerAnimationKeyframes() throws {
+    var fixture = try makeFixture([("Animated", 0, 0, 6, 0)])
+    var animated = fixture.layers[0]
+    animated.animationChannels = [
+        ProjectAnimationChannel(
+            property: .layer(.opacity),
+            keyframes: [
+                ProjectKeyframe(time: RationalTime(value: 1, timescale: 1), value: .scalar(0.25), interpolation: .linear),
+                ProjectKeyframe(time: RationalTime(value: 3, timescale: 1), value: .scalar(0.75), interpolation: .linear)
+            ]
+        )
+    ]
+    fixture.layers[0] = animated
+    fixture.project.layerRegistry[0] = animated
+    fixture.project = try fixture.project.validated()
+
+    let result = try TimelineEngine().apply(
+        .move(layerIDs: [animated.id], delta: RationalTime(value: 2, timescale: 1)),
+        to: fixture.project,
+        compositionID: fixture.composition.id
+    )
+    let moved = try layer(animated.id, in: result)
+    let channel = try #require(moved.animationChannels.first)
+    #expect(channel.keyframes.map(\.time) == [
+        RationalTime(value: 3, timescale: 1),
+        RationalTime(value: 5, timescale: 1)
+    ])
+}
+
 @Test("Invalid trims are rejected rather than clamped")
 func invalidTrimIsRejected() throws {
     let fixture = try makeFixture([("Clip", 0, 1, 5, 0)])
