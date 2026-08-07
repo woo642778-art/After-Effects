@@ -15,140 +15,106 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  portable-tasks-3-to-7:
+  app-tasks-8-to-9:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: macos-15
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.0'
-      - name: Configure task commits
+      - name: Select Xcode and install XcodeGen
         run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
           git config user.name 'vertex2-phase9-bot'
           git config user.email 'actions@users.noreply.github.com'
-
-      - name: Task 3 RED
+      - name: Select newest iPhone Simulator
         run: |
           set -euo pipefail
-          python3 Tools/phase9_tasks/task03_red.py
+          SIM_UDID="$(python3 - <<'PY'
+          import json,re,subprocess
+          payload=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          c=[]
+          for runtime,devices in payload.get('devices',{}).items():
+              m=re.search(r'iOS-(\d+)-(\d+)',runtime)
+              if not m: continue
+              v=(int(m.group(1)),int(m.group(2)))
+              for d in devices:
+                  if d.get('isAvailable') and d.get('name','').startswith('iPhone'): c.append((v,d['name'],d['udid']))
+          if not c: raise SystemExit('No iPhone Simulator')
+          c.sort(reverse=True); print(c[0][2])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Prepare Xcode project
+        run: |
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+
+      - name: Task 8 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task08_red.py
+          xcodegen generate
           set +e
-          swift test --filter TimelineSnapEngineTests >/tmp/task3-red.log 2>&1
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask8Red" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIFrameEffectServiceTests > "$RUNNER_TEMP/task8-red.log" 2>&1
           status=$?
           set -e
-          cat /tmp/task3-red.log
-          test "$status" -ne 0
-      - name: Task 3 GREEN
+          if [ "$status" -eq 0 ]; then echo 'Task 8 RED unexpectedly passed'; exit 1; fi
+          grep -n -C 3 -m 40 -E 'error:|cannot find|AIFrameEffectService' "$RUNNER_TEMP/task8-red.log" || tail -n 100 "$RUNNER_TEMP/task8-red.log"
+      - name: Task 8 GREEN
         run: |
           set -euo pipefail
-          python3 Tools/phase9_tasks/task03_green.py
-          swift test --filter TimelineSnapEngineTests
-          swift test --filter TimelineSelectionTests
+          python3 Tools/phase9_tasks/task08_green.py
+          xcodegen generate
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask8" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIFrameEffectServiceTests | tee "$RUNNER_TEMP/task8-green.log"
           git diff --check
-          git add Sources/VertexTimeline Tests/VertexTimelineTests
-          git commit -m 'feat(timeline): add deterministic snapping and selection'
+          git add App/AIFrameEffectService.swift App/BundledAIEnvironment+FrameEffects.swift App/CompositionEffectResolverAdapter.swift Tests/VertexAppTests/AIFrameEffectServiceTests.swift
+          git commit -m 'feat(ai): add prioritized frame effect service'
 
-      - name: Task 4 RED
+      - name: Task 9 RED
         run: |
           set -euo pipefail
-          python3 Tools/phase9_tasks/task04_red.py
+          python3 Tools/phase9_tasks/task09_red.py
           set +e
-          swift test --filter ProjectTimelineCommandTests >/tmp/task4-red.log 2>&1
+          swift test --filter AIEffectBakeCommandTests > "$RUNNER_TEMP/task9-red.log" 2>&1
           status=$?
           set -e
-          cat /tmp/task4-red.log
-          test "$status" -ne 0
-      - name: Task 4 GREEN
+          if [ "$status" -eq 0 ]; then echo 'Task 9 RED unexpectedly passed'; exit 1; fi
+          grep -n -C 3 -m 40 -E 'error:|registerBakedAIEffect|ProjectAIEffectBakeRegistration' "$RUNNER_TEMP/task9-red.log" || tail -n 100 "$RUNNER_TEMP/task9-red.log"
+      - name: Task 9 GREEN
         run: |
           set -euo pipefail
-          python3 Tools/phase9_tasks/task04_green.py
-          swift test --filter ProjectTimelineCommandTests
-          swift test --filter VertexTimelineTests
+          python3 Tools/phase9_tasks/task09_green.py
+          swift test --filter AIEffectBakeCommandTests
+          xcodegen generate
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask9" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIEffectBakeCoordinatorTests | tee "$RUNNER_TEMP/task9-green.log"
           git diff --check
-          git add Sources/VertexProject Sources/VertexTimeline App/ProjectWorkspaceViewModel.swift project.yml Tests/VertexProjectTests/ProjectTimelineCommandTests.swift
-          git commit -m 'feat(project): make timeline edits transactional'
+          git add Sources/VertexProject App/AIEffectBakeCoordinator.swift App/ProjectWorkspaceViewModel.swift Tests/VertexProjectTests/AIEffectBakeCommandTests.swift Tests/VertexAppTests/AIEffectBakeCoordinatorTests.swift
+          git commit -m 'feat(ai): add atomic bake-to-layer workflow'
 
-      - name: Task 5 RED
+      - name: App regression gate
         run: |
           set -euo pipefail
-          python3 Tools/phase9_tasks/task05_red.py
-          python3 Tools/phase9_tasks/task05_testfix.py
-          set +e
-          swift test --filter ProjectEffectTests >/tmp/task5-red.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/task5-red.log
-          test "$status" -ne 0
-      - name: Task 5 GREEN
-        run: |
-          set -euo pipefail
-          python3 Tools/phase9_tasks/task05_green.py
           swift test --filter ProjectEffectTests
-          swift test --filter ProjectEffectCommandTests
-          swift test --filter ProjectTimelineCommandTests
-          git diff --check
-          git add Sources/VertexProject Tests/VertexProjectTests/ProjectEffectTests.swift Tests/VertexProjectTests/ProjectEffectCommandTests.swift
-          git commit -m 'feat(effects): add typed ordered layer effect stack'
-
-      - name: Task 6 RED
-        run: |
-          set -euo pipefail
-          python3 Tools/phase9_tasks/task06_red.py
-          python3 Tools/phase9_tasks/task06_testfix.py
-          set +e
-          swift test --filter EffectGraphCompilerTests >/tmp/task6-red.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/task6-red.log
-          test "$status" -ne 0
-      - name: Task 6 GREEN
-        run: |
-          set -euo pipefail
-          python3 Tools/phase9_tasks/task06_green.py
-          python3 Tools/phase9_tasks/task06_green_fix.py
           swift test --filter EffectGraphCompilerTests
-          swift test --filter Phase8CompositionGraphTests
-          git diff --check
-          git add Sources/VertexComposition Tests/VertexCompositionTests/EffectGraphCompilerTests.swift
-          git commit -m 'feat(composition): evaluate layer effects before masks'
-
-      - name: Task 7 RED
-        run: |
-          set -euo pipefail
-          python3 Tools/phase9_tasks/task07_red.py
-          set +e
-          swift test --filter AIFrameEffectKeyTests >/tmp/task7-red.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/task7-red.log
-          test "$status" -ne 0
-      - name: Task 7 GREEN
-        run: |
-          set -euo pipefail
-          python3 Tools/phase9_tasks/task07_green.py
-          swift test --filter AIFrameEffectKeyTests
-          swift test --filter VertexAITests
-          git diff --check
-          git add Sources/VertexAI Tests/VertexAITests/AIFrameEffectKeyTests.swift
-          git commit -m 'feat(ai): add deterministic frame effect cache keys'
-
-      - name: Portable regression gate
-        run: |
-          set -euo pipefail
-          swift test --filter VertexTimelineTests
-          swift test --filter ProjectTimelineSchemaTests
-          swift test --filter ProjectTimelineCommandTests
-          swift test --filter ProjectEffectTests
-          swift test --filter ProjectEffectCommandTests
-          swift test --filter EffectGraphCompilerTests
-          swift test --filter AIFrameEffectKeyTests
+          swift test --filter AIEffectBakeCommandTests
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask89Regression" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIFrameEffectServiceTests -only-testing:VertexAppTests/AIEffectBakeCoordinatorTests
           git diff --check
           test -z "$(git status --porcelain)"
-      - name: Push task commit stack
+      - name: Push Task 8 and 9 commits
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: git push origin HEAD:"$HEAD_BRANCH"
+      - name: Upload task logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task8-9-logs
+          path: ${{ runner.temp }}/task*-*.log
+          if-no-files-found: warn
+          retention-days: 3
