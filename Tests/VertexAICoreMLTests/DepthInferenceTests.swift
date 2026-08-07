@@ -50,7 +50,7 @@ import CoreML
 import CoreVideo
 
 @Test("Bundled Depth Anything model performs real local inference when CI provides the model root")
-func bundledDepthAnythingInference() async throws {
+func bundledDepthAnythingInference() throws {
     guard let rootPath = ProcessInfo.processInfo.environment["VERTEX_AI_MODEL_ROOT"] else { return }
     let root = URL(fileURLWithPath: rootPath, isDirectory: true)
     let compiled = root.appendingPathComponent("AIModels/DepthAnythingV2SmallF16.mlmodelc")
@@ -99,7 +99,7 @@ func bundledDepthAnythingInference() async throws {
         }
     }
 
-    let depth = try await engine.infer(pixelBuffer: buffer, recipe: DepthRecipe())
+    let depth = try engine.infer(pixelBuffer: buffer, recipe: DepthRecipe())
     #expect(depth.width == 96)
     #expect(depth.height == 64)
     #expect(depth.values.allSatisfy(\.isFinite))
