@@ -48,6 +48,8 @@ targets:
         product: VertexAI
       - package: Vertex
         product: VertexAICoreML
+      - package: Vertex
+        product: VertexAIAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
@@ -99,6 +101,8 @@ targets:
         product: VertexAI
       - package: Vertex
         product: VertexAICoreML
+      - package: Vertex
+        product: VertexAIAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
