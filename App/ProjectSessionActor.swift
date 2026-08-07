@@ -137,6 +137,9 @@ actor ProjectSessionActor {
 
     func save() async throws -> ProjectSessionSnapshot {
         var session = try requireSession()
+        guard session.hasUnsavedChanges else {
+            return try currentSnapshot()
+        }
         let destination = try requirePackageURL()
         let saved = try packageStore.save(session.document, to: destination)
         try session.markSaved(revision: saved.document.revision)
