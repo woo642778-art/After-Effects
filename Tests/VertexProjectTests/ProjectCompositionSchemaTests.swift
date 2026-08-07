@@ -56,11 +56,11 @@ private func makeDocument(
         projectID: projectID,
         revision: 0,
         metadata: ProjectMetadata(
-            name: "Schema 2 Fixture",
+            name: "Schema 3 Fixture",
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             modifiedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            createdByAppVersion: "6.0.0",
-            lastSavedByAppVersion: "6.0.0"
+            createdByAppVersion: "7.0.0",
+            lastSavedByAppVersion: "7.0.0"
         ),
         settings: ProjectSettings(),
         mediaRegistry: [MediaReference.fixture(id: mediaID.rawValue)],
@@ -72,17 +72,18 @@ private func makeDocument(
     )
 }
 
-@Test("New schema 2 projects contain one active empty composition")
+@Test("New schema 3 projects contain one active empty composition and no AI assets")
 func newProjectContainsMainComposition() throws {
     let project = try ProjectDocument.makeNew(id: projectID, name: "New", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
-    #expect(project.schemaVersion == 2)
+    #expect(project.schemaVersion == 3)
     #expect(project.compositionRegistry.count == 1)
     #expect(project.layerRegistry.isEmpty)
+    #expect(project.aiAssetRegistry.isEmpty)
     #expect(project.activeCompositionID == project.compositionRegistry[0].id)
     #expect(project.compositionRegistry[0].name == "Main Composition")
 }
 
-@Test("Canonical schema 2 preserves authoritative Z-order")
+@Test("Canonical schema 3 preserves authoritative Z-order")
 func canonicalSchemaPreservesZOrder() throws {
     let composition = makeComposition(layerIDs: [topLayerID, bottomLayerID])
     let top = makeMediaLayer(id: topLayerID, compositionID: composition.id, mediaID: mediaID, name: "Top")
