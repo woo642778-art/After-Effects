@@ -100,15 +100,12 @@ func canonicalSchemaPreservesZOrder() throws {
     #expect(!json.contains("legacyRenderSettings"))
 }
 
-@Test("Invalid convenience selections normalize to nil")
-func invalidSelectionsNormalizeToNil() throws {
+@Test("Invalid convenience selections are rejected")
+func invalidSelectionsAreRejected() throws {
     var document = try ProjectDocument.makeNew(id: projectID, name: "Selection")
     document.selectedLayerID = VertexID(rawValue: "60000000-0000-0000-0000-000000000099")
     document.selectedMediaID = VertexID(rawValue: "60000000-0000-0000-0000-000000000098")
-    let normalized = document.normalized()
-    #expect(normalized.selectedLayerID == nil)
-    #expect(normalized.selectedMediaID == nil)
-    #expect(try normalized.validated().activeCompositionID != nil)
+    #expect(throws: ProjectError.self) { try document.validated() }
 }
 
 @Test("Model-only layers reject pixel operations and non-normal blending")
