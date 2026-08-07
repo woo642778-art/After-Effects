@@ -155,7 +155,7 @@ public extension Array where Element == ProjectMask {
     }
 }
 
-public enum ProjectTrackMatteMode: String, Codable, CaseIterable, Sendable {
+public enum ProjectTrackMatteMode: String, Codable, CaseIterable, Hashable, Sendable {
     case alpha
     case alphaInverted
     case luma
