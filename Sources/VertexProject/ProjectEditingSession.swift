@@ -128,6 +128,63 @@ public struct ProjectEditingSession: Sendable {
         return transition
     }
 
+    public mutating func setActiveComposition(
+        _ compositionID: VertexID?,
+        timestamp: Date = Date()
+    ) throws {
+        let resolvedID: VertexID
+        if let compositionID {
+            guard document.composition(id: compositionID) != nil else {
+                throw ProjectError.invalidValue("Active composition must exist in the composition registry.")
+            }
+            resolvedID = compositionID
+        } else {
+            guard let first = document.compositionRegistry.first?.id else {
+                throw ProjectError.invalidValue("A project must contain at least one composition.")
+            }
+            resolvedID = first
+        }
+        guard document.activeCompositionID != resolvedID else { return }
+        guard document.revision < UInt64.max else {
+            throw ProjectError.invalidRevision
+        }
+
+        var changed = document
+        changed.activeCompositionID = resolvedID
+        if let selectedLayerID = changed.selectedLayerID,
+           changed.layer(id: selectedLayerID)?.compositionID != resolvedID {
+            changed.selectedLayerID = nil
+        }
+        changed.revision += 1
+        changed.metadata.modifiedAt = timestamp
+        changed.metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
+        document = try changed.validated()
+        hasUnsavedChanges = true
+    }
+
+    public mutating func setSelectedLayer(
+        _ layerID: VertexID?,
+        timestamp: Date = Date()
+    ) throws {
+        if let layerID {
+            guard let layer = document.layer(id: layerID),
+                  layer.compositionID == document.activeCompositionID else {
+                throw ProjectError.invalidValue("Selected layer must exist in the active composition.")
+            }
+        }
+        guard document.selectedLayerID != layerID else { return }
+        guard document.revision < UInt64.max else {
+            throw ProjectError.invalidRevision
+        }
+        var changed = document
+        changed.selectedLayerID = layerID
+        changed.revision += 1
+        changed.metadata.modifiedAt = timestamp
+        changed.metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
+        document = try changed.validated()
+        hasUnsavedChanges = true
+    }
+
     public mutating func setSelectedMedia(
         _ mediaID: VertexID?,
         timestamp: Date = Date()
@@ -246,6 +303,80 @@ public struct ProjectEditingSession: Sendable {
             .setProjectColor(currentBefore, currentAfter)
         ) where previousAfter == currentBefore:
             return .setProjectColor(before: previousBefore, after: currentAfter)
+
+        case let (
+            .setCompositionDimensions(previousID, previousBeforeWidth, previousBeforeHeight, previousAfterWidth, previousAfterHeight),
+            .setCompositionDimensions(currentID, currentBeforeWidth, currentBeforeHeight, currentAfterWidth, currentAfterHeight)
+        ) where previousID == currentID
+            && previousAfterWidth == currentBeforeWidth
+            && previousAfterHeight == currentBeforeHeight:
+            return .setCompositionDimensions(
+                id: previousID,
+                beforeWidth: previousBeforeWidth,
+                beforeHeight: previousBeforeHeight,
+                afterWidth: currentAfterWidth,
+                afterHeight: currentAfterHeight
+            )
+
+        case let (
+            .setCompositionDuration(previousID, previousBefore, previousAfter),
+            .setCompositionDuration(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setCompositionDuration(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setCompositionFrameRate(previousID, previousBefore, previousAfter),
+            .setCompositionFrameRate(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setCompositionFrameRate(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setCompositionBackground(previousID, previousBefore, previousAfter),
+            .setCompositionBackground(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setCompositionBackground(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerTiming(previousID, previousBefore, previousAfter),
+            .setLayerTiming(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerTiming(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerTransform(previousID, previousBefore, previousAfter),
+            .setLayerTransform(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerTransform(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerEnabled(previousID, previousBefore, previousAfter),
+            .setLayerEnabled(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerEnabled(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerSolo(previousID, previousBefore, previousAfter),
+            .setLayerSolo(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerSolo(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerBlendMode(previousID, previousBefore, previousAfter),
+            .setLayerBlendMode(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerBlendMode(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerSource(previousID, previousBefore, previousAfter),
+            .setLayerSource(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerSource(id: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerOperations(previousID, previousBefore, previousAfter),
+            .setLayerOperations(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            return .setLayerOperations(id: previousID, before: previousBefore, after: currentAfter)
 
         default:
             return nil
