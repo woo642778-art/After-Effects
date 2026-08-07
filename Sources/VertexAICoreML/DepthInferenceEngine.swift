@@ -133,7 +133,7 @@ public enum DepthProcessing {
 }
 
 #if canImport(CoreML) && canImport(CoreVideo)
-import CoreML
+@preconcurrency import CoreML
 import CoreVideo
 
 public actor DepthInferenceEngine {
@@ -153,23 +153,24 @@ public actor DepthInferenceEngine {
         previousFrame: DepthFrame? = nil
     ) async throws -> DepthFrame {
         _ = try recipe.validated()
-        let model = try await registry.model(for: modelID)
-        let preprocessed = try AIImagePreprocessor.aspectFit(pixelBuffer: pixelBuffer, for: model)
-        let prediction = try AIImageTensorAdapter.prediction(model: model, pixelBuffer: preprocessed.buffer)
-        let raw = try Self.extractDepth(provider: prediction)
-        let aligned = try Self.align(
-            values: raw.values,
-            width: raw.width,
-            height: raw.height,
-            transform: preprocessed.transform
-        )
-        return try DepthProcessing.process(
-            values: aligned,
-            width: preprocessed.transform.sourceWidth,
-            height: preprocessed.transform.sourceHeight,
-            recipe: recipe,
-            previous: previousFrame
-        )
+        return try registry.withModel(for: modelID) { model in
+            let preprocessed = try AIImagePreprocessor.aspectFit(pixelBuffer: pixelBuffer, for: model)
+            let prediction = try AIImageTensorAdapter.prediction(model: model, pixelBuffer: preprocessed.buffer)
+            let raw = try Self.extractDepth(provider: prediction)
+            let aligned = try Self.align(
+                values: raw.values,
+                width: raw.width,
+                height: raw.height,
+                transform: preprocessed.transform
+            )
+            return try DepthProcessing.process(
+                values: aligned,
+                width: preprocessed.transform.sourceWidth,
+                height: preprocessed.transform.sourceHeight,
+                recipe: recipe,
+                previous: previousFrame
+            )
+        }
     }
 
     private static func extractDepth(provider: MLFeatureProvider) throws -> (width: Int, height: Int, values: [Float]) {
