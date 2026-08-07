@@ -70,7 +70,15 @@ jobs:
           grep -q 'currentSchemaVersion = 2' Sources/VertexProject/ProjectSchema.swift
           grep -q 'currentAppVersion = "6.0.0"' Sources/VertexProject/ProjectSchema.swift
       - name: Run deterministic portable tests
-        run: swift test
+        run: |
+          set -euo pipefail
+          SWIFT_LOG="$RUNNER_TEMP/swift-test.log"
+          if ! swift test >"$SWIFT_LOG" 2>&1; then
+            echo "Portable Swift tests failed. Diagnostics:"
+            grep -n -C 4 -m 60 -E "error:|failed|Failure|✘" "$SWIFT_LOG" || tail -n 240 "$SWIFT_LOG"
+            exit 1
+          fi
+          tail -n 120 "$SWIFT_LOG"
 
   ios-app-tests:
     name: Run iOS app and session tests
