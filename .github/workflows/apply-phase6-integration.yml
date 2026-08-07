@@ -1,0 +1,44 @@
+name: Apply corrected Phase 6 integration
+
+on:
+  push:
+    branches:
+      - agent/phase-6-persistence-integration
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout integration staging branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve overlay payload
+        run: |
+          set -euo pipefail
+          cat .integration/overlay-* > /tmp/phase6-overlay.tar.gz.b64
+          base64 --decode /tmp/phase6-overlay.tar.gz.b64 > /tmp/phase6-overlay.tar.gz
+
+      - name: Rebuild corrected Phase 6
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin agent/phase-5-project-persistence agent/archive/phase-6-pre-correction
+          git reset --hard origin/agent/phase-5-project-persistence
+          git merge --no-commit --no-ff origin/agent/archive/phase-6-pre-correction || true
+          tar -xzf /tmp/phase6-overlay.tar.gz -C .
+          git add -A
+          if git diff --name-only --diff-filter=U | grep .; then
+            echo "Unresolved merge conflicts remain"
+            exit 1
+          fi
+          rm -rf .integration
+          rm -f .github/workflows/export-integration-sources.yml
+          git add -A
+          git commit -m "merge: integrate corrected Phase 5 persistence"
+          git push origin HEAD:agent/phase-6-persistence-integration --force
