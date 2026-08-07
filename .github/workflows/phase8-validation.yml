@@ -6,7 +6,7 @@ on:
       - agent/phase-8-vertex2-motion-masks
   pull_request:
     branches:
-      - agent/phase-7-offline-ai-studio
+      - agent/phase-8-validation-base
   workflow_dispatch:
 
 concurrency:
