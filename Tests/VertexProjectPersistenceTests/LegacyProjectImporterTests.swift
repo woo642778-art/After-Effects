@@ -149,8 +149,7 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
             legacyMissingMediaID: Data()
         ]
     )
-    let projectURL = sourceURL.appendingPathComponent("project.json")
-    try projectData.write(to: projectURL)
+    try projectData.write(to: sourceURL.appendingPathComponent("project.json"))
 
     let manifest = LegacyManifestDTO(
         schemaVersion: document.schemaVersion,
@@ -168,10 +167,14 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
         to: sourceURL.appendingPathComponent("manifest.json")
     )
 
-    let history = ProjectHistorySnapshot(undo: [rename], redo: [rename])
-    try legacyEncoder().encode(history).write(
-        to: sourceURL.appendingPathComponent("history.json")
-    )
+    let discardedHistory: [String: Any] = [
+        "undo": [["discarded": true]],
+        "redo": [["discarded": true]]
+    ]
+    try JSONSerialization.data(
+        withJSONObject: discardedHistory,
+        options: [.sortedKeys]
+    ).write(to: sourceURL.appendingPathComponent("history.json"))
 
     try embeddedBytes.write(
         to: mediaDirectory.appendingPathComponent("embedded-source.mov")
