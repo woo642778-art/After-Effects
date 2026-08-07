@@ -27,44 +27,38 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: '6.0'
-      - name: Detect completed Task 2
+      - name: Detect completed Task 2 review fix
         id: task-state
         run: |
-          if [ -f Sources/VertexTimeline/TimelineEngine.swift ]; then
+          if grep -q 'private func shiftedLayer' Sources/VertexTimeline/TimelineEngine.swift; then
             echo 'applied=true' >> "$GITHUB_OUTPUT"
           else
             echo 'applied=false' >> "$GITHUB_OUTPUT"
           fi
-      - name: Apply Task 2 RED tests
+      - name: Apply Task 2 review RED test
         if: steps.task-state.outputs.applied != 'true'
-        run: python3 Tools/phase9_tasks/task02_red.py
-      - name: Verify Task 2 RED
+        run: python3 Tools/phase9_tasks/task02_review_red.py
+      - name: Verify keyframe placement RED
         if: steps.task-state.outputs.applied != 'true'
         run: |
           set -euo pipefail
           set +e
-          swift test --filter VertexTimelineTests > "$RUNNER_TEMP/task2-red.log" 2>&1
+          swift test --filter moveShiftsLayerAnimationKeyframes > "$RUNNER_TEMP/task2-review-red.log" 2>&1
           status=$?
           set -e
-          cat "$RUNNER_TEMP/task2-red.log"
+          cat "$RUNNER_TEMP/task2-review-red.log"
           if [ "$status" -eq 0 ]; then
-            echo 'Expected VertexTimeline tests to fail before the module exists.'
+            echo 'Expected moving a layer to fail the attached-keyframe placement test before the fix.'
             exit 1
           fi
-          grep -Eq "VertexTimeline|no such module|unknown module" "$RUNNER_TEMP/task2-red.log" || {
-            echo 'RED failure was not caused by the missing VertexTimeline implementation.'
-            exit 1
-          }
-      - name: Apply Task 2 GREEN implementation
+      - name: Apply Task 2 review GREEN fix
         if: steps.task-state.outputs.applied != 'true'
-        run: python3 Tools/phase9_tasks/task02_green.py
-      - name: Run Task 2 timeline tests
-        run: |
-          set -euo pipefail
-          swift test --filter VertexTimelineTests
+        run: python3 Tools/phase9_tasks/task02_review_green.py
+      - name: Run reviewed Task 2 tests
+        run: swift test --filter VertexTimelineTests
       - name: Verify diff hygiene
         run: git diff --check
-      - name: Commit generated Task 2 implementation
+      - name: Commit Task 2 review fix
         if: steps.task-state.outputs.applied != 'true'
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -72,6 +66,6 @@ jobs:
           set -euo pipefail
           git config user.name 'vertex2-phase9-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add Package.swift Package@swift-6.0.swift Sources/VertexTimeline Tests/VertexTimelineTests
-          git commit -m 'feat(timeline): add exact-time edit engine'
+          git add Sources/VertexTimeline Tests/VertexTimelineTests
+          git commit -m 'fix(timeline): move keyframes with layer placement'
           git push origin HEAD:"$HEAD_BRANCH"
