@@ -52,19 +52,22 @@ public struct CompositionRenderRequest: Sendable {
     public var time: RationalTime
     public var output: RenderOutputSpecification
     public var limits: CompositionRenderLimits
+    public var purpose: CompositionRenderPurpose
 
     public init(
         project: ProjectDocument,
         compositionID: VertexID,
         time: RationalTime,
         output: RenderOutputSpecification,
-        limits: CompositionRenderLimits = CompositionRenderLimits()
+        limits: CompositionRenderLimits = CompositionRenderLimits(),
+        purpose: CompositionRenderPurpose = .interactivePreview
     ) {
         self.project = project
         self.compositionID = compositionID
         self.time = time
         self.output = output
         self.limits = limits
+        self.purpose = purpose
     }
 }
 
