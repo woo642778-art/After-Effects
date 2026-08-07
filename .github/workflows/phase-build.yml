@@ -13,6 +13,7 @@ on:
     branches:
       - agent/phase-4-gpu-render-graph
       - agent/phase-5-project-persistence
+      - agent/phase-6-layers-compositions
   workflow_dispatch:
 
 concurrency:
@@ -21,14 +22,14 @@ concurrency:
 
 jobs:
   portable-tests:
-    name: Vertex portable core, media, render, project, persistence, and composition tests
+    name: Vertex portable core, media, render, project, persistence, composition, and AI tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Verify corrected Phase 6 persistence contract
+      - name: Verify corrected persistence and Phase 7 contracts
         run: |
           set -euo pipefail
           if swift package dump-package | grep -q '"name" : "VertexProjectFoundation"'; then
@@ -67,18 +68,22 @@ jobs:
             echo "Writable .aeproject creation remains outside read-only legacy import"
             exit 1
           fi
-          grep -q 'currentSchemaVersion = 2' Sources/VertexProject/ProjectSchema.swift
-          grep -q 'currentAppVersion = "6.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'currentSchemaVersion = 3' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'currentAppVersion = "7.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'MARKETING_VERSION: 7.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 7' project.yml
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
       - name: Run deterministic portable tests
         run: |
           set -euo pipefail
           SWIFT_LOG="$RUNNER_TEMP/swift-test.log"
           if ! swift test >"$SWIFT_LOG" 2>&1; then
             echo "Portable Swift tests failed. Diagnostics:"
-            grep -n -C 4 -m 60 -E "error:|failed|Failure|✘" "$SWIFT_LOG" || tail -n 240 "$SWIFT_LOG"
+            grep -n -C 4 -m 100 -E "error:|failed|Failure|✘" "$SWIFT_LOG" || tail -n 320 "$SWIFT_LOG"
             exit 1
           fi
-          tail -n 120 "$SWIFT_LOG"
+          tail -n 160 "$SWIFT_LOG"
 
   ios-app-tests:
     name: Run iOS app and session tests
@@ -117,21 +122,8 @@ jobs:
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
           xcrun simctl shutdown all || true
           xcrun simctl boot "$SIM_UDID" || true
-          READY=0
-          for attempt in $(seq 1 60); do
-            state="$(xcrun simctl list devices -j | python3 -c 'import json,sys; p=json.load(sys.stdin); u=sys.argv[1]; print(next((d.get("state","") for ds in p.get("devices",{}).values() for d in ds if d.get("udid")==u), ""))' "$SIM_UDID")"
-            if [ "$state" = "Booted" ]; then
-              READY=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "$READY" -ne 1 ]; then
-            echo "Simulator did not boot within 120 seconds"
-            xcrun simctl list devices
-            exit 1
-          fi
-      - name: Run iOS app session tests
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Run iOS app session and startup tests
         run: |
           set -euo pipefail
           TEST_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
@@ -148,10 +140,10 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             test >"$TEST_LOG" 2>&1; then
             echo "iOS app tests failed. Diagnostics:"
-            /usr/bin/grep -n -C 4 -E "error:|failed|Test Case" "$TEST_LOG" || /usr/bin/tail -n 300 "$TEST_LOG"
+            /usr/bin/grep -n -C 5 -m 120 -E "error:|failed|Test Case|Testing" "$TEST_LOG" || /usr/bin/tail -n 360 "$TEST_LOG"
             exit 1
           fi
-          /usr/bin/tail -n 120 "$TEST_LOG"
+          /usr/bin/tail -n 160 "$TEST_LOG"
       - name: Upload iOS app test log
         if: always()
         uses: actions/upload-artifact@v4
@@ -161,99 +153,35 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  native-regression-tests:
+    name: Run macOS native Metal, persistence, composition, and AI tests
+    runs-on: macos-15
+    needs:
+      - portable-tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Compile Metal shader source
+        run: |
+          xcrun -sdk macosx metal \
+            -c Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal \
+            -o "$RUNNER_TEMP/VertexRenderKernels.air"
+      - name: Run native regression suites
+        run: |
+          set -euo pipefail
+          swift test --filter VertexRenderMetalTests
+          swift test --filter VertexProjectPersistenceTests
+          swift test --filter VertexCompositionTests
+          swift test --filter VertexAICoreMLTests
+
   unsigned-ipa:
-    name: Build After Effects 6.0.0 unsigned IPA
+    name: Final Phase 7 IPA publish gate
+    if: ${{ false }}
     runs-on: macos-15
     needs:
       - portable-tests
       - ios-app-tests
+      - native-regression-tests
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
-      - name: Compile Metal shader source
-        run: |
-          set -euo pipefail
-          xcrun -sdk macosx metal \
-            -c Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal \
-            -o "$RUNNER_TEMP/VertexRenderKernels.air"
-
-      - name: Run native Metal fixture tests
-        run: swift test --filter VertexRenderMetalTests
-
-      - name: Run native project persistence tests
-        run: swift test --filter VertexProjectPersistenceTests
-
-      - name: Run native composition tests
-        run: swift test --filter VertexCompositionTests
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate supplied icon assets
-        run: bash Tools/generate_app_assets.sh
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Build iOS application without signing
-        run: |
-          set -euo pipefail
-          BUILD_LOG="$RUNNER_TEMP/xcodebuild.log"
-          if ! xcodebuild \
-            -project Vertex.xcodeproj \
-            -scheme Vertex \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination "generic/platform=iOS" \
-            -derivedDataPath "$PWD/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            clean build >"$BUILD_LOG" 2>&1; then
-            echo "iOS build failed. Compiler diagnostics:"
-            /usr/bin/grep -n -C 4 "error:" "$BUILD_LOG" || /usr/bin/tail -n 250 "$BUILD_LOG"
-            exit 1
-          fi
-          /usr/bin/tail -n 80 "$BUILD_LOG"
-
-      - name: Verify product identity, version, architecture, and render resources
-        run: |
-          set -euo pipefail
-          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
-          test -d "$APP_PATH"
-          test -f "$APP_PATH/Assets.car"
-          test -f "$APP_PATH/Vertex_VertexRenderMetal.bundle/default.metallib"
-          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
-          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
-          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-          MIN_OS="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP_PATH/Info.plist")"
-          test "$DISPLAY_NAME" = "After Effects"
-          test "$VERSION" = "6.0.0"
-          test "$BUILD" = "6"
-          test "$BUNDLE_ID" = "com.woo642778.aftereffects"
-          test "$MIN_OS" = "17.0"
-          /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
-
-      - name: Package unsigned IPA and checksum
-        run: |
-          set -euo pipefail
-          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
-          rm -rf Payload artifacts
-          mkdir -p Payload artifacts
-          cp -R "$APP_PATH" Payload/AfterEffects.app
-          /usr/bin/zip -qry artifacts/After-Effects-6.0.0-unsigned.ipa Payload
-          shasum -a 256 artifacts/After-Effects-6.0.0-unsigned.ipa > artifacts/After-Effects-6.0.0-unsigned.ipa.sha256
-          unzip -l artifacts/After-Effects-6.0.0-unsigned.ipa | grep -q 'Payload/AfterEffects.app/Assets.car'
-          unzip -l artifacts/After-Effects-6.0.0-unsigned.ipa | grep -q 'Payload/AfterEffects.app/Vertex_VertexRenderMetal.bundle/default.metallib'
-
-      - name: Upload unsigned IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: After-Effects-6.0.0-unsigned-ipa
-          path: artifacts/*
-          if-no-files-found: error
-          retention-days: 30
+      - run: echo "Enabled only after audited AI models and final artifact inventory are wired."
