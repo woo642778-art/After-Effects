@@ -27,32 +27,49 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: '6.0'
-      - name: Apply Phase 9 task scripts
+      - name: Apply Task 1 feature and RED regression test
         run: |
           set -euo pipefail
-          for script in Tools/phase9_tasks/task*.py; do
-            echo "==> $script"
-            python3 "$script"
-          done
-      - name: Run portable task tests
+          python3 Tools/phase9_tasks/task01.py
+          python3 Tools/phase9_tasks/task01_fix_red.py
+      - name: Verify RED for schema 3 to 4 metadata regression
         run: |
           set -euo pipefail
+          set +e
+          swift test --filter schema3MigratesToSchema4 > "$RUNNER_TEMP/task1-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task1-red.log"
+          if [ "$status" -eq 0 ]; then
+            echo 'Expected schema3MigratesToSchema4 to fail before the migration-version fix.'
+            exit 1
+          fi
+          grep -q '8.0.0' "$RUNNER_TEMP/task1-red.log" || {
+            echo 'RED failure did not exercise the expected 8.0.0 metadata assertion.'
+            exit 1
+          }
+      - name: Apply minimal GREEN fix
+        run: python3 Tools/phase9_tasks/task01_fix_green.py
+      - name: Run Task 1 focused tests
+        run: |
+          set -euo pipefail
+          swift test --filter schema3MigratesToSchema4
           swift test --filter ProjectTimelineSchemaTests
           swift test --filter Schema4To5MigrationTests
       - name: Verify diff hygiene
         run: |
           git diff --check
           git status --short
-      - name: Commit generated task implementation
+      - name: Commit generated Task 1 implementation
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
           git config user.name 'vertex2-phase9-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add App Sources Tests Package.swift Package@swift-6.0.swift project.yml .github/workflows Tools/phase9_tasks 2>/dev/null || true
+          git add Sources Tests
           if git diff --cached --quiet; then
-            echo 'No generated changes to commit.'
+            echo 'No generated Task 1 changes to commit.'
             exit 0
           fi
           git commit -m 'feat(project): add schema 5 timeline primitives'
