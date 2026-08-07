@@ -18,6 +18,15 @@ targets:
       - path: App
         excludes:
           - Resources/AppIconSource.base64
+          - GeneratedAIResources
+      - path: App/GeneratedAIResources/AIModels
+        type: folder
+        buildPhase: resources
+      - path: App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+        buildPhase: resources
+      - path: App/GeneratedAIResources/AIModelNotices
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: Vertex
         product: VertexCore
@@ -37,6 +46,8 @@ targets:
         product: VertexComposition
       - package: Vertex
         product: VertexAI
+      - package: Vertex
+        product: VertexAICoreML
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
@@ -86,6 +97,8 @@ targets:
         product: VertexComposition
       - package: Vertex
         product: VertexAI
+      - package: Vertex
+        product: VertexAICoreML
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
