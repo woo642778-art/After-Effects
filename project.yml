@@ -29,12 +29,17 @@ targets:
         product: VertexRender
       - package: Vertex
         product: VertexRenderMetal
+      - package: Vertex
+        product: VertexProject
+      - package: Vertex
+        product: VertexProjectPersistence
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
-        MARKETING_VERSION: 4.0.0
-        CURRENT_PROJECT_VERSION: 4
+        PRODUCT_MODULE_NAME: Vertex
+        MARKETING_VERSION: 5.0.0
+        CURRENT_PROJECT_VERSION: 5
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: After Effects
@@ -52,16 +57,13 @@ targets:
         CODE_SIGN_STYLE: Automatic
     scheme:
       testTargets:
-        - VertexTests
+        - VertexAppTests
 
-  VertexTests:
+  VertexAppTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: Tests/VertexCoreTests
-      - path: Tests/VertexMediaTests
-      - path: Tests/VertexRenderTests
-      - path: Tests/VertexRenderMetalTests
+      - path: Tests/VertexAppTests
     dependencies:
       - target: Vertex
       - package: Vertex
@@ -72,8 +74,14 @@ targets:
         product: VertexRender
       - package: Vertex
         product: VertexRenderMetal
+      - package: Vertex
+        product: VertexProject
+      - package: Vertex
+        product: VertexProjectPersistence
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AfterEffects.app/AfterEffects
+        BUNDLE_LOADER: $(TEST_HOST)

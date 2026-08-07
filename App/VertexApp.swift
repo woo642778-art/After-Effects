@@ -21,7 +21,7 @@ struct AfterEffectsApp: App {
                 guard !isReady else { return }
 
                 let architectureIsAvailable = !CoreArchitectureCatalog.contracts.isEmpty
-                    && MilestoneCatalog.current.number == 2
+                    && MilestoneCatalog.current.number == 5
                 guard architectureIsAvailable else { return }
 
                 try? await Task.sleep(nanoseconds: 1_250_000_000)

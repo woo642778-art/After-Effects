@@ -1,6 +1,7 @@
 import Foundation
 import VertexCore
 import VertexMedia
+import VertexProject
 import VertexRender
 import VertexRenderMetal
 
@@ -13,14 +14,55 @@ final class RenderLabViewModel: ObservableObject {
         case failed(String)
     }
 
-    @Published var exposure: Double = 0 { didSet { scheduleRender() } }
-    @Published var saturation: Double = 1 { didSet { scheduleRender() } }
-    @Published var opacity: Double = 1 { didSet { scheduleRender() } }
-    @Published var inverted = false { didSet { scheduleRender() } }
-    @Published var scale: Double = 1 { didSet { scheduleRender() } }
-    @Published var translationX: Double = 0 { didSet { scheduleRender() } }
-    @Published var translationY: Double = 0 { didSet { scheduleRender() } }
-    @Published var outputLongEdge = 1080 { didSet { scheduleRender() } }
+    @Published var exposure: Double = 0 {
+        didSet {
+            scheduleRender()
+            persist(.exposure, oldValue: oldValue, newValue: exposure)
+        }
+    }
+    @Published var saturation: Double = 1 {
+        didSet {
+            scheduleRender()
+            persist(.saturation, oldValue: oldValue, newValue: saturation)
+        }
+    }
+    @Published var opacity: Double = 1 {
+        didSet {
+            scheduleRender()
+            persist(.opacity, oldValue: oldValue, newValue: opacity)
+        }
+    }
+    @Published var inverted = false {
+        didSet {
+            scheduleRender()
+            guard !isApplyingProjectState, oldValue != inverted else { return }
+            workspace?.setInverted(inverted)
+        }
+    }
+    @Published var scale: Double = 1 {
+        didSet {
+            scheduleRender()
+            persist(.scale, oldValue: oldValue, newValue: scale)
+        }
+    }
+    @Published var translationX: Double = 0 {
+        didSet {
+            scheduleRender()
+            persist(.translationX, oldValue: oldValue, newValue: translationX)
+        }
+    }
+    @Published var translationY: Double = 0 {
+        didSet {
+            scheduleRender()
+            persist(.translationY, oldValue: oldValue, newValue: translationY)
+        }
+    }
+    @Published var outputLongEdge = 1080 {
+        didSet {
+            scheduleRender()
+            persistOutputDimensions()
+        }
+    }
     @Published private(set) var state: State = .idle
 
     let source: PortableImage
@@ -28,6 +70,8 @@ final class RenderLabViewModel: ObservableObject {
     private var coordinator: LatestRenderCoordinator?
     private var debounceTask: Task<Void, Never>?
     private var hasStarted = false
+    private var isApplyingProjectState = false
+    private weak var workspace: ProjectWorkspaceViewModel?
 
     init(source: PortableImage) {
         self.source = source
@@ -62,6 +106,22 @@ final class RenderLabViewModel: ObservableObject {
         return result.cacheKey.rawValue
     }
 
+    func attach(_ workspace: ProjectWorkspaceViewModel) {
+        self.workspace = workspace
+        let settings = workspace.renderSettings
+        isApplyingProjectState = true
+        exposure = settings.exposure
+        saturation = settings.saturation
+        opacity = settings.opacity
+        inverted = settings.inverted
+        scale = settings.scale
+        translationX = settings.translationX
+        translationY = settings.translationY
+        outputLongEdge = max(settings.outputWidth, settings.outputHeight)
+        isApplyingProjectState = false
+        if hasStarted { scheduleRender(immediate: true) }
+    }
+
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
@@ -70,6 +130,17 @@ final class RenderLabViewModel: ObservableObject {
 
     func renderNow() {
         scheduleRender(immediate: true)
+    }
+
+    private func persist(_ parameter: ProjectRenderParameter, oldValue: Double, newValue: Double) {
+        guard !isApplyingProjectState, oldValue != newValue else { return }
+        workspace?.setRenderParameter(parameter, to: newValue)
+    }
+
+    private func persistOutputDimensions() {
+        guard !isApplyingProjectState,
+              let output = try? outputSpecification(longEdge: outputLongEdge) else { return }
+        workspace?.setOutputDimensions(width: output.width, height: output.height)
     }
 
     private func scheduleRender(immediate: Bool = false) {

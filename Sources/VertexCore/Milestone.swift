@@ -55,45 +55,52 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 4,
-        title: "GPU Render Graph",
+        number: 5,
+        title: "Project Persistence and Recovery",
         status: .implemented,
         deliverables: [
-            "Portable VertexRender graph, request, result, validation, cache, cancellation, and error contracts",
-            "Native Metal compute backend isolated behind the RenderBackend protocol",
-            "GPU transform, exposure, saturation, inversion, opacity, and output resizing",
-            "Real imported-thumbnail Render Lab with latest-request-wins scheduling",
-            "Byte-identical PNG preview and file export from one RenderResult",
-            "Versioned After Effects 4.0.0 unsigned IPA artifact"
+            "Versioned deterministic VertexProject schema with portable media and render settings",
+            "Command-based Undo and Redo with coalescing, revision checks, and idempotent command identities",
+            "Checksummed write-ahead journal, sequential replay, migration inspection, and strong media relinking",
+            "Atomic project package storage, history persistence, autosave rotation, backup recovery, and verified media embedding",
+            "Real project create, open, save, export, autosave, recovery, Undo, Redo, embed, and relink application flows",
+            "Versioned After Effects 5.0.0 unsigned IPA artifact"
         ],
         sourceAdoptions: [
+            SourceAdoption(
+                id: "foundation",
+                repository: "Apple Foundation",
+                license: "Apple platform SDK and Swift core libraries",
+                mode: .wrappedDependency,
+                purpose: "Phase 5 file packages, deterministic JSON boundaries, atomic file replacement, bookmarks, and FileWrapper export"
+            ),
             SourceAdoption(
                 id: "avfoundation",
                 repository: "Apple AVFoundation",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Phase 3 production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
+                purpose: "Production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
             ),
             SourceAdoption(
                 id: "metal",
                 repository: "Apple Metal",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Phase 4 GPU compute execution behind VertexRenderMetal without exposing Metal types"
+                purpose: "GPU compute execution behind VertexRenderMetal without exposing Metal types"
             ),
             SourceAdoption(
                 id: "metalpetal",
                 repository: "MetalPetal/MetalPetal",
                 license: "MIT",
                 mode: .researchOnly,
-                purpose: "Audited future filters and composition backend candidate; not linked into Phase 4"
+                purpose: "Audited future filters and composition backend candidate; not linked into Phase 5"
             ),
             SourceAdoption(
                 id: "videoio",
                 repository: "MetalPetal/VideoIO",
                 license: "MIT",
                 mode: .researchOnly,
-                purpose: "Audited future timed preview and video export candidate; not linked into Phase 4"
+                purpose: "Audited future timed preview and video export candidate; not linked into Phase 5"
             ),
             SourceAdoption(
                 id: "videolab",
@@ -110,6 +117,6 @@ public enum MilestoneCatalog {
                 purpose: "Timeline interaction research only; no source copied into the product"
             )
         ],
-        artifactPolicy: "Phase 4 publishes After-Effects-4.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
+        artifactPolicy: "Phase 5 publishes After-Effects-5.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
     )
 }

@@ -9,6 +9,10 @@ on:
       - "Documentation/**"
       - "docs/**"
       - "README.md"
+  pull_request:
+    branches:
+      - agent/phase-4-gpu-render-graph
+      - agent/phase-5-project-persistence
   workflow_dispatch:
 
 concurrency:
@@ -17,20 +21,138 @@ concurrency:
 
 jobs:
   portable-tests:
-    name: Vertex portable core, media, and render tests
+    name: Vertex portable core, media, render, and project tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
+      - name: Verify corrected persistence contract
+        run: |
+          set -euo pipefail
+          if swift package dump-package | grep -q '"name" : "VertexProjectFoundation"'; then
+            echo "VertexProjectFoundation remains in the package graph"
+            exit 1
+          fi
+          test ! -d Sources/VertexProjectFoundation
+          test ! -d Tests/VertexProjectFoundationTests
+          test ! -d Sources/VertexProjectPersistence/LegacyDraftCompatibility
+          test ! -f Sources/VertexProject/ProjectJournal.swift
+          if grep -R "import VertexProjectFoundation" Package.swift project.yml App Sources Tests; then
+            echo "Active code still imports VertexProjectFoundation"
+            exit 1
+          fi
+          if grep -R "bookmarkData" Sources/VertexProject; then
+            echo "Canonical project model still stores bookmark bytes"
+            exit 1
+          fi
+          if grep -R "appliedCommandIDs" Sources/VertexProject; then
+            echo "Canonical project model still stores applied command IDs"
+            exit 1
+          fi
+          if grep -R "legacyRenderSettings" Sources/VertexProject; then
+            echo "Canonical project model still stores legacy render settings"
+            exit 1
+          fi
+          if grep -R --exclude-dir=LegacyImport --exclude='*.md' "operations.log" Sources/VertexProjectPersistence App; then
+            echo "Writable operation WAL remains outside read-only legacy import"
+            exit 1
+          fi
+          if grep -R --exclude-dir=LegacyImport --exclude='*.md' "history.json" Sources/VertexProjectPersistence App; then
+            echo "Persistent history remains outside read-only legacy import"
+            exit 1
+          fi
       - name: Run deterministic portable tests
         run: swift test
 
-  unsigned-ipa:
-    name: Build After Effects 4.0.0 unsigned IPA
+  ios-app-tests:
+    name: Run iOS app session tests
     runs-on: macos-15
-    needs: portable-tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate supplied icon assets
+        run: bash Tools/generate_app_assets.sh
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Select and boot newest iPhone Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              match = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in devices:
+                  if device.get('isAvailable') and device.get('name','').startswith('iPhone'):
+                      candidates.append((version, device['name'], device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPhone Simulator found')
+          candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+          print(candidates[0][2])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          READY=0
+          for attempt in $(seq 1 60); do
+            state="$(xcrun simctl list devices -j | python3 -c 'import json,sys; p=json.load(sys.stdin); u=sys.argv[1]; print(next((d.get("state","") for ds in p.get("devices",{}).values() for d in ds if d.get("udid")==u), ""))' "$SIM_UDID")"
+            if [ "$state" = "Booted" ]; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$READY" -ne 1 ]; then
+            echo "Simulator did not boot within 120 seconds"
+            xcrun simctl list devices
+            exit 1
+          fi
+      - name: Run iOS app session tests
+        run: |
+          set -euo pipefail
+          TEST_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
+          echo "TEST_LOG=$TEST_LOG" >> "$GITHUB_ENV"
+          if ! xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataTests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test >"$TEST_LOG" 2>&1; then
+            echo "iOS app tests failed. Diagnostics:"
+            /usr/bin/grep -n -C 4 -E "error:|failed|Test Case" "$TEST_LOG" || /usr/bin/tail -n 300 "$TEST_LOG"
+            exit 1
+          fi
+          /usr/bin/tail -n 120 "$TEST_LOG"
+      - name: Upload iOS app test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-test-log
+          path: ${{ env.TEST_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+  unsigned-ipa:
+    name: Build After Effects 5.0.0 unsigned IPA
+    runs-on: macos-15
+    needs:
+      - portable-tests
+      - ios-app-tests
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +169,9 @@ jobs:
       - name: Run native Metal fixture tests
         run: swift test --filter VertexRenderMetalTests
 
+      - name: Run native project persistence tests
+        run: swift test --filter VertexProjectPersistenceTests
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -59,7 +184,8 @@ jobs:
       - name: Build iOS application without signing
         run: |
           set -euo pipefail
-          xcodebuild \
+          BUILD_LOG="$RUNNER_TEMP/xcodebuild.log"
+          if ! xcodebuild \
             -project Vertex.xcodeproj \
             -scheme Vertex \
             -configuration Release \
@@ -69,7 +195,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build
+            clean build >"$BUILD_LOG" 2>&1; then
+            echo "iOS build failed. Compiler diagnostics:"
+            /usr/bin/grep -n -C 4 "error:" "$BUILD_LOG" || /usr/bin/tail -n 250 "$BUILD_LOG"
+            exit 1
+          fi
+          /usr/bin/tail -n 80 "$BUILD_LOG"
 
       - name: Verify product identity, version, architecture, and render resources
         run: |
@@ -83,8 +214,8 @@ jobs:
           BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           test "$DISPLAY_NAME" = "After Effects"
-          test "$VERSION" = "4.0.0"
-          test "$BUILD" = "4"
+          test "$VERSION" = "5.0.0"
+          test "$BUILD" = "5"
           test "$BUNDLE_ID" = "com.woo642778.aftereffects"
           /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
 
@@ -95,13 +226,13 @@ jobs:
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP_PATH" Payload/AfterEffects.app
-          /usr/bin/zip -qry artifacts/After-Effects-4.0.0-unsigned.ipa Payload
-          shasum -a 256 artifacts/After-Effects-4.0.0-unsigned.ipa > artifacts/After-Effects-4.0.0-unsigned.ipa.sha256
+          /usr/bin/zip -qry artifacts/After-Effects-5.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-5.0.0-unsigned.ipa > artifacts/After-Effects-5.0.0-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: After-Effects-4.0.0-unsigned-ipa
+          name: After-Effects-5.0.0-unsigned-ipa
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30

@@ -5,6 +5,7 @@ import VertexMedia
 import VertexRender
 
 struct RenderLabView: View {
+    @EnvironmentObject private var projectWorkspace: ProjectWorkspaceViewModel
     @StateObject private var viewModel: RenderLabViewModel
     @State private var isExporterPresented = false
 
@@ -52,7 +53,13 @@ struct RenderLabView: View {
             .disabled(viewModel.exportDocument == nil)
         }
         .padding(.top, 4)
-        .task { viewModel.start() }
+        .task {
+            viewModel.attach(projectWorkspace)
+            viewModel.start()
+        }
+        .onChange(of: projectWorkspace.project?.revision) { _, _ in
+            viewModel.attach(projectWorkspace)
+        }
         .fileExporter(
             isPresented: $isExporterPresented,
             document: viewModel.exportDocument,

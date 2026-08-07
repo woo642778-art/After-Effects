@@ -4,6 +4,7 @@ import UIKit
 import VertexMedia
 
 struct MediaImportView: View {
+    @EnvironmentObject private var projectWorkspace: ProjectWorkspaceViewModel
     @StateObject private var viewModel = MediaImportViewModel()
     @State private var isImporterPresented = false
 
@@ -43,6 +44,7 @@ struct MediaImportView: View {
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
+                projectWorkspace.registerImportedMedia(from: url)
                 viewModel.importMedia(from: url)
             case .failure(let error):
                 if (error as NSError).code != NSUserCancelledError {
