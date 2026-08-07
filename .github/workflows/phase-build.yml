@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: phase-build-${{ github.ref }}
+  group: phase-build-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
