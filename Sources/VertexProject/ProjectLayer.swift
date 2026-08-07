@@ -204,6 +204,13 @@ public enum LayerSource: Codable, Equatable, Sendable {
         default: false
         }
     }
+
+    public var canProducePixels: Bool {
+        switch self {
+        case .media, .composition, .adjustment: true
+        case .null, .guide, .camera, .light: false
+        }
+    }
 }
 
 public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
@@ -218,8 +225,26 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
     public var transform: LayerTransform
     public var blendMode: LayerBlendMode
     public var operations: [LayerOperation]
+    public var animationChannels: [ProjectAnimationChannel]
+    public var masks: [ProjectMask]
+    public var trackMatte: ProjectTrackMatte?
 
-    public init(id: VertexID = VertexID(), compositionID: VertexID, name: String, source: LayerSource, enabled: Bool = true, locked: Bool = false, solo: Bool = false, timing: LayerTiming, transform: LayerTransform = .identity, blendMode: LayerBlendMode = .normal, operations: [LayerOperation] = []) {
+    public init(
+        id: VertexID = VertexID(),
+        compositionID: VertexID,
+        name: String,
+        source: LayerSource,
+        enabled: Bool = true,
+        locked: Bool = false,
+        solo: Bool = false,
+        timing: LayerTiming,
+        transform: LayerTransform = .identity,
+        blendMode: LayerBlendMode = .normal,
+        operations: [LayerOperation] = [],
+        animationChannels: [ProjectAnimationChannel] = [],
+        masks: [ProjectMask] = [],
+        trackMatte: ProjectTrackMatte? = nil
+    ) {
         self.id = id
         self.compositionID = compositionID
         self.name = name
@@ -231,6 +256,9 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         self.transform = transform
         self.blendMode = blendMode
         self.operations = operations
+        self.animationChannels = animationChannels
+        self.masks = masks
+        self.trackMatte = trackMatte
     }
 
     public func validated(in document: ProjectDocument) throws -> Self {
@@ -243,6 +271,9 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         _ = try timing.validated(for: composition)
         _ = try transform.validated()
         for operation in operations { _ = try operation.validated() }
+        _ = try masks.validatedMasks()
+        _ = try animationChannels.validatedAnimationChannels(for: masks)
+        try validateAnimationRanges()
 
         switch source {
         case .media(let mediaID, let sourceStartTime):
@@ -256,16 +287,57 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
                 throw ProjectError.invalidValue("Nested layer references a missing composition.")
             }
         case .adjustment:
-            guard blendMode == .normal else { throw ProjectError.invalidValue("Adjustment layers use Normal blend mode in schema 2.") }
+            guard blendMode == .normal else { throw ProjectError.invalidValue("Adjustment layers use Normal blend mode in schema 4.") }
         case .null, .guide:
-            guard blendMode == .normal, operations.isEmpty else { throw ProjectError.invalidValue("Model-only layers use Normal blend mode and no pixel operations.") }
+            guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
+                throw ProjectError.invalidValue("Model-only layers use Normal blend mode and cannot own pixel operations, masks, or mattes.")
+            }
         case .camera(let settings):
             _ = try settings.validated()
-            guard blendMode == .normal, operations.isEmpty else { throw ProjectError.invalidValue("Camera layers use Normal blend mode and no pixel operations.") }
+            guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
+                throw ProjectError.invalidValue("Camera layers use Normal blend mode and no pixel operations, masks, or mattes.")
+            }
         case .light(let settings):
             _ = try settings.validated()
-            guard blendMode == .normal, operations.isEmpty else { throw ProjectError.invalidValue("Light layers use Normal blend mode and no pixel operations.") }
+            guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
+                throw ProjectError.invalidValue("Light layers use Normal blend mode and no pixel operations, masks, or mattes.")
+            }
+        }
+
+        if let trackMatte {
+            guard source.canProducePixels else {
+                throw ProjectError.invalidValue("Only pixel-producing layers may consume a track matte.")
+            }
+            guard trackMatte.sourceLayerID != id,
+                  let matteLayer = document.layer(id: trackMatte.sourceLayerID),
+                  matteLayer.compositionID == compositionID,
+                  matteLayer.source.canProducePixels else {
+                throw ProjectError.invalidValue("Track matte must reference another pixel-producing layer in the same composition.")
+            }
         }
         return self
+    }
+
+    private func validateAnimationRanges() throws {
+        for channel in animationChannels {
+            for keyframe in channel.keyframes {
+                switch (channel.property, keyframe.value) {
+                case (.layer(.scaleX), .scalar(let value)), (.layer(.scaleY), .scalar(let value)):
+                    guard value > 0 else {
+                        throw ProjectError.invalidValue("Animated layer scale must remain positive.")
+                    }
+                case (.layer(.opacity), .scalar(let value)), (.mask(_, .opacity), .scalar(let value)):
+                    guard (0...1).contains(value) else {
+                        throw ProjectError.invalidValue("Animated opacity must remain within 0...1.")
+                    }
+                case (.mask(_, .feather), .scalar(let value)):
+                    guard value >= 0 else {
+                        throw ProjectError.invalidValue("Animated mask feather must remain nonnegative.")
+                    }
+                default:
+                    break
+                }
+            }
+        }
     }
 }
