@@ -238,8 +238,8 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 }
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
-    public static let currentAppVersion = "5.0.0"
+    public static let currentSchemaVersion = 2
+    public static let currentAppVersion = "6.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int
@@ -248,8 +248,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var metadata: ProjectMetadata
     public var settings: ProjectSettings
     public var mediaRegistry: [MediaReference]
-    public var compositionRegistry: [ProjectCompositionPlaceholder]
+    public var compositionRegistry: [ProjectComposition]
+    public var layerRegistry: [ProjectLayer]
     public var activeCompositionID: VertexID?
+    public var selectedLayerID: VertexID?
     public var selectedMediaID: VertexID?
     public var renderSettings: ProjectRenderSettings
 
@@ -261,10 +263,12 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         metadata: ProjectMetadata,
         settings: ProjectSettings,
         mediaRegistry: [MediaReference],
-        compositionRegistry: [ProjectCompositionPlaceholder],
+        compositionRegistry: [ProjectComposition],
+        layerRegistry: [ProjectLayer],
         activeCompositionID: VertexID?,
+        selectedLayerID: VertexID?,
         selectedMediaID: VertexID?,
-        renderSettings: ProjectRenderSettings
+        renderSettings: ProjectRenderSettings = ProjectRenderSettings()
     ) {
         self.schemaVersion = schemaVersion
         self.minimumReaderVersion = minimumReaderVersion
@@ -274,9 +278,74 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.settings = settings
         self.mediaRegistry = mediaRegistry
         self.compositionRegistry = compositionRegistry
+        self.layerRegistry = layerRegistry
         self.activeCompositionID = activeCompositionID
+        self.selectedLayerID = selectedLayerID
         self.selectedMediaID = selectedMediaID
         self.renderSettings = renderSettings
+    }
+
+    public init(
+        schemaVersion: Int = ProjectDocument.currentSchemaVersion,
+        minimumReaderVersion: Int = ProjectDocument.currentSchemaVersion,
+        projectID: VertexID,
+        revision: UInt64,
+        metadata: ProjectMetadata,
+        settings: ProjectSettings,
+        mediaRegistry: [MediaReference],
+        compositionRegistry placeholders: [ProjectCompositionPlaceholder],
+        activeCompositionID: VertexID?,
+        selectedMediaID: VertexID?,
+        renderSettings: ProjectRenderSettings
+    ) {
+        let compositions = placeholders.map {
+            ProjectComposition(
+                id: $0.id,
+                name: $0.name,
+                width: renderSettings.outputWidth,
+                height: renderSettings.outputHeight,
+                duration: RationalTime(value: 10, timescale: 1),
+                frameRate: settings.frameRate,
+                color: settings.color,
+                backgroundColor: .transparent,
+                layerIDs: []
+            )
+        }
+        let fallbackID = (try? DeterministicVertexID.derive(
+            domain: "vertex.project.main-composition",
+            components: [projectID.rawValue]
+        )) ?? projectID
+        let canonicalCompositions = compositions.isEmpty ? [
+            ProjectComposition(
+                id: fallbackID,
+                name: "Main Composition",
+                width: renderSettings.outputWidth,
+                height: renderSettings.outputHeight,
+                duration: RationalTime(value: 10, timescale: 1),
+                frameRate: settings.frameRate,
+                color: settings.color,
+                backgroundColor: .transparent,
+                layerIDs: []
+            )
+        ] : compositions
+        let canonicalActive = activeCompositionID.flatMap { candidate in
+            canonicalCompositions.contains(where: { $0.id == candidate }) ? candidate : nil
+        } ?? canonicalCompositions.first?.id
+        self.init(
+            schemaVersion: schemaVersion,
+            minimumReaderVersion: minimumReaderVersion,
+            projectID: projectID,
+            revision: revision,
+            metadata: metadata,
+            settings: settings,
+            mediaRegistry: mediaRegistry,
+            compositionRegistry: canonicalCompositions,
+            layerRegistry: [],
+            activeCompositionID: canonicalActive,
+            selectedLayerID: nil,
+            selectedMediaID: selectedMediaID,
+            renderSettings: renderSettings
+        )
     }
 
     public static func makeNew(
@@ -284,6 +353,22 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         name: String,
         timestamp: Date = Date()
     ) throws -> ProjectDocument {
+        let settings = ProjectSettings()
+        let compositionID = try DeterministicVertexID.derive(
+            domain: "vertex.project.main-composition",
+            components: [id.rawValue]
+        )
+        let composition = ProjectComposition(
+            id: compositionID,
+            name: "Main Composition",
+            width: 1080,
+            height: 1080,
+            duration: RationalTime(value: 10, timescale: 1),
+            frameRate: settings.frameRate,
+            color: settings.color,
+            backgroundColor: .transparent,
+            layerIDs: []
+        )
         let document = ProjectDocument(
             projectID: id,
             revision: 0,
@@ -294,10 +379,12 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
                 createdByAppVersion: currentAppVersion,
                 lastSavedByAppVersion: currentAppVersion
             ),
-            settings: ProjectSettings(),
+            settings: settings,
             mediaRegistry: [],
-            compositionRegistry: [],
-            activeCompositionID: nil,
+            compositionRegistry: [composition],
+            layerRegistry: [],
+            activeCompositionID: compositionID,
+            selectedLayerID: nil,
             selectedMediaID: nil,
             renderSettings: ProjectRenderSettings()
         )
@@ -317,11 +404,93 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         return try document.validated()
     }
 
+    public func composition(id: VertexID) -> ProjectComposition? {
+        compositionRegistry.first { $0.id == id }
+    }
+
+    public func layer(id: VertexID) -> ProjectLayer? {
+        layerRegistry.first { $0.id == id }
+    }
+
+    public func layers(in compositionID: VertexID) -> [ProjectLayer] {
+        guard let composition = composition(id: compositionID) else { return [] }
+        let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
+        return composition.layerIDs.compactMap { layerByID[$0] }
+    }
+
     public func normalized() -> ProjectDocument {
         var copy = self
         copy.mediaRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.compositionRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+        copy.layerRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+
+        if let candidate = copy.activeCompositionID,
+           copy.compositionRegistry.contains(where: { $0.id == candidate }) {
+            copy.activeCompositionID = candidate
+        } else {
+            copy.activeCompositionID = copy.compositionRegistry.first?.id
+        }
+
+        if let selectedMediaID = copy.selectedMediaID,
+           !copy.mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
+            copy.selectedMediaID = nil
+        }
+
+        if let selectedLayerID = copy.selectedLayerID {
+            if let selected = copy.layerRegistry.first(where: { $0.id == selectedLayerID }),
+               selected.compositionID == copy.activeCompositionID {
+                copy.selectedLayerID = selected.id
+            } else {
+                copy.selectedLayerID = nil
+            }
+        }
         return copy
+    }
+
+    public func nestedCompositionCycle() -> [VertexID]? {
+        let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
+        var edges: [VertexID: [VertexID]] = [:]
+        for composition in compositionRegistry {
+            edges[composition.id] = composition.layerIDs.compactMap { layerID in
+                guard let layer = layerByID[layerID],
+                      case .composition(let target, _) = layer.source else {
+                    return nil
+                }
+                return target
+            }
+        }
+
+        var visited = Set<VertexID>()
+        var active = Set<VertexID>()
+        var stack: [VertexID] = []
+
+        func visit(_ id: VertexID) -> [VertexID]? {
+            if let index = stack.firstIndex(of: id) {
+                return Array(stack[index...]) + [id]
+            }
+            if visited.contains(id) { return nil }
+            visited.insert(id)
+            active.insert(id)
+            stack.append(id)
+            for target in edges[id] ?? [] {
+                if active.contains(target), let index = stack.firstIndex(of: target) {
+                    return Array(stack[index...]) + [target]
+                }
+                if let cycle = visit(target) {
+                    return cycle
+                }
+            }
+            _ = stack.popLast()
+            active.remove(id)
+            return nil
+        }
+
+        for composition in compositionRegistry {
+            if let cycle = visit(composition.id) {
+                return cycle
+            }
+        }
+        return nil
     }
 
     public func validated() throws -> ProjectDocument {
@@ -334,6 +503,9 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         guard !metadata.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectError.invalidValue("Project name must not be empty.")
         }
+        guard settings.frameRate > .zero else {
+            throw ProjectError.invalidValue("Project frame rate must be positive.")
+        }
         _ = try renderSettings.validated()
         for reference in mediaRegistry {
             _ = try reference.validated()
@@ -341,16 +513,47 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else {
             throw ProjectError.duplicateIdentity("media")
         }
+        guard !compositionRegistry.isEmpty else {
+            throw ProjectError.invalidValue("A project must contain at least one composition.")
+        }
         guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else {
             throw ProjectError.duplicateIdentity("composition")
+        }
+        guard Set(layerRegistry.map(\.id)).count == layerRegistry.count else {
+            throw ProjectError.duplicateIdentity("layer")
+        }
+
+        let layerByID = Dictionary(uniqueKeysWithValues: layerRegistry.map { ($0.id, $0) })
+        for composition in compositionRegistry {
+            _ = try composition.validated(layerByID: layerByID)
+        }
+        let orderedLayerIDs = compositionRegistry.flatMap(\.layerIDs)
+        guard orderedLayerIDs.count == layerRegistry.count,
+              Set(orderedLayerIDs) == Set(layerRegistry.map(\.id)) else {
+            throw ProjectError.invalidValue("Every layer must appear exactly once in its owning composition order.")
+        }
+        for layer in layerRegistry {
+            _ = try layer.validated(in: self)
+        }
+
+        guard let activeCompositionID,
+              compositionRegistry.contains(where: { $0.id == activeCompositionID }) else {
+            throw ProjectError.invalidValue("An active composition must exist in the composition registry.")
         }
         if let selectedMediaID,
            !mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
             throw ProjectError.invalidValue("Selected media must exist in the media registry.")
         }
-        if let activeCompositionID,
-           !compositionRegistry.contains(where: { $0.id == activeCompositionID }) {
-            throw ProjectError.invalidValue("Active composition must exist in the composition registry.")
+        if let selectedLayerID {
+            guard let selected = layer(id: selectedLayerID),
+                  selected.compositionID == activeCompositionID else {
+                throw ProjectError.invalidValue("Selected layer must exist in the active composition.")
+            }
+        }
+        if let cycle = nestedCompositionCycle() {
+            throw ProjectError.invalidValue(
+                "Nested composition cycle: \(cycle.map(\.rawValue).joined(separator: " -> "))."
+            )
         }
         return self
     }
