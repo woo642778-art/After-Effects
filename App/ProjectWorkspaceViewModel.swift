@@ -6,20 +6,35 @@ import VertexProjectPersistence
 
 @MainActor
 final class ProjectWorkspaceViewModel: ObservableObject {
-    enum Status: Equatable {
+    enum OperationKind: String, Equatable, Sendable {
+        case createProject
+        case openProject
+        case save
+        case autosave
+        case legacyInspection
+        case legacyImport
+        case pendingRecovery
+        case mediaImport
+        case relink
+        case embed
+        case export
+        case edit
+        case undo
+        case redo
+    }
+
+    enum OperationState: Equatable {
         case idle
-        case ready(String)
-        case saving
-        case autosaved
-        case legacyImportReady
-        case pendingSaveDecision
+        case running(OperationKind)
+        case succeeded(String)
         case failed(String)
+        case cancelled
     }
 
     @Published var projectNameInput = "Untitled Project"
     @Published private(set) var project: ProjectDocument?
     @Published private(set) var packageURL: URL?
-    @Published private(set) var status: Status = .idle
+    @Published private(set) var status: OperationState = .idle
     @Published private(set) var lastSavedAt: Date?
     @Published private(set) var missingMediaIDs: Set<VertexID> = []
     @Published private(set) var canUndo = false
@@ -33,7 +48,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private var legacySourceURL: URL?
     private var autosaveTask: Task<Void, Never>?
     private var commandCountSinceAutosave = 0
-    private var latestPublicationToken = 0
+    private var publicationGate = PublicationGate()
 
     var renderSettings: ProjectRenderSettings {
         project?.renderSettings ?? ProjectRenderSettings()
@@ -50,10 +65,9 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func createProject(named name: String? = nil) {
-        let token = beginPublishedOperation()
+        let token = beginPublishedOperation(.createProject)
         let requested = (name ?? projectNameInput)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        status = .saving
 
         Task { [weak self] in
             guard let self else { return }
@@ -94,8 +108,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
 
     func confirmLegacyImport() {
         guard let sourceURL = legacySourceURL else { return }
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.legacyImport)
 
         Task { [weak self] in
             guard let self else { return }
@@ -119,15 +132,15 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func cancelLegacyImport() {
+        _ = publicationGate.begin()
         legacySourceURL = nil
         legacyInspection = nil
-        status = project == nil ? .idle : .ready("Legacy import cancelled")
+        status = .cancelled
     }
 
     func applyPendingSnapshot() {
         guard let context = pendingDecision else { return }
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.pendingRecovery)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -144,8 +157,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
 
     func discardPendingSnapshot() {
         guard let context = pendingDecision else { return }
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.pendingRecovery)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -165,8 +177,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             status = .failed("Create or open a project before importing media.")
             return
         }
-        let token = beginPublishedOperation()
-        status = .ready("Analyzing media identity")
+        let token = beginPublishedOperation(.mediaImport)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -206,7 +217,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func undo() {
-        let token = beginPublishedOperation()
+        let token = beginPublishedOperation(.undo)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -221,7 +232,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func redo() {
-        let token = beginPublishedOperation()
+        let token = beginPublishedOperation(.redo)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -236,8 +247,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func saveNow() {
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.save)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -251,18 +261,17 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     func prepareExport() {
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.export)
         Task { [weak self] in
             guard let self else { return }
             do {
                 let snapshot = try await self.sessionActor.save()
                 let document = try ProjectPackageFileDocument(packageURL: snapshot.packageURL)
-                guard token == self.latestPublicationToken else { return }
+                guard self.publicationGate.accepts(token) else { return }
                 self.commandCountSinceAutosave = 0
                 self.apply(snapshot)
                 self.exportDocument = document
-                self.status = .ready("Verified project package ready to export")
+                self.status = .succeeded("Verified project package ready to export")
             } catch {
                 self.publish(error, token: token)
             }
@@ -271,7 +280,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
 
     func embedSelectedMedia() {
         guard let mediaID = selectedMedia?.id else { return }
-        let token = beginPublishedOperation()
+        let token = beginPublishedOperation(.embed)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -290,7 +299,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
 
     func relinkSelectedMedia(to url: URL) {
         guard let mediaID = selectedMedia?.id else { return }
-        let token = beginPublishedOperation()
+        let token = beginPublishedOperation(.relink)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -307,21 +316,26 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     func flushAutosave() {
         autosaveTask?.cancel()
         autosaveTask = nil
+        guard project != nil else { return }
+        let token = beginPublishedOperation(.autosave)
         Task { [weak self] in
-            guard let self, self.project != nil else { return }
+            guard let self else { return }
             do {
                 if try await self.sessionActor.autosave(reason: .manualFlush) != nil {
                     self.commandCountSinceAutosave = 0
-                    self.status = .autosaved
+                    guard self.publicationGate.accepts(token) else { return }
+                    self.status = .succeeded("Immutable recovery snapshot created")
+                } else if self.publicationGate.accepts(token) {
+                    self.status = .succeeded("No new autosave was needed")
                 }
             } catch {
-                self.status = .failed(error.localizedDescription)
+                self.publish(error, token: token)
             }
         }
     }
 
     private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
-        let token = beginPublishedOperation()
+        let token = beginPublishedOperation(.edit)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -336,8 +350,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     private func openCanonicalProject(from externalURL: URL) {
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.openProject)
         Task { [weak self] in
             guard let self else { return }
             let hasScope = externalURL.startAccessingSecurityScopedResource()
@@ -348,9 +361,9 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 case .opened(let snapshot):
                     self.publish(snapshot, token: token, message: "Canonical project opened")
                 case .pendingDecision(let context):
-                    guard token == self.latestPublicationToken else { return }
+                    guard self.publicationGate.accepts(token) else { return }
                     self.pendingDecision = context
-                    self.status = .pendingSaveDecision
+                    self.status = .succeeded("Pending save needs an explicit recovery decision")
                 }
             } catch {
                 self.publish(error, token: token)
@@ -359,18 +372,17 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     }
 
     private func inspectLegacyProject(from externalURL: URL) {
-        let token = beginPublishedOperation()
-        status = .saving
+        let token = beginPublishedOperation(.legacyInspection)
         Task { [weak self] in
             guard let self else { return }
             let hasScope = externalURL.startAccessingSecurityScopedResource()
             defer { if hasScope { externalURL.stopAccessingSecurityScopedResource() } }
             do {
                 let inspection = try await self.sessionActor.inspectLegacy(packageURL: externalURL)
-                guard token == self.latestPublicationToken else { return }
+                guard self.publicationGate.accepts(token) else { return }
                 self.legacySourceURL = externalURL
                 self.legacyInspection = inspection
-                self.status = .legacyImportReady
+                self.status = .succeeded("Legacy import ready for review")
             } catch {
                 self.publish(error, token: token)
             }
@@ -385,7 +397,6 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 do {
                     if try await self.sessionActor.autosave(reason: .commandThreshold) != nil {
                         self.commandCountSinceAutosave = 0
-                        self.status = .autosaved
                     }
                 } catch {
                     self.status = .failed(error.localizedDescription)
@@ -404,7 +415,6 @@ final class ProjectWorkspaceViewModel: ObservableObject {
             do {
                 if try await self.sessionActor.autosave(reason: .idleDelay) != nil {
                     self.commandCountSinceAutosave = 0
-                    self.status = .autosaved
                 }
             } catch {
                 self.status = .failed(error.localizedDescription)
@@ -412,9 +422,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         }
     }
 
-    private func beginPublishedOperation() -> Int {
-        latestPublicationToken += 1
-        return latestPublicationToken
+    private func beginPublishedOperation(_ kind: OperationKind) -> Int {
+        let token = publicationGate.begin()
+        status = .running(kind)
+        return token
     }
 
     private func publish(
@@ -422,13 +433,13 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         token: Int,
         message: String
     ) {
-        guard token == latestPublicationToken else { return }
+        guard publicationGate.accepts(token) else { return }
         apply(snapshot)
-        status = .ready(message)
+        status = .succeeded(message)
     }
 
     private func publish(_ error: Error, token: Int) {
-        guard token == latestPublicationToken else { return }
+        guard publicationGate.accepts(token) else { return }
         status = .failed(error.localizedDescription)
     }
 
