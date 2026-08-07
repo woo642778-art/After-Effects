@@ -124,16 +124,49 @@ public struct LayerTiming: Codable, Equatable, Sendable {
     public var startTime: RationalTime
     public var inPoint: RationalTime
     public var outPoint: RationalTime
+    public var sourceOffset: RationalTime
 
-    public init(startTime: RationalTime, inPoint: RationalTime, outPoint: RationalTime) {
+    private enum CodingKeys: String, CodingKey {
+        case startTime
+        case inPoint
+        case outPoint
+        case sourceOffset
+    }
+
+    public init(
+        startTime: RationalTime,
+        inPoint: RationalTime,
+        outPoint: RationalTime,
+        sourceOffset: RationalTime = .zero
+    ) {
         self.startTime = startTime
         self.inPoint = inPoint
         self.outPoint = outPoint
+        self.sourceOffset = sourceOffset
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        startTime = try container.decode(RationalTime.self, forKey: .startTime)
+        inPoint = try container.decode(RationalTime.self, forKey: .inPoint)
+        outPoint = try container.decode(RationalTime.self, forKey: .outPoint)
+        sourceOffset = try container.decodeIfPresent(RationalTime.self, forKey: .sourceOffset) ?? .zero
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(startTime, forKey: .startTime)
+        try container.encode(inPoint, forKey: .inPoint)
+        try container.encode(outPoint, forKey: .outPoint)
+        try container.encode(sourceOffset, forKey: .sourceOffset)
     }
 
     public func validated(for composition: ProjectComposition) throws -> Self {
         guard inPoint >= .zero, inPoint < outPoint, outPoint <= composition.duration else {
             throw ProjectError.invalidValue("Layer timing must satisfy 0 <= In < Out <= composition duration.")
+        }
+        guard sourceOffset >= .zero else {
+            throw ProjectError.invalidValue("Layer source offset must be nonnegative.")
         }
         return self
     }
@@ -253,6 +286,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
     public var animationChannels: [ProjectAnimationChannel]
     public var masks: [ProjectMask]
     public var trackMatte: ProjectTrackMatte?
+    public var parentLayerID: VertexID?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -269,6 +303,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         case animationChannels
         case masks
         case trackMatte
+        case parentLayerID
     }
 
     public init(
@@ -285,7 +320,8 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         operations: [LayerOperation] = [],
         animationChannels: [ProjectAnimationChannel] = [],
         masks: [ProjectMask] = [],
-        trackMatte: ProjectTrackMatte? = nil
+        trackMatte: ProjectTrackMatte? = nil,
+        parentLayerID: VertexID? = nil
     ) {
         self.id = id
         self.compositionID = compositionID
@@ -301,6 +337,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         self.animationChannels = animationChannels
         self.masks = masks
         self.trackMatte = trackMatte
+        self.parentLayerID = parentLayerID
     }
 
     public init(from decoder: Decoder) throws {
@@ -319,6 +356,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         animationChannels = try container.decodeIfPresent([ProjectAnimationChannel].self, forKey: .animationChannels) ?? []
         masks = try container.decodeIfPresent([ProjectMask].self, forKey: .masks) ?? []
         trackMatte = try container.decodeIfPresent(ProjectTrackMatte.self, forKey: .trackMatte)
+        parentLayerID = try container.decodeIfPresent(VertexID.self, forKey: .parentLayerID)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -337,6 +375,7 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
         try container.encode(animationChannels, forKey: .animationChannels)
         try container.encode(masks, forKey: .masks)
         try container.encodeIfPresent(trackMatte, forKey: .trackMatte)
+        try container.encodeIfPresent(parentLayerID, forKey: .parentLayerID)
     }
 
     public func validated(in document: ProjectDocument) throws -> Self {
@@ -379,6 +418,22 @@ public struct ProjectLayer: Codable, Equatable, Sendable, Identifiable {
             _ = try settings.validated()
             guard blendMode == .normal, operations.isEmpty, masks.isEmpty, trackMatte == nil else {
                 throw ProjectError.invalidValue("Light layers use Normal blend mode and no pixel operations, masks, or mattes.")
+            }
+        }
+
+        if let parentLayerID {
+            guard parentLayerID != id,
+                  let parentLayer = document.layer(id: parentLayerID),
+                  parentLayer.compositionID == compositionID else {
+                throw ProjectError.invalidValue("Layer parent must reference another layer in the same composition.")
+            }
+            var visited: Set<VertexID> = [id]
+            var candidate: ProjectLayer? = parentLayer
+            while let current = candidate {
+                guard visited.insert(current.id).inserted else {
+                    throw ProjectError.invalidValue("Parent relationships must not contain a cycle.")
+                }
+                candidate = current.parentLayerID.flatMap { document.layer(id: $0) }
             }
         }
 

@@ -32,13 +32,16 @@ private func schema3Phase7FixtureBytes() throws -> Data {
     current.mediaRegistry.append(output)
     let aiAsset = ProjectAIAsset(
         id: VertexID(rawValue: "86000000-0000-0000-0000-000000000020"),
-        kind: .depthMap,
+        kind: .depth,
         sourceMediaID: source.id,
         outputMediaID: output.id,
-        modelIdentifier: "depth-anything-v2-small-f16",
-        modelVersion: "phase7-test",
-        createdAt: current.metadata.modifiedAt,
-        processingSettingsFingerprint: "settings"
+        recipe: ProjectAIRecipeReference(
+            task: "depth",
+            modelID: "depth-anything-v2-small-f16",
+            modelDigest: String(repeating: "a", count: 64),
+            recipeDigest: String(repeating: "b", count: 64),
+            qualityTier: "balanced"
+        )
     )
     let schema3 = Schema3ProjectDocument(
         schemaVersion: 3,
@@ -67,7 +70,8 @@ private func schema3Phase7FixtureBytes() throws -> Data {
 @Test("Schema 3 to 4 preserves Phase 7 assets and initializes motion state")
 func schema3MigratesToSchema4() throws {
     let source = try schema3Phase7FixtureBytes()
-    let migrated = try DeterministicProjectCodec().decode(source)
+    let step = try ProjectMigrationRegistry.current.migrate(source, from: 3, to: 4)
+    let migrated = try Schema4ProjectCodec.decode(step.data)
 
     #expect(migrated.schemaVersion == 4)
     #expect(migrated.minimumReaderVersion == 4)
