@@ -4,6 +4,11 @@ import VertexCore
 package struct Schema1CompositionPlaceholder: Codable, Equatable, Sendable {
     package var id: VertexID
     package var name: String
+
+    package init(id: VertexID, name: String) {
+        self.id = id
+        self.name = name
+    }
 }
 
 package struct Schema1ProjectDocument: Codable, Equatable, Sendable {
@@ -18,6 +23,32 @@ package struct Schema1ProjectDocument: Codable, Equatable, Sendable {
     package var activeCompositionID: VertexID?
     package var selectedMediaID: VertexID?
     package var renderSettings: ProjectRenderSettings
+
+    package init(
+        schemaVersion: Int,
+        minimumReaderVersion: Int,
+        projectID: VertexID,
+        revision: UInt64,
+        metadata: ProjectMetadata,
+        settings: ProjectSettings,
+        mediaRegistry: [MediaReference],
+        compositionRegistry: [Schema1CompositionPlaceholder],
+        activeCompositionID: VertexID?,
+        selectedMediaID: VertexID?,
+        renderSettings: ProjectRenderSettings
+    ) {
+        self.schemaVersion = schemaVersion
+        self.minimumReaderVersion = minimumReaderVersion
+        self.projectID = projectID
+        self.revision = revision
+        self.metadata = metadata
+        self.settings = settings
+        self.mediaRegistry = mediaRegistry
+        self.compositionRegistry = compositionRegistry
+        self.activeCompositionID = activeCompositionID
+        self.selectedMediaID = selectedMediaID
+        self.renderSettings = renderSettings
+    }
 
     package func validated() throws -> Self {
         guard schemaVersion == 1, minimumReaderVersion <= 1 else { throw ProjectError.migrationFailure("Schema 1 compatibility values are invalid.") }
