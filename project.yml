@@ -57,18 +57,12 @@ targets:
         CODE_SIGN_STYLE: Automatic
     scheme:
       testTargets:
-        - VertexTests
+        - VertexAppTests
 
-  VertexTests:
+  VertexAppTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: Tests/VertexCoreTests
-      - path: Tests/VertexMediaTests
-      - path: Tests/VertexRenderTests
-      - path: Tests/VertexRenderMetalTests
-      - path: Tests/VertexProjectTests
-      - path: Tests/VertexProjectPersistenceTests
       - path: Tests/VertexAppTests
     dependencies:
       - target: Vertex
