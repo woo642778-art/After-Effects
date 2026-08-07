@@ -55,54 +55,54 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 6,
-        title: "Layers, Compositions, and Multi-Source Rendering",
-        status: .implemented,
+        number: 7,
+        title: "Offline AI Studio",
+        status: .inProgress,
         deliverables: [
-            "Canonical schema 2 projects with stable composition and layer identities",
-            "Session-only Undo and Redo for composition and layer editing with no persisted command history",
-            "Deterministic schema 1 to 2 migration and non-destructive legacy schema 2 import",
-            "Multi-source backend-neutral render DAG with Normal, Add, Multiply, Screen, adjustment layers, and nested compositions",
-            "Exact-frame composition preview and PNG output through the shared Metal render path",
-            "Versioned After Effects 6.0.0 unsigned IPA artifact"
+            "Startup state that cannot deadlock on milestone, AI, Metal, or project readiness",
+            "Fully offline video Depth Map and Cutout workflows with project-usable results",
+            "Fully offline AI Upscale and Restoration with Preview, Balanced, and Max Quality tiers",
+            "Chunked full-video AI processing with progress, cancellation, checkpointing, and resume",
+            "Pinned model provenance, license, checksum, conversion, and packaged-resource audits",
+            "Versioned After Effects 7.0.0 unsigned IPA artifact with model inventory"
         ],
         sourceAdoptions: [
             SourceAdoption(
-                id: "foundation",
-                repository: "Apple Foundation",
-                license: "Apple platform SDK and Swift core libraries",
-                mode: .wrappedDependency,
-                purpose: "Canonical project packages, deterministic serialization, and atomic snapshot persistence"
-            ),
-            SourceAdoption(
-                id: "avfoundation",
-                repository: "Apple AVFoundation",
+                id: "vision",
+                repository: "Apple Vision",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Exact-time media frame resolution behind Vertex media adapters"
+                purpose: "On-device person and foreground segmentation fast paths"
             ),
             SourceAdoption(
-                id: "metal",
-                repository: "Apple Metal",
+                id: "coreml",
+                repository: "Apple Core ML",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Multi-node composition execution, blending, adjustment processing, and preview output"
+                purpose: "On-device neural inference, model loading, and compute-unit selection"
             ),
             SourceAdoption(
-                id: "metalpetal",
-                repository: "MetalPetal/MetalPetal",
-                license: "MIT",
+                id: "depth-anything-v2-small",
+                repository: "DepthAnything/Depth-Anything-V2",
+                license: "Apache-2.0 for Small checkpoint; final inclusion requires lockfile audit",
                 mode: .researchOnly,
-                purpose: "Filter and GPU architecture research only; not linked into Phase 6"
+                purpose: "Primary monocular depth candidate for an offline Core ML path"
             ),
             SourceAdoption(
-                id: "videolab",
-                repository: "ruanjx/VideoLab",
-                license: "MIT",
-                mode: .designReference,
-                purpose: "Layer and composition architecture study without source copying"
+                id: "real-esrgan",
+                repository: "xinntao/Real-ESRGAN",
+                license: "BSD-3-Clause code; checkpoint redistribution audited separately",
+                mode: .researchOnly,
+                purpose: "General and anime/game super-resolution candidate family"
+            ),
+            SourceAdoption(
+                id: "sam2",
+                repository: "facebookresearch/sam2",
+                license: "Apache-2.0 upstream code/checkpoints; iOS runtime validation required",
+                mode: .researchOnly,
+                purpose: "Prompt-driven quality cutout and video mask propagation candidate"
             )
         ],
-        artifactPolicy: "Phase 6 publishes After-Effects-6.0.0-unsigned.ipa after portable, Simulator, native persistence, Metal pixel, Release, and artifact inspection gates pass. The IPA remains unsigned until signing credentials are supplied."
+        artifactPolicy: "Phase 7 publishes After-Effects-7.0.0-unsigned.ipa only after startup, portable AI, native inference, full-video job, persistence, Simulator, Release, model-manifest, packaged-resource, architecture, and SHA-256 gates pass. The IPA remains unsigned until signing credentials are supplied."
     )
 }
