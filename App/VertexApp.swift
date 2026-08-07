@@ -9,7 +9,7 @@ struct AfterEffectsApp: App {
             ZStack {
                 switch startupState {
                 case .splash:
-                    SplashView()
+                    Vertex2SplashView()
                         .transition(.opacity)
 
                 case .workspace:
@@ -51,7 +51,7 @@ private struct StartupFatalErrorView: View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 38, weight: .semibold))
-            Text("After Effects could not start")
+            Text("Vertex2 could not start")
                 .font(.headline)
             Text(message)
                 .font(.caption)
