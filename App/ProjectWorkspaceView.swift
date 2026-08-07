@@ -144,9 +144,8 @@ struct ProjectWorkspaceView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first { workspace.openProject(from: url) }
-            case .failure(let error):
+            case .failure:
                 workspace.cancelLegacyImport()
-                _ = error
             }
         }
         .fileImporter(
@@ -185,30 +184,41 @@ struct ProjectWorkspaceView: View {
             Text("Create a .vertexproject or import an existing package.")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
-        case .ready(let message):
+        case .running(let kind):
+            Label(operationLabel(for: kind), systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption)
+                .foregroundStyle(AfterEffectsTheme.secondaryText)
+        case .succeeded(let message):
             Label(message, systemImage: "checkmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
-        case .saving:
-            Label("Writing and verifying a full pending snapshot", systemImage: "arrow.triangle.2.circlepath")
-                .font(.caption)
-                .foregroundStyle(AfterEffectsTheme.secondaryText)
-        case .autosaved:
-            Label("Immutable recovery snapshot created", systemImage: "clock.arrow.circlepath")
-                .font(.caption)
-                .foregroundStyle(AfterEffectsTheme.secondaryText)
-        case .legacyImportReady:
-            Label("Review the non-destructive legacy conversion below.", systemImage: "doc.badge.arrow.up")
-                .font(.caption)
-                .foregroundStyle(.orange)
-        case .pendingSaveDecision:
-            Label("A pending save needs an explicit recovery decision.", systemImage: "exclamationmark.shield.fill")
-                .font(.caption)
-                .foregroundStyle(.orange)
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundStyle(.orange)
+        case .cancelled:
+            Label("Operation cancelled", systemImage: "xmark.circle")
+                .font(.caption)
+                .foregroundStyle(AfterEffectsTheme.secondaryText)
+        }
+    }
+
+    private func operationLabel(for kind: ProjectWorkspaceViewModel.OperationKind) -> String {
+        switch kind {
+        case .createProject: "Creating and verifying project"
+        case .openProject: "Opening and verifying project"
+        case .save: "Writing and verifying a full pending snapshot"
+        case .autosave: "Writing immutable recovery snapshot"
+        case .legacyInspection: "Inspecting legacy project"
+        case .legacyImport: "Converting legacy project non-destructively"
+        case .pendingRecovery: "Resolving pending save"
+        case .mediaImport: "Analyzing media identity"
+        case .relink: "Replacing media bookmark sidecar"
+        case .embed: "Embedding and verifying media"
+        case .export: "Preparing verified project package"
+        case .edit: "Applying session edit"
+        case .undo: "Applying Undo"
+        case .redo: "Applying Redo"
         }
     }
 
