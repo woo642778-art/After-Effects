@@ -23,6 +23,7 @@ struct RootView: View {
                     statusCard
                     ProjectWorkspaceView()
                     MediaImportView()
+                    CompositionWorkspaceView()
                     architectureSection
                     sourcesSection
                     artifactCard
