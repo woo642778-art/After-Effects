@@ -7,7 +7,7 @@ ASSET_ROOT="$ROOT_DIR/App/Resources/Assets.xcassets"
 APP_ICON_DIR="$ASSET_ROOT/AppIcon.appiconset"
 LAUNCH_LOGO_DIR="$ASSET_ROOT/LaunchLogo.imageset"
 TEMP_DIR="$(mktemp -d)"
-SOURCE_PNG="$TEMP_DIR/source.png"
+SOURCE_IMAGE="$TEMP_DIR/source.jpg"
 
 cleanup() {
   rm -rf "$TEMP_DIR"
@@ -16,7 +16,7 @@ trap cleanup EXIT
 
 mkdir -p "$APP_ICON_DIR" "$LAUNCH_LOGO_DIR"
 
-python3 - "$SOURCE_BASE64" "$SOURCE_PNG" <<'PY'
+python3 - "$SOURCE_BASE64" "$SOURCE_IMAGE" <<'PY'
 import base64
 import pathlib
 import sys
@@ -29,7 +29,7 @@ PY
 resize() {
   local size="$1"
   local destination="$2"
-  /usr/bin/sips -z "$size" "$size" "$SOURCE_PNG" --out "$destination" >/dev/null
+  /usr/bin/sips -z "$size" "$size" "$SOURCE_IMAGE" --out "$destination" >/dev/null
 }
 
 resize 40 "$APP_ICON_DIR/AppIcon-20@2x.png"
@@ -62,4 +62,4 @@ for expected in \
   test -s "$expected"
 done
 
-echo "Generated After Effects app icons and launch logo from AppIconSource.base64"
+echo "Generated Vertex2 app icons and launch logo from AppIconSource.base64"
