@@ -71,7 +71,7 @@ private func writeNativeSchema1Package(at url: URL) throws -> (VertexID, VertexI
     return (projectID, compositionID, mediaID)
 }
 
-@Test("Native schema 1 vertexproject opens by atomically migrating to schema 2")
+@Test("Native schema 1 vertexproject opens by atomically migrating through schema 3")
 func nativeSchema1PackageMigratesOnOpen() throws {
     let url = schema1PackageURL()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -81,23 +81,24 @@ func nativeSchema1PackageMigratesOnOpen() throws {
         Issue.record("Native schema 1 package should migrate without a pending user decision.")
         return
     }
-    #expect(snapshot.document.schemaVersion == 2)
-    #expect(snapshot.manifest.schemaVersion == 2)
+    #expect(snapshot.document.schemaVersion == 3)
+    #expect(snapshot.manifest.schemaVersion == 3)
     #expect(snapshot.document.projectID == identities.0)
     #expect(snapshot.document.activeCompositionID == identities.1)
     #expect(snapshot.document.selectedMediaID == identities.2)
     #expect(snapshot.document.layerRegistry.count == 1)
+    #expect(snapshot.document.aiAssetRegistry.isEmpty)
     #expect(snapshot.document.composition(id: identities.1)?.width == 1280)
     #expect(snapshot.document.composition(id: identities.1)?.height == 720)
     #expect(!FileManager.default.fileExists(atPath: snapshot.layout.pendingSaveURL.path))
 
     let persistedHeader = try ProjectSchemaHeader.decode(from: Data(contentsOf: snapshot.layout.projectURL))
-    #expect(persistedHeader.schemaVersion == 2)
+    #expect(persistedHeader.schemaVersion == 3)
     let persistedManifest = try VertexProjectManifestCodec().decode(Data(contentsOf: snapshot.layout.manifestURL))
-    #expect(persistedManifest.schemaVersion == 2)
+    #expect(persistedManifest.schemaVersion == 3)
 
     guard case .opened(let reopened) = try VertexProjectPackageStore().open(at: url) else {
-        Issue.record("Migrated schema 2 package should reopen directly.")
+        Issue.record("Migrated schema 3 package should reopen directly.")
         return
     }
     #expect(reopened.document == snapshot.document)
