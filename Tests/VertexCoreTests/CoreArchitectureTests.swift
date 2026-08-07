@@ -96,11 +96,11 @@ func presentationGateConsumesOnce() {
     #expect(gate.hasPresented)
 }
 
-@Test("Phase 6 is the active architecture milestone")
-func phaseSixIsActive() {
-    #expect(MilestoneCatalog.current.number == 6)
-    #expect(MilestoneCatalog.current.title == "Layers, Compositions, and Multi-Source Rendering")
-    #expect(MilestoneCatalog.current.status == .implemented)
+@Test("Phase 7 is the active architecture milestone")
+func phaseSevenIsActive() {
+    #expect(MilestoneCatalog.current.number == 7)
+    #expect(MilestoneCatalog.current.title == "Offline AI Studio")
+    #expect(MilestoneCatalog.current.status == .inProgress)
 }
 
 @Test("Rational time comparison avoids cross multiplication overflow")
