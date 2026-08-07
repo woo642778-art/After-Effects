@@ -104,8 +104,10 @@ func savedSchema2RenderGraphIsStableAcrossReopen() async throws {
         cancellationToken: RenderCancellationToken()
     )
 
+    let beforeNodeCount = try before.graph.evaluationPlan().orderedNodes.count
+    let afterNodeCount = try after.graph.evaluationPlan().orderedNodes.count
     #expect(reopenedSnapshot.document == document)
     #expect(after.graph == before.graph)
     #expect(after.cacheKey == before.cacheKey)
-    #expect(try after.graph.evaluationPlan().orderedNodes.count == try before.graph.evaluationPlan().orderedNodes.count)
+    #expect(afterNodeCount == beforeNodeCount)
 }
