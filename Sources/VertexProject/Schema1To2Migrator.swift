@@ -57,8 +57,10 @@ public struct Schema1To2Migrator: ProjectMigrator {
         }
 
         var metadata = legacy.metadata
-        metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
-        let migrated = try ProjectDocument(
+        // Keep the intermediate document genuinely schema 2. The following
+        // Schema2To3Migrator updates app metadata to the current release.
+        metadata.lastSavedByAppVersion = "6.0.0"
+        let migrated = Schema2ProjectDocument(
             schemaVersion: 2,
             minimumReaderVersion: 2,
             projectID: legacy.projectID,
@@ -71,9 +73,9 @@ public struct Schema1To2Migrator: ProjectMigrator {
             activeCompositionID: activeID,
             selectedLayerID: selectedLayerID,
             selectedMediaID: legacy.selectedMediaID
-        ).validated()
+        )
         return ProjectMigrationStepResult(
-            data: try DeterministicProjectCodec().encode(migrated),
+            data: try Schema2ProjectCodec.encode(migrated),
             report: ProjectMigrationReport(
                 sourceVersion: 1,
                 destinationVersion: 2,
