@@ -56,7 +56,7 @@ struct RootView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("After Effects")
+                Text("Vertex2")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
@@ -164,7 +164,7 @@ struct RootView: View {
     }
 
     private var attribution: some View {
-        Text("After Effects · Made by Maze")
+        Text("Vertex2 · Made by Maze")
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.white.opacity(0.48))
             .frame(maxWidth: .infinity)
