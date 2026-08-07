@@ -1,0 +1,54 @@
+name: Phase 9 SDD Apply
+
+on:
+  push:
+    branches:
+      - agent/phase-9-ae-workspace-ai-effects
+    paths:
+      - 'Tools/phase9_tasks/**'
+      - '.github/workflows/phase9-sdd-apply.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase9-sdd-apply
+  cancel-in-progress: false
+
+jobs:
+  apply-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/phase-9-ae-workspace-ai-effects
+      - name: Apply Phase 9 task scripts
+        run: |
+          set -euo pipefail
+          for script in Tools/phase9_tasks/task*.py; do
+            echo "==> $script"
+            python3 "$script"
+          done
+      - name: Run portable task tests
+        run: |
+          set -euo pipefail
+          swift test --filter ProjectTimelineSchemaTests
+          swift test --filter Schema4To5MigrationTests
+      - name: Verify diff hygiene
+        run: |
+          git diff --check
+          git status --short
+      - name: Commit generated task implementation
+        run: |
+          set -euo pipefail
+          git config user.name 'vertex2-phase9-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add App Sources Tests Package.swift Package@swift-6.0.swift project.yml .github/workflows Tools/phase9_tasks 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat(project): add schema 5 timeline primitives'
+          git push origin HEAD:agent/phase-9-ae-workspace-ai-effects
