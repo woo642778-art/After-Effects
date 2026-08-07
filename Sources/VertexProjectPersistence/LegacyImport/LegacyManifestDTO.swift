@@ -26,7 +26,7 @@ package struct LegacyManifestDTO: Codable, Equatable, Sendable {
         }
     }
 
-    package func validate(project: LegacyProjectDTO, projectData: Data) throws {
+    package func validate(project: DecodedLegacyProject, projectData: Data) throws {
         guard projectID == project.projectID,
               projectRevision == project.revision,
               schemaVersion == project.schemaVersion,
