@@ -114,6 +114,20 @@ actor ProjectSessionActor {
         return try currentSnapshot()
     }
 
+    func setActiveComposition(_ compositionID: VertexID) async throws -> ProjectSessionSnapshot {
+        var session = try requireSession()
+        try session.setActiveComposition(compositionID)
+        editingSession = session
+        return try currentSnapshot()
+    }
+
+    func setSelectedLayer(_ layerID: VertexID?) async throws -> ProjectSessionSnapshot {
+        var session = try requireSession()
+        try session.setSelectedLayer(layerID)
+        editingSession = session
+        return try currentSnapshot()
+    }
+
     func setSelectedMedia(_ mediaID: VertexID?) async throws -> ProjectSessionSnapshot {
         var session = try requireSession()
         try session.setSelectedMedia(mediaID)

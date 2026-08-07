@@ -104,3 +104,28 @@ func discardPendingPreservesCurrentPair() throws {
     #expect(reopened.document == original)
     #expect(!FileManager.default.fileExists(atPath: layout.pendingSaveURL.path))
 }
+
+@Test("Package manifests are derived from the exact canonical project bytes")
+func packageManifestUsesCanonicalTimestampPrecision() throws {
+    let url = packageStoreTemporaryURL("CanonicalTimestamp")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let timestamp = Date(timeIntervalSince1970: 1_700_000_000.123456)
+    let document = try packageStoreDocument(timestamp: timestamp)
+    let snapshot = try VertexProjectPackageStore(
+        fixedTimestamp: Date(timeIntervalSince1970: 1_700_000_100.654321)
+    ).create(at: url, document: document)
+
+    let decoded = try DeterministicProjectCodec().decode(snapshot.projectData)
+    #expect(snapshot.document == decoded)
+    #expect(snapshot.manifest.projectID == decoded.projectID)
+    #expect(snapshot.manifest.projectRevision == decoded.revision)
+    #expect(snapshot.manifest.projectChecksum == DeterministicProjectCodec().checksum(data: snapshot.projectData))
+
+    guard case .opened(let reopened) = try VertexProjectPackageStore().open(at: url) else {
+        Issue.record("A package created from a sub-millisecond timestamp must open directly.")
+        return
+    }
+    #expect(reopened.document == decoded)
+    #expect(reopened.manifest == snapshot.manifest)
+}

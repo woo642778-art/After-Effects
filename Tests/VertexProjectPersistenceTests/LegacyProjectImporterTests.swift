@@ -124,11 +124,21 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
         settings: ProjectSettings(),
         mediaRegistry: [external, missing, embedded],
         compositionRegistry: [
-            ProjectCompositionPlaceholder(id: legacyImportCompositionID, name: "Main")
+            ProjectComposition(
+                id: legacyImportCompositionID,
+                name: "Main",
+                width: 1080,
+                height: 1080,
+                duration: RationalTime(value: 10, timescale: 1),
+                frameRate: RationalTime(value: 30, timescale: 1),
+                color: .rec709SDR(alphaMode: .straight),
+                layerIDs: []
+            )
         ],
+        layerRegistry: [],
         activeCompositionID: legacyImportCompositionID,
-        selectedMediaID: legacyBookmarkMediaID,
-        renderSettings: ProjectRenderSettings()
+        selectedLayerID: nil,
+        selectedMediaID: legacyBookmarkMediaID
     )
     document = try document.validated()
 

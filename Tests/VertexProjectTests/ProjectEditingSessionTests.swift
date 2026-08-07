@@ -54,7 +54,7 @@ func historyIsBounded() throws {
             request(
                 session: session,
                 timestamp: Date(timeIntervalSince1970: 1_700_000_000 + Double(index)),
-                payload: .setRenderParameter(.exposure, value: Double(index + 1))
+                payload: .renameProject(to: "History \(index + 1)")
             )
         )
     }
@@ -70,30 +70,31 @@ func recentCommandIDsAreBounded() throws {
             request(
                 session: session,
                 timestamp: Date(timeIntervalSince1970: 1_700_001_000 + Double(index)),
-                payload: .setRenderParameter(.exposure, value: Double(index + 1))
+                payload: .renameProject(to: "IDs \(index + 1)")
             )
         )
     }
     #expect(session.recentCommandCount == 512)
 }
 
-@Test("Compatible slider edits coalesce into one Undo transition")
+@Test("Compatible composition edits coalesce into one Undo transition")
 func sessionCoalescesContinuousEdits() throws {
     var session = try ProjectEditingSession(document: .makeNew(name: "Coalesce"), coalescingInterval: 0.5)
+    let compositionID = try #require(session.document.activeCompositionID)
     _ = try session.apply(
         request(
             session: session,
             timestamp: Date(timeIntervalSince1970: 10),
-            mergeKey: "render.exposure",
-            payload: .setRenderParameter(.exposure, value: 0.4)
+            mergeKey: "composition.dimensions",
+            payload: .setCompositionDimensions(id: compositionID, width: 1200, height: 1080)
         )
     )
     _ = try session.apply(
         request(
             session: session,
             timestamp: Date(timeIntervalSince1970: 10.2),
-            mergeKey: "render.exposure",
-            payload: .setRenderParameter(.exposure, value: 1.2)
+            mergeKey: "composition.dimensions",
+            payload: .setCompositionDimensions(id: compositionID, width: 1280, height: 720)
         )
     )
     #expect(session.undoCount == 1)
@@ -101,7 +102,8 @@ func sessionCoalescesContinuousEdits() throws {
         commandID: VertexID(rawValue: "52000000-0000-0000-0000-000000000010"),
         timestamp: Date(timeIntervalSince1970: 11)
     )
-    #expect(session.document.renderSettings.exposure == 0)
+    #expect(session.document.composition(id: compositionID)?.width == 1080)
+    #expect(session.document.composition(id: compositionID)?.height == 1080)
 }
 
 @Test("Workspace selection does not clear Redo history")

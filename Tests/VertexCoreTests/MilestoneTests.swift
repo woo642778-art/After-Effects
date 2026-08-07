@@ -1,15 +1,15 @@
 import Testing
 @testable import VertexCore
 
-@Test("Phase 5 is the active implemented milestone")
-func phaseFiveIsActiveMilestone() {
+@Test("Phase 6 is the active implemented milestone")
+func phaseSixIsActiveMilestone() {
     let milestone = MilestoneCatalog.current
 
-    #expect(milestone.number == 5)
+    #expect(milestone.number == 6)
     #expect(milestone.status == .implemented)
-    #expect(milestone.title == "Project Persistence and Recovery")
-    #expect(milestone.deliverables.contains { $0.contains("write-ahead journal") })
-    #expect(milestone.deliverables.contains { $0.contains("5.0.0") })
+    #expect(milestone.title == "Layers and Compositions")
+    #expect(milestone.deliverables.contains { $0.contains("multi-source") })
+    #expect(milestone.deliverables.contains { $0.contains("6.0.0") })
 }
 
 @Test("Core source candidates retain explicit adoption boundaries")
@@ -45,7 +45,7 @@ func gplSourceIsNotAdoptedIntoProduct() {
 @Test("Artifact policy fixes the phase-major version and signing boundary")
 func artifactPolicyIsExplicit() {
     let policy = MilestoneCatalog.current.artifactPolicy.lowercased()
-    #expect(policy.contains("after-effects-5.0.0-unsigned.ipa"))
+    #expect(policy.contains("after-effects-6.0.0-unsigned.ipa"))
     #expect(policy.contains("signing credentials"))
     #expect(policy.contains("major version"))
 }

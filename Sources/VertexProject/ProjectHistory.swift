@@ -66,8 +66,7 @@ public final class ProjectHistoryController {
 
     public func perform(_ record: ProjectCommandRecord) throws {
         project = try engine.apply(record, to: project)
-        if let last = undoStack.last,
-           let merged = coalesced(last, with: record) {
+        if let last = undoStack.last, let merged = coalesced(last, with: record) {
             undoStack[undoStack.count - 1] = merged
         } else {
             undoStack.append(record)
@@ -94,7 +93,6 @@ public final class ProjectHistoryController {
             forwardOperation: original.inverseOperation,
             inverseOperation: original.forwardOperation
         )
-
         try prepare(transition)
         let changed = try engine.apply(transition, to: project)
         project = changed
@@ -122,7 +120,6 @@ public final class ProjectHistoryController {
             forwardOperation: original.forwardOperation,
             inverseOperation: original.inverseOperation
         )
-
         try prepare(transition)
         let changed = try engine.apply(transition, to: project)
         project = changed
@@ -135,6 +132,7 @@ public final class ProjectHistoryController {
     private func coalesced(_ previous: ProjectCommandRecord, with current: ProjectCommandRecord) -> ProjectCommandRecord? {
         guard let previousKey = previous.mergeKey,
               previousKey == current.mergeKey,
+              previous.projectID == current.projectID,
               current.timestamp.timeIntervalSince(previous.timestamp) >= 0,
               current.timestamp.timeIntervalSince(previous.timestamp) <= coalescingInterval else {
             return nil
@@ -147,11 +145,31 @@ public final class ProjectHistoryController {
             .setRenderParameter(currentParameter, currentBefore, currentAfter)
         ) where previousParameter == currentParameter && previousAfter == currentBefore:
             mergedForward = .setRenderParameter(previousParameter, before: previousBefore, after: currentAfter)
+
         case let (
             .setRenderBoolean(previousParameter, previousBefore, previousAfter),
             .setRenderBoolean(currentParameter, currentBefore, currentAfter)
         ) where previousParameter == currentParameter && previousAfter == currentBefore:
             mergedForward = .setRenderBoolean(previousParameter, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerTransform(previousID, previousBefore, previousAfter),
+            .setLayerTransform(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            mergedForward = .setLayerTransform(layerID: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerTiming(previousID, previousBefore, previousAfter),
+            .setLayerTiming(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            mergedForward = .setLayerTiming(layerID: previousID, before: previousBefore, after: currentAfter)
+
+        case let (
+            .setLayerOperations(previousID, previousBefore, previousAfter),
+            .setLayerOperations(currentID, currentBefore, currentAfter)
+        ) where previousID == currentID && previousAfter == currentBefore:
+            mergedForward = .setLayerOperations(layerID: previousID, before: previousBefore, after: currentAfter)
+
         default:
             return nil
         }

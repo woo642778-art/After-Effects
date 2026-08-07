@@ -4,6 +4,12 @@ import VertexCore
 import VertexProject
 import VertexProjectPersistence
 
+enum ProjectWorkspaceNavigation: Equatable, Sendable {
+    case activeComposition(VertexID)
+    case selectedLayer(VertexID?, selectedMediaID: VertexID?)
+    case selectedMedia(VertexID?)
+}
+
 @MainActor
 final class ProjectWorkspaceViewModel: ObservableObject {
     enum Status: Equatable {
@@ -35,8 +41,21 @@ final class ProjectWorkspaceViewModel: ObservableObject {
     private var commandCountSinceAutosave = 0
     private var latestPublicationToken = 0
 
-    var renderSettings: ProjectRenderSettings {
-        project?.renderSettings ?? ProjectRenderSettings()
+    var packageLocation: URL? { packageURL }
+
+    var activeComposition: ProjectComposition? {
+        guard let project, let id = project.activeCompositionID else { return nil }
+        return project.composition(id: id)
+    }
+
+    var selectedLayer: ProjectLayer? {
+        guard let project, let id = project.selectedLayerID else { return nil }
+        return project.layer(id: id)
+    }
+
+    var orderedLayers: [ProjectLayer] {
+        guard let project, let id = project.activeCompositionID else { return [] }
+        return project.layers(in: id)
     }
 
     var revisionText: String {
@@ -78,7 +97,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         guard let current = project?.metadata.name else { return }
         let next = projectNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !next.isEmpty, next != current else { return }
-        perform(.renameProject(to: next), mergeKey: nil)
+        applyCommand(.renameProject(to: next))
     }
 
     func openProject(from externalURL: URL) {
@@ -178,31 +197,6 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 self.publish(error, token: token)
             }
         }
-    }
-
-    func setRenderParameter(_ parameter: ProjectRenderParameter, to value: Double) {
-        guard project?.renderSettings.value(for: parameter) != value else { return }
-        perform(
-            .setRenderParameter(parameter, value: value),
-            mergeKey: "render.\(parameter.rawValue)"
-        )
-    }
-
-    func setInverted(_ value: Bool) {
-        guard project?.renderSettings.inverted != value else { return }
-        perform(
-            .setRenderBoolean(.inverted, value: value),
-            mergeKey: "render.inverted"
-        )
-    }
-
-    func setOutputDimensions(width: Int, height: Int) {
-        guard let settings = project?.renderSettings,
-              settings.outputWidth != width || settings.outputHeight != height else { return }
-        perform(
-            .setOutputDimensions(width: width, height: height),
-            mergeKey: "render.output"
-        )
     }
 
     func undo() {
@@ -320,18 +314,57 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         }
     }
 
-    private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
+    func applyCommand(
+        _ payload: ProjectCommandPayload,
+        mergeKey: String? = nil,
+        then navigation: ProjectWorkspaceNavigation? = nil
+    ) {
         let token = beginPublishedOperation()
         Task { [weak self] in
             guard let self else { return }
             do {
-                let snapshot = try await self.sessionActor.apply(payload, mergeKey: mergeKey)
+                var snapshot = try await self.sessionActor.apply(payload, mergeKey: mergeKey)
+                if let navigation {
+                    snapshot = try await self.apply(navigation, to: snapshot)
+                }
                 self.commandCountSinceAutosave += 1
                 self.publish(snapshot, token: token, message: "Session change applied")
                 self.scheduleAutosaveOrFlush()
             } catch {
                 self.publish(error, token: token)
             }
+        }
+    }
+
+    func navigate(_ navigation: ProjectWorkspaceNavigation) {
+        let token = beginPublishedOperation()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.apply(navigation, to: nil)
+                self.publish(snapshot, token: token, message: "Workspace navigation updated")
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    private func apply(
+        _ navigation: ProjectWorkspaceNavigation,
+        to snapshot: ProjectSessionSnapshot?
+    ) async throws -> ProjectSessionSnapshot {
+        _ = snapshot
+        switch navigation {
+        case .activeComposition(let id):
+            return try await sessionActor.setActiveComposition(id)
+        case .selectedLayer(let id, let selectedMediaID):
+            var current = try await sessionActor.setSelectedLayer(id)
+            if current.document.selectedMediaID != selectedMediaID {
+                current = try await sessionActor.setSelectedMedia(selectedMediaID)
+            }
+            return current
+        case .selectedMedia(let id):
+            return try await sessionActor.setSelectedMedia(id)
         }
     }
 

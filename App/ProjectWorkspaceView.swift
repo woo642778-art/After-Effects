@@ -13,11 +13,11 @@ struct ProjectWorkspaceView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("PROJECT PERSISTENCE")
+                    Text("PROJECT / COMPOSITIONS")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AfterEffectsTheme.accent)
                         .tracking(0.8)
-                    Text(".vertexproject · atomic snapshot · session Undo")
+                    Text(".vertexproject · schema 2 · session Undo")
                         .font(.headline)
                         .foregroundStyle(.white)
                 }

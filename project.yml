@@ -33,13 +33,15 @@ targets:
         product: VertexProject
       - package: Vertex
         product: VertexProjectPersistence
+      - package: Vertex
+        product: VertexComposition
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 5.0.0
-        CURRENT_PROJECT_VERSION: 5
+        MARKETING_VERSION: 6.0.0
+        CURRENT_PROJECT_VERSION: 6
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: After Effects
@@ -69,6 +71,7 @@ targets:
       - path: Tests/VertexRenderMetalTests
       - path: Tests/VertexProjectTests
       - path: Tests/VertexProjectPersistenceTests
+      - path: Tests/VertexCompositionTests
       - path: Tests/VertexAppTests
     dependencies:
       - target: Vertex
@@ -84,6 +87,8 @@ targets:
         product: VertexProject
       - package: Vertex
         product: VertexProjectPersistence
+      - package: Vertex
+        product: VertexComposition
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
