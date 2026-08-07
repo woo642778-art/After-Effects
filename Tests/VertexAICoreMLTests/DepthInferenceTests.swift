@@ -102,7 +102,7 @@ func bundledDepthAnythingInference() throws {
     let depth = try engine.infer(pixelBuffer: buffer, recipe: DepthRecipe())
     #expect(depth.width == 96)
     #expect(depth.height == 64)
-    #expect(depth.values.allSatisfy(\.isFinite))
+    #expect(depth.values.allSatisfy { $0.isFinite })
     #expect(depth.maximum > depth.minimum)
 }
 #endif
