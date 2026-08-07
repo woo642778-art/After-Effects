@@ -24,73 +24,7 @@ public struct DepthFrame: Equatable, Sendable {
     }
 }
 
-#if canImport(CoreML) && canImport(CoreVideo)
-import CoreML
-import CoreVideo
-
-public actor DepthInferenceEngine {
-    public static let defaultModelID = "depth-anything-v2-small-f16"
-
-    private let registry: AIModelRegistry
-    private let modelID: String
-
-    public init(registry: AIModelRegistry, modelID: String = defaultModelID) {
-        self.registry = registry
-        self.modelID = modelID
-    }
-
-    public func infer(
-        pixelBuffer: CVPixelBuffer,
-        recipe: DepthRecipe,
-        previousFrame: DepthFrame? = nil
-    ) async throws -> DepthFrame {
-        _ = try recipe.validated()
-        let model = try await registry.model(for: modelID)
-        let preprocessed = try AIImagePreprocessor.aspectFit(pixelBuffer: pixelBuffer, for: model)
-        let prediction = try AIImageTensorAdapter.prediction(model: model, pixelBuffer: preprocessed.buffer)
-        let raw = try Self.extractDepth(provider: prediction)
-        let aligned = try Self.align(
-            values: raw.values,
-            width: raw.width,
-            height: raw.height,
-            transform: preprocessed.transform
-        )
-        return try Self.process(
-            values: aligned,
-            width: preprocessed.transform.sourceWidth,
-            height: preprocessed.transform.sourceHeight,
-            recipe: recipe,
-            previous: previousFrame
-        )
-    }
-
-    private static func extractDepth(provider: MLFeatureProvider) throws -> (width: Int, height: Int, values: [Float]) {
-        let array = try AIImageTensorAdapter.firstMultiArrayOutput(from: provider)
-        let shape = array.shape.map(\.intValue)
-        guard shape.count >= 2, let width = shape.last, let height = shape.dropLast().last,
-              width > 0, height > 0 else {
-            throw AIError.inferenceFailed("Depth output shape is unsupported: \(shape)")
-        }
-        let prefixCount = shape.count - 2
-        var result = Array(repeating: Float.zero, count: width * height)
-        var indices = Array(repeating: NSNumber(value: 0), count: shape.count)
-        for y in 0..<height {
-            indices[prefixCount] = NSNumber(value: y)
-            for x in 0..<width {
-                indices[prefixCount + 1] = NSNumber(value: x)
-                result[y * width + x] = array[indices].floatValue
-            }
-        }
-        guard result.contains(where: \.isFinite) else {
-            throw AIError.inferenceFailed("Depth model returned no finite values.")
-        }
-        return (width, height, result)
-    }
-}
-
-#endif
-
-extension DepthInferenceEngine {
+public enum DepthProcessing {
     public static func process(
         values: [Float],
         width: Int,
@@ -143,64 +77,7 @@ extension DepthInferenceEngine {
         return try DepthFrame(width: width, height: height, values: normalized)
     }
 
-    static func align(
-        values: [Float],
-        width: Int,
-        height: Int,
-        transform: AIImageTransform
-    ) throws -> [Float] {
-        guard values.count == width * height else {
-            throw AIError.inferenceFailed("Depth alignment received an invalid buffer.")
-        }
-        let scaleX = Double(width) / Double(transform.modelWidth)
-        let scaleY = Double(height) / Double(transform.modelHeight)
-        let cropX = max(0, min(width - 1, Int((transform.contentX * scaleX).rounded(.down))))
-        let cropY = max(0, min(height - 1, Int((transform.contentY * scaleY).rounded(.down))))
-        let cropMaxX = max(cropX + 1, min(width, Int(((transform.contentX + transform.contentWidth) * scaleX).rounded(.up))))
-        let cropMaxY = max(cropY + 1, min(height, Int(((transform.contentY + transform.contentHeight) * scaleY).rounded(.up))))
-        let cropWidth = cropMaxX - cropX
-        let cropHeight = cropMaxY - cropY
-        var cropped = Array(repeating: Float.zero, count: cropWidth * cropHeight)
-        for y in 0..<cropHeight {
-            let sourceStart = (cropY + y) * width + cropX
-            let destinationStart = y * cropWidth
-            cropped.replaceSubrange(destinationStart..<(destinationStart + cropWidth), with: values[sourceStart..<(sourceStart + cropWidth)])
-        }
-        return bilinearResize(
-            cropped,
-            sourceWidth: cropWidth,
-            sourceHeight: cropHeight,
-            targetWidth: transform.sourceWidth,
-            targetHeight: transform.sourceHeight
-        )
-    }
-
-    private static func boxBlur(_ input: [Float], width: Int, height: Int, radius: Int) -> [Float] {
-        guard radius > 0 else { return input }
-        var horizontal = Array(repeating: Float.zero, count: input.count)
-        var output = Array(repeating: Float.zero, count: input.count)
-        for y in 0..<height {
-            for x in 0..<width {
-                let lower = max(0, x - radius)
-                let upper = min(width - 1, x + radius)
-                var sum: Float = 0
-                for sampleX in lower...upper { sum += input[y * width + sampleX] }
-                horizontal[y * width + x] = sum / Float(upper - lower + 1)
-            }
-        }
-        for y in 0..<height {
-            let lower = max(0, y - radius)
-            let upper = min(height - 1, y + radius)
-            for x in 0..<width {
-                var sum: Float = 0
-                for sampleY in lower...upper { sum += horizontal[sampleY * width + x] }
-                output[y * width + x] = sum / Float(upper - lower + 1)
-            }
-        }
-        return output
-    }
-
-    private static func bilinearResize(
+    public static func bilinearResize(
         _ input: [Float],
         sourceWidth: Int,
         sourceHeight: Int,
@@ -228,4 +105,127 @@ extension DepthInferenceEngine {
         }
         return output
     }
+
+    private static func boxBlur(_ input: [Float], width: Int, height: Int, radius: Int) -> [Float] {
+        guard radius > 0 else { return input }
+        var horizontal = Array(repeating: Float.zero, count: input.count)
+        var output = Array(repeating: Float.zero, count: input.count)
+        for y in 0..<height {
+            for x in 0..<width {
+                let lower = max(0, x - radius)
+                let upper = min(width - 1, x + radius)
+                var sum: Float = 0
+                for sampleX in lower...upper { sum += input[y * width + sampleX] }
+                horizontal[y * width + x] = sum / Float(upper - lower + 1)
+            }
+        }
+        for y in 0..<height {
+            let lower = max(0, y - radius)
+            let upper = min(height - 1, y + radius)
+            for x in 0..<width {
+                var sum: Float = 0
+                for sampleY in lower...upper { sum += horizontal[sampleY * width + x] }
+                output[y * width + x] = sum / Float(upper - lower + 1)
+            }
+        }
+        return output
+    }
 }
+
+#if canImport(CoreML) && canImport(CoreVideo)
+import CoreML
+import CoreVideo
+
+public actor DepthInferenceEngine {
+    public static let defaultModelID = "depth-anything-v2-small-f16"
+
+    private let registry: AIModelRegistry
+    private let modelID: String
+
+    public init(registry: AIModelRegistry, modelID: String = defaultModelID) {
+        self.registry = registry
+        self.modelID = modelID
+    }
+
+    public func infer(
+        pixelBuffer: CVPixelBuffer,
+        recipe: DepthRecipe,
+        previousFrame: DepthFrame? = nil
+    ) async throws -> DepthFrame {
+        _ = try recipe.validated()
+        let model = try await registry.model(for: modelID)
+        let preprocessed = try AIImagePreprocessor.aspectFit(pixelBuffer: pixelBuffer, for: model)
+        let prediction = try AIImageTensorAdapter.prediction(model: model, pixelBuffer: preprocessed.buffer)
+        let raw = try Self.extractDepth(provider: prediction)
+        let aligned = try Self.align(
+            values: raw.values,
+            width: raw.width,
+            height: raw.height,
+            transform: preprocessed.transform
+        )
+        return try DepthProcessing.process(
+            values: aligned,
+            width: preprocessed.transform.sourceWidth,
+            height: preprocessed.transform.sourceHeight,
+            recipe: recipe,
+            previous: previousFrame
+        )
+    }
+
+    private static func extractDepth(provider: MLFeatureProvider) throws -> (width: Int, height: Int, values: [Float]) {
+        let array = try AIImageTensorAdapter.firstMultiArrayOutput(from: provider)
+        let shape = array.shape.map(\.intValue)
+        guard shape.count >= 2, let width = shape.last, let height = shape.dropLast().last,
+              width > 0, height > 0 else {
+            throw AIError.inferenceFailed("Depth output shape is unsupported: \(shape)")
+        }
+        let prefixCount = shape.count - 2
+        var result = Array(repeating: Float.zero, count: width * height)
+        var indices = Array(repeating: NSNumber(value: 0), count: shape.count)
+        for y in 0..<height {
+            indices[prefixCount] = NSNumber(value: y)
+            for x in 0..<width {
+                indices[prefixCount + 1] = NSNumber(value: x)
+                result[y * width + x] = array[indices].floatValue
+            }
+        }
+        guard result.contains(where: \.isFinite) else {
+            throw AIError.inferenceFailed("Depth model returned no finite values.")
+        }
+        return (width, height, result)
+    }
+
+    private static func align(
+        values: [Float],
+        width: Int,
+        height: Int,
+        transform: AIImageTransform
+    ) throws -> [Float] {
+        guard values.count == width * height else {
+            throw AIError.inferenceFailed("Depth alignment received an invalid buffer.")
+        }
+        let scaleX = Double(width) / Double(transform.modelWidth)
+        let scaleY = Double(height) / Double(transform.modelHeight)
+        let cropX = max(0, min(width - 1, Int((transform.contentX * scaleX).rounded(.down))))
+        let cropY = max(0, min(height - 1, Int((transform.contentY * scaleY).rounded(.down))))
+        let cropMaxX = max(cropX + 1, min(width, Int(((transform.contentX + transform.contentWidth) * scaleX).rounded(.up))))
+        let cropMaxY = max(cropY + 1, min(height, Int(((transform.contentY + transform.contentHeight) * scaleY).rounded(.up))))
+        let cropWidth = cropMaxX - cropX
+        let cropHeight = cropMaxY - cropY
+        var cropped = Array(repeating: Float.zero, count: cropWidth * cropHeight)
+        for y in 0..<cropHeight {
+            let sourceStart = (cropY + y) * width + cropX
+            let destinationStart = y * cropWidth
+            cropped.replaceSubrange(destinationStart..<(destinationStart + cropWidth), with: values[sourceStart..<(sourceStart + cropWidth)])
+        }
+        return DepthProcessing.bilinearResize(
+            cropped,
+            sourceWidth: cropWidth,
+            sourceHeight: cropHeight,
+            targetWidth: transform.sourceWidth,
+            targetHeight: transform.sourceHeight
+        )
+    }
+}
+
+#endif
