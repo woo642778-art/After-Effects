@@ -21,26 +21,20 @@ private func legacyImportRoot(_ name: String = UUID().uuidString) -> URL {
     FileManager.default.temporaryDirectory.appendingPathComponent(name, isDirectory: true)
 }
 
-private func encodeLegacyManifest(_ manifest: ProjectManifest) throws -> Data {
+private func legacyEncoder() -> JSONEncoder {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     encoder.dateEncodingStrategy = .custom(ProjectDateCodec.encode)
-    return try encoder.encode(manifest)
+    encoder.nonConformingFloatEncodingStrategy = .throw
+    return encoder
 }
 
-private func decodeLegacyManifest(_ data: Data) throws -> ProjectManifest {
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .custom(ProjectDateCodec.decode)
-    return try decoder.decode(ProjectManifest.self, from: data)
-}
-
-private func injectLegacyState(
-    projectURL: URL,
-    manifestURL: URL,
+private func legacyProjectData(
+    from document: ProjectDocument,
     bookmarkPayloads: [VertexID: Data]
-) throws {
-    let projectData = try Data(contentsOf: projectURL)
-    let object = try #require(try JSONSerialization.jsonObject(with: projectData) as? [String: Any])
+) throws -> Data {
+    let canonical = try DeterministicProjectCodec().encode(document)
+    let object = try #require(try JSONSerialization.jsonObject(with: canonical) as? [String: Any])
     var changed = object
     var media = try #require(changed["mediaRegistry"] as? [[String: Any]])
 
@@ -58,17 +52,23 @@ private func injectLegacyState(
         "57000000-0000-0000-0000-000000000099"
     ]
 
-    let changedData = try JSONSerialization.data(withJSONObject: changed, options: [.sortedKeys, .withoutEscapingSlashes])
-    try changedData.write(to: projectURL)
-
-    var manifest = try decodeLegacyManifest(Data(contentsOf: manifestURL))
-    manifest.projectChecksum = DeterministicProjectCodec().checksum(data: changedData)
-    try encodeLegacyManifest(manifest).write(to: manifestURL)
+    return try JSONSerialization.data(
+        withJSONObject: changed,
+        options: [.sortedKeys, .withoutEscapingSlashes]
+    )
 }
 
 private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let sourceURL = root.appendingPathComponent("Legacy Source").appendingPathExtension("aeproject")
+    let journalDirectory = sourceURL.appendingPathComponent("journal", isDirectory: true)
+    let autosavesDirectory = sourceURL.appendingPathComponent("autosaves", isDirectory: true)
+    let mediaDirectory = sourceURL.appendingPathComponent("media", isDirectory: true)
+    try FileManager.default.createDirectory(at: sourceURL, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: journalDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: autosavesDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
+
     let createdAt = Date(timeIntervalSince1970: 1_650_000_000)
     let modifiedAt = Date(timeIntervalSince1970: 1_650_000_100)
     let embeddedBytes = Data("verified-embedded-media".utf8)
@@ -141,25 +141,54 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
         forwardOperation: .renameProject(before: "Legacy Original", after: "Legacy Replayed"),
         inverseOperation: .renameProject(before: "Legacy Replayed", after: "Legacy Original")
     )
-    let history = ProjectHistorySnapshot(undo: [rename], redo: [rename])
-    let legacyStore = ProjectPackageStore()
-    _ = try legacyStore.create(at: sourceURL, document: document, history: history)
-    let layout = try ProjectPackageLayout(root: sourceURL)
-    try embeddedBytes.write(to: layout.mediaDirectoryURL.appendingPathComponent("embedded-source.mov"))
-    try Data("mutable-current".utf8).write(to: layout.autosaveCurrentURL)
-    try Data("mutable-previous".utf8).write(to: layout.autosavePreviousURL)
-    try FileManager.default.copyItem(at: layout.projectURL, to: layout.projectBackupURL)
-    try ProjectJournalCodec().encodeLine(
-        ProjectJournalRecord(sequence: 1, command: rename)
-    ).write(to: layout.journalURL)
 
-    try injectLegacyState(
-        projectURL: layout.projectURL,
-        manifestURL: layout.manifestURL,
+    let projectData = try legacyProjectData(
+        from: document,
         bookmarkPayloads: [
             legacyBookmarkMediaID: Data("valid-bookmark-sidecar".utf8),
             legacyMissingMediaID: Data()
         ]
+    )
+    let projectURL = sourceURL.appendingPathComponent("project.json")
+    try projectData.write(to: projectURL)
+
+    let manifest = LegacyManifestDTO(
+        schemaVersion: document.schemaVersion,
+        minimumReaderVersion: document.minimumReaderVersion,
+        projectID: document.projectID,
+        createdByAppVersion: document.metadata.createdByAppVersion,
+        lastSavedByAppVersion: document.metadata.lastSavedByAppVersion,
+        projectRevision: document.revision,
+        projectChecksum: DeterministicProjectCodec().checksum(data: projectData),
+        committedJournalSequence: 0,
+        lastSuccessfulSave: modifiedAt,
+        integrityStatus: .valid
+    )
+    try legacyEncoder().encode(manifest).write(
+        to: sourceURL.appendingPathComponent("manifest.json")
+    )
+
+    let history = ProjectHistorySnapshot(undo: [rename], redo: [rename])
+    try legacyEncoder().encode(history).write(
+        to: sourceURL.appendingPathComponent("history.json")
+    )
+
+    try embeddedBytes.write(
+        to: mediaDirectory.appendingPathComponent("embedded-source.mov")
+    )
+    try Data("mutable-current".utf8).write(
+        to: autosavesDirectory.appendingPathComponent("snapshot-current.json")
+    )
+    try Data("mutable-previous".utf8).write(
+        to: autosavesDirectory.appendingPathComponent("snapshot-previous.json")
+    )
+    try projectData.write(
+        to: sourceURL.appendingPathComponent("project.json.backup")
+    )
+    try ProjectJournalCodec().encodeLine(
+        ProjectJournalRecord(sequence: 1, command: rename)
+    ).write(
+        to: journalDirectory.appendingPathComponent("operations.log")
     )
 
     return LegacyImportFixture(
@@ -243,8 +272,8 @@ func legacyImportFailureCleansTemporaryDestination() throws {
     let root = legacyImportRoot("LegacyFailure")
     defer { try? FileManager.default.removeItem(at: root) }
     let fixture = try makeLegacyImportFixture(at: root)
-    let layout = try ProjectPackageLayout(root: fixture.sourceURL)
-    try Data("corrupt-project".utf8).write(to: layout.projectURL)
+    let projectURL = fixture.sourceURL.appendingPathComponent("project.json")
+    try Data("corrupt-project".utf8).write(to: projectURL)
 
     let destination = root.appendingPathComponent("Failed").appendingPathExtension("vertexproject")
     #expect(throws: ProjectPersistenceError.self) {
