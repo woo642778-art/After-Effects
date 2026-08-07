@@ -35,13 +35,15 @@ targets:
         product: VertexProjectPersistence
       - package: Vertex
         product: VertexComposition
+      - package: Vertex
+        product: VertexAI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 6.0.0
-        CURRENT_PROJECT_VERSION: 6
+        MARKETING_VERSION: 7.0.0
+        CURRENT_PROJECT_VERSION: 7
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: After Effects
@@ -82,6 +84,8 @@ targets:
         product: VertexProjectPersistence
       - package: Vertex
         product: VertexComposition
+      - package: Vertex
+        product: VertexAI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
