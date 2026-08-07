@@ -47,9 +47,17 @@ func autosaveDoesNotBecomeExplicitSave() async throws {
 
     let actor = ProjectSessionActor()
     _ = try await actor.create(name: "Autosave", packageURL: url)
+    let current = try await actor.snapshot()
+    let composition = try #require(
+        current.document.activeCompositionID.flatMap { current.document.composition(id: $0) }
+    )
     let edited = try await actor.apply(
-        .setRenderParameter(.exposure, value: 1.25),
-        mergeKey: "render.exposure"
+        .setCompositionDimensions(
+            id: composition.id,
+            width: composition.width + 1,
+            height: composition.height
+        ),
+        mergeKey: "composition.\(composition.id.rawValue).dimensions"
     )
     let autosave = try await actor.autosave(reason: .manualFlush)
     let afterAutosave = try await actor.snapshot()

@@ -63,7 +63,7 @@ func historySurvivesSave() throws {
     let project = try ProjectDocument.makeNew(name: "History", timestamp: Date(timeIntervalSince1970: 100))
     let controller = try ProjectHistoryController(project: project)
     try controller.perform(
-        .setRenderParameter(.exposure, before: 0, after: 1),
+        .renameProject(before: "History", after: "Changed"),
         timestamp: Date(timeIntervalSince1970: 101),
         commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000041")
     )
@@ -72,7 +72,7 @@ func historySurvivesSave() throws {
     let restored = try ProjectHistoryController(project: loaded.document, snapshot: loaded.history)
     #expect(restored.canUndo)
     try restored.undo(commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000042"))
-    #expect(restored.project.renderSettings.exposure == 0)
+    #expect(restored.project.metadata.name == "History")
 }
 
 @Test("Journal append writes complete durable records")
@@ -85,11 +85,10 @@ func journalAppendRoundTrips() throws {
         timestamp: Date(timeIntervalSince1970: 100)
     )
     _ = try ProjectPackageStore().create(at: url, document: project)
-    let command = ProjectCommandRecord.settingExposure(
+    let command = ProjectCommandRecord(
         project: project,
         commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000044"),
-        from: 0,
-        to: 1,
+        operation: .renameProject(before: "Journal", after: "Journal Changed"),
         timestamp: Date(timeIntervalSince1970: 101)
     )
     try ProjectPackageStore().appendJournal(

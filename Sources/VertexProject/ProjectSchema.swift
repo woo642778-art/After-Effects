@@ -25,21 +25,6 @@ public struct MediaLocator: Codable, Equatable, Sendable {
         self.embeddedPath = embeddedPath
     }
 
-    @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
-    public init(
-        relativeHint: String? = nil,
-        bookmarkData: Data?,
-        embeddedPath: String? = nil
-    ) {
-        self.relativeHint = relativeHint
-        self.embeddedPath = embeddedPath
-    }
-
-    @available(*, deprecated, message: "Bookmark bytes belong in VertexProjectPersistence sidecars.")
-    public var bookmarkData: Data? {
-        get { nil }
-        set { }
-    }
 }
 
 public struct MediaReference: Codable, Equatable, Sendable, Identifiable {
@@ -254,8 +239,8 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 }
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
-    public static let currentAppVersion = "5.0.0"
+    public static let currentSchemaVersion = 2
+    public static let currentAppVersion = "6.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int
@@ -264,10 +249,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var metadata: ProjectMetadata
     public var settings: ProjectSettings
     public var mediaRegistry: [MediaReference]
-    public var compositionRegistry: [ProjectCompositionPlaceholder]
+    public var compositionRegistry: [ProjectComposition]
+    public var layerRegistry: [ProjectLayer]
     public var activeCompositionID: VertexID?
+    public var selectedLayerID: VertexID?
     public var selectedMediaID: VertexID?
-    public var renderSettings: ProjectRenderSettings
 
     public init(
         schemaVersion: Int = ProjectDocument.currentSchemaVersion,
@@ -277,10 +263,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         metadata: ProjectMetadata,
         settings: ProjectSettings,
         mediaRegistry: [MediaReference],
-        compositionRegistry: [ProjectCompositionPlaceholder],
+        compositionRegistry: [ProjectComposition],
+        layerRegistry: [ProjectLayer],
         activeCompositionID: VertexID?,
-        selectedMediaID: VertexID?,
-        renderSettings: ProjectRenderSettings
+        selectedLayerID: VertexID?,
+        selectedMediaID: VertexID?
     ) {
         self.schemaVersion = schemaVersion
         self.minimumReaderVersion = minimumReaderVersion
@@ -290,45 +277,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.settings = settings
         self.mediaRegistry = mediaRegistry
         self.compositionRegistry = compositionRegistry
+        self.layerRegistry = layerRegistry
         self.activeCompositionID = activeCompositionID
+        self.selectedLayerID = selectedLayerID
         self.selectedMediaID = selectedMediaID
-        self.renderSettings = renderSettings
-    }
-
-    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
-    public init(
-        schemaVersion: Int = ProjectDocument.currentSchemaVersion,
-        minimumReaderVersion: Int = ProjectDocument.currentSchemaVersion,
-        projectID: VertexID,
-        revision: UInt64,
-        metadata: ProjectMetadata,
-        settings: ProjectSettings,
-        mediaRegistry: [MediaReference],
-        compositionRegistry: [ProjectCompositionPlaceholder],
-        activeCompositionID: VertexID?,
-        selectedMediaID: VertexID?,
-        renderSettings: ProjectRenderSettings,
-        appliedCommandIDs: [VertexID]
-    ) {
-        self.init(
-            schemaVersion: schemaVersion,
-            minimumReaderVersion: minimumReaderVersion,
-            projectID: projectID,
-            revision: revision,
-            metadata: metadata,
-            settings: settings,
-            mediaRegistry: mediaRegistry,
-            compositionRegistry: compositionRegistry,
-            activeCompositionID: activeCompositionID,
-            selectedMediaID: selectedMediaID,
-            renderSettings: renderSettings
-        )
-    }
-
-    @available(*, deprecated, message: "Applied command IDs are active-session state only.")
-    public var appliedCommandIDs: [VertexID] {
-        get { [] }
-        set { }
     }
 
     public static func makeNew(
@@ -336,7 +288,23 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         name: String,
         timestamp: Date = Date()
     ) throws -> ProjectDocument {
-        let document = ProjectDocument(
+        let compositionID = try DeterministicVertexID.derive(
+            domain: "vertex.phase6.main-composition",
+            components: [id.rawValue]
+        )
+        let settings = ProjectSettings()
+        let composition = ProjectComposition(
+            id: compositionID,
+            name: "Main Composition",
+            width: 1080,
+            height: 1080,
+            duration: RationalTime(value: 10, timescale: 1),
+            frameRate: settings.frameRate,
+            color: settings.color,
+            backgroundColor: .transparent,
+            layerIDs: []
+        )
+        return try ProjectDocument(
             projectID: id,
             revision: 0,
             metadata: ProjectMetadata(
@@ -346,20 +314,17 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
                 createdByAppVersion: currentAppVersion,
                 lastSavedByAppVersion: currentAppVersion
             ),
-            settings: ProjectSettings(),
+            settings: settings,
             mediaRegistry: [],
-            compositionRegistry: [],
-            activeCompositionID: nil,
-            selectedMediaID: nil,
-            renderSettings: ProjectRenderSettings()
-        )
-        return try document.validated()
+            compositionRegistry: [composition],
+            layerRegistry: [],
+            activeCompositionID: composition.id,
+            selectedLayerID: nil,
+            selectedMediaID: nil
+        ).validated()
     }
 
-    public static func makeFixture(
-        timestamp: Date,
-        media: [MediaReference]
-    ) throws -> ProjectDocument {
+    public static func makeFixture(timestamp: Date, media: [MediaReference]) throws -> ProjectDocument {
         var document = try makeNew(
             id: VertexID(rawValue: "50000000-0000-0000-0000-000000000001"),
             name: "Fixture",
@@ -369,42 +334,130 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         return try document.validated()
     }
 
+    public func composition(id: VertexID) -> ProjectComposition? {
+        compositionRegistry.first { $0.id == id }
+    }
+
+    public func layer(id: VertexID) -> ProjectLayer? {
+        layerRegistry.first { $0.id == id }
+    }
+
+    public func layers(in compositionID: VertexID) -> [ProjectLayer] {
+        guard let composition = composition(id: compositionID) else { return [] }
+        return composition.layerIDs.compactMap { id in layerRegistry.first { $0.id == id } }
+    }
+
     public func normalized() -> ProjectDocument {
         var copy = self
         copy.mediaRegistry.sort { $0.id.rawValue < $1.id.rawValue }
         copy.compositionRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+        copy.layerRegistry.sort { $0.id.rawValue < $1.id.rawValue }
+        copy.normalizeWorkspaceState()
         return copy
     }
 
-    public func validated() throws -> ProjectDocument {
-        guard schemaVersion == Self.currentSchemaVersion else {
-            throw ProjectError.unsupportedSchema(found: schemaVersion, supported: Self.currentSchemaVersion)
+    public func nestedCompositionCycle() -> [VertexID]? {
+        var edges: [VertexID: [VertexID]] = [:]
+        for composition in compositionRegistry {
+            edges[composition.id] = composition.layerIDs.compactMap { layerID in
+                guard let layer = layer(id: layerID),
+                      case .composition(let target, _) = layer.source else { return nil }
+                return target
+            }
         }
-        guard minimumReaderVersion <= schemaVersion else {
+
+        var visited = Set<VertexID>()
+        var active = Set<VertexID>()
+        var stack: [VertexID] = []
+
+        func visit(_ id: VertexID) -> [VertexID]? {
+            if let index = stack.firstIndex(of: id) {
+                return Array(stack[index...]) + [id]
+            }
+            if visited.contains(id) { return nil }
+            visited.insert(id)
+            active.insert(id)
+            stack.append(id)
+            for target in edges[id] ?? [] {
+                if active.contains(target), let index = stack.firstIndex(of: target) {
+                    return Array(stack[index...]) + [target]
+                }
+                if let cycle = visit(target) { return cycle }
+            }
+            _ = stack.popLast()
+            active.remove(id)
+            return nil
+        }
+
+        for composition in compositionRegistry {
+            if let cycle = visit(composition.id) { return cycle }
+        }
+        return nil
+    }
+
+    public func validated() throws -> ProjectDocument {
+        var copy = self
+        copy.normalizeWorkspaceState()
+
+        guard copy.schemaVersion == Self.currentSchemaVersion else {
+            throw ProjectError.unsupportedSchema(found: copy.schemaVersion, supported: Self.currentSchemaVersion)
+        }
+        guard copy.minimumReaderVersion <= copy.schemaVersion else {
             throw ProjectError.invalidValue("Minimum reader version cannot exceed the schema version.")
         }
-        guard !metadata.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !copy.metadata.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectError.invalidValue("Project name must not be empty.")
         }
-        _ = try renderSettings.validated()
-        for reference in mediaRegistry {
-            _ = try reference.validated()
+        guard copy.settings.frameRate > .zero else {
+            throw ProjectError.invalidValue("Project frame rate must be positive.")
         }
-        guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else {
+        for reference in copy.mediaRegistry { _ = try reference.validated() }
+        guard Set(copy.mediaRegistry.map(\.id)).count == copy.mediaRegistry.count else {
             throw ProjectError.duplicateIdentity("media")
         }
-        guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else {
+        guard !copy.compositionRegistry.isEmpty else {
+            throw ProjectError.invalidValue("A project must contain at least one composition.")
+        }
+        guard Set(copy.compositionRegistry.map(\.id)).count == copy.compositionRegistry.count else {
             throw ProjectError.duplicateIdentity("composition")
+        }
+        guard Set(copy.layerRegistry.map(\.id)).count == copy.layerRegistry.count else {
+            throw ProjectError.duplicateIdentity("layer")
+        }
+
+        let layerByID = Dictionary(uniqueKeysWithValues: copy.layerRegistry.map { ($0.id, $0) })
+        for composition in copy.compositionRegistry {
+            _ = try composition.validated(layerByID: layerByID)
+        }
+        let orderedIDs = copy.compositionRegistry.flatMap(\.layerIDs)
+        guard orderedIDs.count == copy.layerRegistry.count,
+              Set(orderedIDs) == Set(copy.layerRegistry.map(\.id)) else {
+            throw ProjectError.invalidValue("Every layer must appear exactly once in its owning composition order.")
+        }
+        for layer in copy.layerRegistry { _ = try layer.validated(in: copy) }
+        if let cycle = copy.nestedCompositionCycle() {
+            throw ProjectError.invalidValue(
+                "Nested composition cycle: \(cycle.map(\.rawValue).joined(separator: " -> "))."
+            )
+        }
+        return copy
+    }
+
+    private mutating func normalizeWorkspaceState() {
+        if activeCompositionID == nil || !compositionRegistry.contains(where: { $0.id == activeCompositionID }) {
+            activeCompositionID = compositionRegistry.first?.id
         }
         if let selectedMediaID,
            !mediaRegistry.contains(where: { $0.id == selectedMediaID }) {
-            throw ProjectError.invalidValue("Selected media must exist in the media registry.")
+            self.selectedMediaID = nil
         }
-        if let activeCompositionID,
-           !compositionRegistry.contains(where: { $0.id == activeCompositionID }) {
-            throw ProjectError.invalidValue("Active composition must exist in the composition registry.")
+        if let selectedLayerID,
+           let selected = layerRegistry.first(where: { $0.id == selectedLayerID }),
+           selected.compositionID == activeCompositionID {
+            // Valid selection remains unchanged.
+        } else {
+            self.selectedLayerID = nil
         }
-        return self
     }
 }
 

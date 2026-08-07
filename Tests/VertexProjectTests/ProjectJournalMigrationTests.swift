@@ -10,11 +10,10 @@ func journalReplayIsIdempotent() throws {
         name: "Journal",
         timestamp: Date(timeIntervalSince1970: 10)
     )
-    let command = ProjectCommandRecord.settingExposure(
+    let command = ProjectCommandRecord(
         project: project,
         commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000031"),
-        from: 0,
-        to: 1,
+        operation: .renameProject(before: "Journal", after: "Journal Replayed"),
         timestamp: Date(timeIntervalSince1970: 11)
     )
     let record = try ProjectJournalRecord(sequence: 1, command: command)

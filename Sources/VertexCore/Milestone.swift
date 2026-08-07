@@ -55,16 +55,16 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 5,
-        title: "Project Persistence and Recovery",
+        number: 6,
+        title: "Layers and Compositions",
         status: .implemented,
         deliverables: [
-            "Versioned deterministic VertexProject schema with portable media and render settings",
-            "Command-based Undo and Redo with coalescing, revision checks, and idempotent command identities",
-            "Checksummed write-ahead journal, sequential replay, migration inspection, and strong media relinking",
-            "Atomic project package storage, history persistence, autosave rotation, backup recovery, and verified media embedding",
-            "Real project create, open, save, export, autosave, recovery, Undo, Redo, embed, and relink application flows",
-            "Versioned After Effects 5.0.0 unsigned IPA artifact"
+            "Schema 2 project compositions, stable layer identities, deterministic migration, and durable command history",
+            "Real multi-source VertexRender DAG with explicit top-to-bottom Z-order and exact composition time",
+            "Metal Normal, Add, Multiply, and Screen blending with premultiplied alpha and adjustment layers",
+            "Basic nested-composition rendering with source offsets, parent In/Out ranges, cycle checks, and resource limits",
+            "Functional exact-frame composition preview, ordered layer list, inspector, media relinking, Undo, Redo, autosave, and recovery",
+            "Versioned After Effects 6.0.0 unsigned IPA artifact"
         ],
         sourceAdoptions: [
             SourceAdoption(
@@ -72,42 +72,42 @@ public enum MilestoneCatalog {
                 repository: "Apple Foundation",
                 license: "Apple platform SDK and Swift core libraries",
                 mode: .wrappedDependency,
-                purpose: "Phase 5 file packages, deterministic JSON boundaries, atomic file replacement, bookmarks, and FileWrapper export"
+                purpose: "Schema-aware package migration, deterministic persistence, file access, recovery, and export adapters"
             ),
             SourceAdoption(
                 id: "avfoundation",
                 repository: "Apple AVFoundation",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
+                purpose: "Exact media-frame resolution behind the VertexComposition frame-resolver protocol"
             ),
             SourceAdoption(
                 id: "metal",
                 repository: "Apple Metal",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "GPU compute execution behind VertexRenderMetal without exposing Metal types"
+                purpose: "Multi-source layer, blend, adjustment, and nested-composition GPU execution"
             ),
             SourceAdoption(
                 id: "metalpetal",
                 repository: "MetalPetal/MetalPetal",
                 license: "MIT",
                 mode: .researchOnly,
-                purpose: "Audited future filters and composition backend candidate; not linked into Phase 5"
+                purpose: "Audited future filter backend candidate; not linked into Phase 6"
             ),
             SourceAdoption(
                 id: "videoio",
                 repository: "MetalPetal/VideoIO",
                 license: "MIT",
                 mode: .researchOnly,
-                purpose: "Audited future timed preview and video export candidate; not linked into Phase 5"
+                purpose: "Audited future timed playback and video-export candidate; not linked into Phase 6"
             ),
             SourceAdoption(
                 id: "videolab",
                 repository: "ruanjx/VideoLab",
                 license: "MIT",
                 mode: .designReference,
-                purpose: "Future layer, keyframe, operation, and pre-composition architecture study"
+                purpose: "Layer and composition architecture reference only; no source copied"
             ),
             SourceAdoption(
                 id: "minicut",
@@ -117,6 +117,6 @@ public enum MilestoneCatalog {
                 purpose: "Timeline interaction research only; no source copied into the product"
             )
         ],
-        artifactPolicy: "Phase 5 publishes After-Effects-5.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
+        artifactPolicy: "Phase 6 publishes After-Effects-6.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
     )
 }

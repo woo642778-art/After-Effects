@@ -37,40 +37,79 @@ package struct LegacyMediaReferenceDTO: Codable, Equatable, Sendable {
     }
 }
 
-package struct LegacyProjectDTO: Codable, Equatable, Sendable {
-    package var schemaVersion: Int
-    package var minimumReaderVersion: Int
-    package var projectID: VertexID
-    package var revision: UInt64
-    package var metadata: ProjectMetadata
-    package var settings: ProjectSettings
-    package var mediaRegistry: [LegacyMediaReferenceDTO]
-    package var compositionRegistry: [ProjectCompositionPlaceholder]
-    package var activeCompositionID: VertexID?
-    package var selectedMediaID: VertexID?
-    package var renderSettings: ProjectRenderSettings
-    package var legacyRenderSettings: ProjectRenderSettings?
-    package var appliedCommandIDs: [VertexID]?
+private struct LegacyProjectHeader: Decodable {
+    let schemaVersion: Int
+}
 
-    package func canonicalDocument() throws -> ProjectDocument {
-        guard schemaVersion == ProjectDocument.currentSchemaVersion else {
-            throw ProjectPersistenceError.legacyImportIncomplete(
-                stage: "unsupported legacy schema \(schemaVersion)"
-            )
+package struct LegacySchema1ProjectDTO: Codable, Equatable, Sendable {
+    var schemaVersion: Int
+    var minimumReaderVersion: Int
+    var projectID: VertexID
+    var revision: UInt64
+    var metadata: ProjectMetadata
+    var settings: ProjectSettings
+    var mediaRegistry: [LegacyMediaReferenceDTO]
+    var compositionRegistry: [ProjectCompositionPlaceholder]
+    var activeCompositionID: VertexID?
+    var selectedMediaID: VertexID?
+    var renderSettings: ProjectRenderSettings
+    var appliedCommandIDs: [VertexID]?
+}
+
+package struct LegacySchema2ProjectDTO: Codable, Equatable, Sendable {
+    var schemaVersion: Int
+    var minimumReaderVersion: Int
+    var projectID: VertexID
+    var revision: UInt64
+    var metadata: ProjectMetadata
+    var settings: ProjectSettings
+    var mediaRegistry: [LegacyMediaReferenceDTO]
+    var compositionRegistry: [ProjectComposition]
+    var layerRegistry: [ProjectLayer]
+    var activeCompositionID: VertexID?
+    var selectedLayerID: VertexID?
+    var selectedMediaID: VertexID?
+    var legacyRenderSettings: ProjectRenderSettings?
+    var appliedCommandIDs: [VertexID]?
+}
+
+package enum LegacyProjectDTO: Equatable, Sendable {
+    case schema1(LegacySchema1ProjectDTO)
+    case schema2(LegacySchema2ProjectDTO)
+
+    package var schemaVersion: Int {
+        switch self {
+        case .schema1(let value): value.schemaVersion
+        case .schema2(let value): value.schemaVersion
         }
-        return try ProjectDocument(
-            schemaVersion: ProjectDocument.currentSchemaVersion,
-            minimumReaderVersion: min(minimumReaderVersion, ProjectDocument.currentSchemaVersion),
-            projectID: projectID,
-            revision: revision,
-            metadata: metadata,
-            settings: settings,
-            mediaRegistry: mediaRegistry.map { $0.canonicalReference() },
-            compositionRegistry: compositionRegistry,
-            activeCompositionID: activeCompositionID,
-            selectedMediaID: selectedMediaID,
-            renderSettings: legacyRenderSettings ?? renderSettings
-        ).validated()
+    }
+
+    package var minimumReaderVersion: Int {
+        switch self {
+        case .schema1(let value): value.minimumReaderVersion
+        case .schema2(let value): value.minimumReaderVersion
+        }
+    }
+
+    package var projectID: VertexID {
+        switch self {
+        case .schema1(let value): value.projectID
+        case .schema2(let value): value.projectID
+        }
+    }
+
+    package var revision: UInt64 {
+        switch self {
+        case .schema1(let value): value.revision
+        case .schema2(let value): value.revision
+        }
+    }
+
+    package var mediaRegistry: [LegacyMediaReferenceDTO] {
+        switch self {
+        case .schema1(let value): value.mediaRegistry
+        case .schema2(let value): value.mediaRegistry
+        }
     }
 
     package var bookmarkPayloads: [VertexID: Data] {
@@ -80,12 +119,62 @@ package struct LegacyProjectDTO: Codable, Equatable, Sendable {
         })
     }
 
+    package func canonicalDocument() throws -> ProjectDocument {
+        switch self {
+        case .schema1(let legacy):
+            let schema1 = Schema1ProjectDocument(
+                schemaVersion: legacy.schemaVersion,
+                minimumReaderVersion: legacy.minimumReaderVersion,
+                projectID: legacy.projectID,
+                revision: legacy.revision,
+                metadata: legacy.metadata,
+                settings: legacy.settings,
+                mediaRegistry: legacy.mediaRegistry.map { $0.canonicalReference() },
+                compositionRegistry: legacy.compositionRegistry,
+                activeCompositionID: legacy.activeCompositionID,
+                selectedMediaID: legacy.selectedMediaID,
+                renderSettings: legacy.renderSettings
+            )
+            let source = try Schema1ProjectCodec.encode(schema1)
+            let migrated = try ProjectMigrationRegistry.current.migrate(source, from: 1, to: 2)
+            return try DeterministicProjectCodec().decode(migrated.data)
+
+        case .schema2(let legacy):
+            var metadata = legacy.metadata
+            metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
+            return try ProjectDocument(
+                projectID: legacy.projectID,
+                revision: legacy.revision,
+                metadata: metadata,
+                settings: legacy.settings,
+                mediaRegistry: legacy.mediaRegistry.map { $0.canonicalReference() },
+                compositionRegistry: legacy.compositionRegistry,
+                layerRegistry: legacy.layerRegistry,
+                activeCompositionID: legacy.activeCompositionID,
+                selectedLayerID: legacy.selectedLayerID,
+                selectedMediaID: legacy.selectedMediaID
+            ).normalized().validated()
+        }
+    }
+
     package static func decode(_ data: Data) throws -> LegacyProjectDTO {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom(ProjectDateCodec.decode)
         decoder.nonConformingFloatDecodingStrategy = .throw
         do {
-            return try decoder.decode(LegacyProjectDTO.self, from: data)
+            let header = try decoder.decode(LegacyProjectHeader.self, from: data)
+            switch header.schemaVersion {
+            case 1:
+                return .schema1(try decoder.decode(LegacySchema1ProjectDTO.self, from: data))
+            case 2:
+                return .schema2(try decoder.decode(LegacySchema2ProjectDTO.self, from: data))
+            default:
+                throw ProjectPersistenceError.legacyImportIncomplete(
+                    stage: "unsupported legacy schema \(header.schemaVersion)"
+                )
+            }
+        } catch let error as ProjectPersistenceError {
+            throw error
         } catch {
             throw ProjectPersistenceError.legacyImportIncomplete(
                 stage: "legacy project decode: \(error.localizedDescription)"

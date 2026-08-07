@@ -77,7 +77,7 @@ func backupHistoryIsIsolated() throws {
     _ = try ProjectPackageStore().create(at: url, document: original)
     let controller = try ProjectHistoryController(project: original)
     try controller.perform(
-        .setRenderParameter(.exposure, before: 0, after: 1),
+        .renameProject(before: "Backup", after: "Changed"),
         timestamp: Date(timeIntervalSince1970: 101),
         commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000051")
     )
@@ -92,7 +92,7 @@ func backupHistoryIsIsolated() throws {
     try Data("corrupt".utf8).write(to: layout.projectURL)
     let inspection = try ProjectRecoveryEngine().inspect(packageURL: url)
     let backup = try #require(inspection.candidates.first { $0.source == .backup && $0.isValid })
-    #expect(backup.document?.renderSettings.exposure == 0)
+    #expect(backup.document?.metadata.name == "Backup")
     #expect(backup.history.undo.isEmpty)
     #expect(backup.history.redo.isEmpty)
 }

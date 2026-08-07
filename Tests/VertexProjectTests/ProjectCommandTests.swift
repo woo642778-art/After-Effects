@@ -3,112 +3,115 @@ import Testing
 @testable import VertexProject
 import VertexCore
 
-private enum JournalPreparationFailure: Error {
-    case injected
-}
-
-@Test("A command increments revision exactly once and is idempotent")
-func commandRevisionAndIdentity() throws {
-    let project = try ProjectDocument.makeNew(name: "Command", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
-    let record = ProjectCommandRecord.settingExposure(
-        project: project,
-        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000020"),
-        from: 0,
-        to: 1.25,
-        timestamp: Date(timeIntervalSince1970: 1_700_000_001)
+private func commandRequest(
+    document: ProjectDocument,
+    id: String,
+    timestamp: TimeInterval,
+    mergeKey: String? = nil,
+    payload: ProjectCommandPayload
+) -> ProjectCommandRequest {
+    ProjectCommandRequest(
+        commandID: VertexID(rawValue: id),
+        projectID: document.projectID,
+        baseRevision: document.revision,
+        timestamp: Date(timeIntervalSince1970: timestamp),
+        mergeKey: mergeKey,
+        payload: payload
     )
-    let changed = try ProjectCommandEngine().apply(record, to: project)
-    #expect(changed.revision == project.revision + 1)
-    #expect(changed.renderSettings.exposure == 1.25)
-    #expect(throws: ProjectError.self) { try ProjectCommandEngine().apply(record, to: changed) }
 }
 
-@Test("Stale base revisions are rejected")
+@Test("A desired-state command increments revision exactly once")
+func commandRevisionAndIdentity() throws {
+    let project = try ProjectDocument.makeNew(
+        name: "Command",
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    let request = commandRequest(
+        document: project,
+        id: "50000000-0000-0000-0000-000000000020",
+        timestamp: 1_700_000_001,
+        payload: .renameProject(to: "Changed")
+    )
+    let transition = try ProjectCommandEngine().prepare(request, for: project)
+    let changed = try ProjectCommandEngine().apply(transition, to: project)
+    #expect(changed.revision == project.revision + 1)
+    #expect(changed.metadata.name == "Changed")
+    #expect(throws: ProjectError.self) {
+        try ProjectCommandEngine().apply(transition, to: changed)
+    }
+}
+
+@Test("Stale desired-state base revisions are rejected")
 func staleRevisionIsRejected() throws {
     var project = try ProjectDocument.makeNew(name: "Stale")
     project.revision = 4
-    let record = ProjectCommandRecord(
+    let request = ProjectCommandRequest(
         commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000021"),
         projectID: project.projectID,
         baseRevision: 3,
-        timestamp: Date(timeIntervalSince1970: 20),
-        mergeKey: nil,
-        forwardOperation: .renameProject(before: "Stale", after: "Changed"),
-        inverseOperation: .renameProject(before: "Changed", after: "Stale")
+        payload: .renameProject(to: "Changed")
     )
-    #expect(throws: ProjectError.self) { try ProjectCommandEngine().apply(record, to: project) }
+    #expect(throws: ProjectError.self) {
+        try ProjectCommandEngine().prepare(request, for: project)
+    }
 }
 
-@Test("Undo and redo restore render settings")
+@Test("Prepared transitions derive exact inverse values without mutating input")
+func prepareDerivesExactInverse() throws {
+    let project = try ProjectDocument.makeNew(name: "Inverse")
+    let request = commandRequest(
+        document: project,
+        id: "50000000-0000-0000-0000-000000000022",
+        timestamp: 20,
+        payload: .renameProject(to: "After")
+    )
+    let transition = try ProjectCommandEngine().prepare(request, for: project)
+    #expect(project.metadata.name == "Inverse")
+    #expect(transition.forward == .renameProject(before: "Inverse", after: "After"))
+    #expect(transition.inverse == .renameProject(before: "After", after: "Inverse"))
+}
+
+@Test("Session Undo and Redo restore canonical project values")
 func undoRedoRoundTrip() throws {
-    let controller = try ProjectHistoryController(project: .makeNew(name: "History"))
-    try controller.perform(.setRenderParameter(.exposure, before: 0, after: 2), mergeKey: "render.exposure")
-    #expect(controller.project.renderSettings.exposure == 2)
-    #expect(controller.canUndo)
-    try controller.undo()
-    #expect(controller.project.renderSettings.exposure == 0)
-    #expect(controller.canRedo)
-    try controller.redo()
-    #expect(controller.project.renderSettings.exposure == 2)
-}
-
-@Test("Undo journal preparation occurs before project mutation")
-func undoPreparationPrecedesMutation() throws {
-    let controller = try ProjectHistoryController(project: .makeNew(name: "WAL"))
-    try controller.perform(
-        .setRenderParameter(.exposure, before: 0, after: 1),
-        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000022")
+    var session = try ProjectEditingSession(document: .makeNew(name: "History"))
+    _ = try session.apply(commandRequest(
+        document: session.document,
+        id: "50000000-0000-0000-0000-000000000023",
+        timestamp: 30,
+        payload: .renameProject(to: "Edited")
+    ))
+    #expect(session.document.metadata.name == "Edited")
+    _ = try session.undo(
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000024"),
+        timestamp: Date(timeIntervalSince1970: 31)
     )
-    var observedExposure = -1.0
-    let transition = try controller.undo(
-        timestamp: Date(timeIntervalSince1970: 30),
-        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000023")
-    ) { record in
-        observedExposure = controller.project.renderSettings.exposure
-        #expect(record.baseRevision == controller.project.revision)
-    }
-    #expect(observedExposure == 1)
-    #expect(transition.forwardOperation == .setRenderParameter(.exposure, before: 1, after: 0))
-    #expect(controller.project.renderSettings.exposure == 0)
-}
-
-@Test("Failed undo journal preparation leaves state and history untouched")
-func failedUndoPreparationIsNonMutating() throws {
-    let controller = try ProjectHistoryController(project: .makeNew(name: "WAL Failure"))
-    try controller.perform(
-        .setRenderParameter(.exposure, before: 0, after: 1),
-        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000024")
+    #expect(session.document.metadata.name == "History")
+    _ = try session.redo(
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000025"),
+        timestamp: Date(timeIntervalSince1970: 32)
     )
-    let revisionBefore = controller.project.revision
-    #expect(throws: JournalPreparationFailure.self) {
-        try controller.undo(
-            commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000025")
-        ) { _ in
-            throw JournalPreparationFailure.injected
-        }
-    }
-    #expect(controller.project.renderSettings.exposure == 1)
-    #expect(controller.project.revision == revisionBefore)
-    #expect(controller.canUndo)
-    #expect(!controller.canRedo)
+    #expect(session.document.metadata.name == "Edited")
 }
 
-@Test("Slider commands coalesce into one undo entry")
-func sliderCommandsCoalesce() throws {
-    let controller = try ProjectHistoryController(project: .makeNew(name: "Coalesce"), coalescingInterval: 0.5)
-    try controller.perform(.setRenderParameter(.exposure, before: 0, after: 0.4), mergeKey: "render.exposure", timestamp: Date(timeIntervalSince1970: 10))
-    try controller.perform(.setRenderParameter(.exposure, before: 0.4, after: 1.2), mergeKey: "render.exposure", timestamp: Date(timeIntervalSince1970: 10.2))
-    #expect(controller.undoCount == 1)
-    try controller.undo()
-    #expect(controller.project.renderSettings.exposure == 0)
-}
-
-@Test("A new command clears redo history")
+@Test("A new session command clears Redo history")
 func newCommandClearsRedo() throws {
-    let controller = try ProjectHistoryController(project: .makeNew(name: "Redo"))
-    try controller.perform(.setRenderParameter(.exposure, before: 0, after: 1))
-    try controller.undo()
-    #expect(controller.canRedo)
-    try controller.perform(.setRenderParameter(.saturation, before: 1, after: 2))
-    #expect(!controller.canRedo)
+    var session = try ProjectEditingSession(document: .makeNew(name: "Redo"))
+    _ = try session.apply(commandRequest(
+        document: session.document,
+        id: "50000000-0000-0000-0000-000000000026",
+        timestamp: 40,
+        payload: .renameProject(to: "First")
+    ))
+    _ = try session.undo(
+        commandID: VertexID(rawValue: "50000000-0000-0000-0000-000000000027"),
+        timestamp: Date(timeIntervalSince1970: 41)
+    )
+    #expect(session.canRedo)
+    _ = try session.apply(commandRequest(
+        document: session.document,
+        id: "50000000-0000-0000-0000-000000000028",
+        timestamp: 42,
+        payload: .renameProject(to: "Second")
+    ))
+    #expect(!session.canRedo)
 }

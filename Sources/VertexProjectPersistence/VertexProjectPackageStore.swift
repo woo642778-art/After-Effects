@@ -199,10 +199,11 @@ public struct VertexProjectPackageStore: Sendable {
             throw injected(.beforePendingWrite)
         }
 
-        let validated = try document.validated()
-        let projectData = try DeterministicProjectCodec().encode(validated)
+        let codec = DeterministicProjectCodec()
+        let projectData = try codec.encode(document)
+        let canonicalDocument = try codec.decode(projectData)
         let manifest = try VertexProjectManifest(
-            document: validated,
+            document: canonicalDocument,
             projectData: projectData,
             savedAt: fixedTimestamp ?? Date()
         )

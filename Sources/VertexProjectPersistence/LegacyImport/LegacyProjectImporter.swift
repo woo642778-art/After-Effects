@@ -78,7 +78,7 @@ private struct LegacyImportContext: Sendable {
         return LegacyImportInspection(
             sourceDigest: sourceDigest,
             compositionCount: replay.document.compositionRegistry.count,
-            layerCount: 0,
+            layerCount: replay.document.layerRegistry.count,
             mediaCount: replay.document.mediaRegistry.count,
             embeddedMediaEligibleCount: embeddedSourceURLs.count,
             bookmarkSuccessCount: bookmarkPayloads.values.filter { !$0.isEmpty }.count,

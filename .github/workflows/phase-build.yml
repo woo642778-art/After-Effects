@@ -13,6 +13,7 @@ on:
     branches:
       - agent/phase-4-gpu-render-graph
       - agent/phase-5-project-persistence
+      - agent/phase-6-layers-compositions
   workflow_dispatch:
 
 concurrency:
@@ -21,14 +22,14 @@ concurrency:
 
 jobs:
   portable-tests:
-    name: Vertex portable core, media, render, and project tests
+    name: Vertex portable core, media, render, project, and composition tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Verify persistence module boundary
+      - name: Verify corrected persistence boundary
         run: |
           set -euo pipefail
           if swift package dump-package | grep -q '"name" : "VertexProjectFoundation"'; then
@@ -39,11 +40,15 @@ jobs:
             echo "Active code still imports VertexProjectFoundation"
             exit 1
           fi
+          if grep -R -E "ProjectCommandRecord|ProjectJournalRecord|ProjectHistoryController|locator\.bookmarkData" App; then
+            echo "The app still depends on the deprecated persistence path"
+            exit 1
+          fi
       - name: Run deterministic portable tests
         run: swift test
 
   ios-app-tests:
-    name: Compile iOS app session tests
+    name: Compile iOS app session and composition tests
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +60,7 @@ jobs:
         run: bash Tools/generate_app_assets.sh
       - name: Generate Xcode project
         run: xcodegen generate
-      - name: Compile iOS app session tests
+      - name: Compile iOS app tests
         run: |
           set -euo pipefail
           TEST_BUILD_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
@@ -86,7 +91,7 @@ jobs:
           retention-days: 7
 
   unsigned-ipa:
-    name: Build After Effects 5.0.0 unsigned IPA
+    name: Build After Effects 6.0.0 unsigned IPA
     runs-on: macos-15
     needs:
       - portable-tests
@@ -109,6 +114,9 @@ jobs:
 
       - name: Run native project persistence tests
         run: swift test --filter VertexProjectPersistenceTests
+
+      - name: Run native composition compiler tests
+        run: swift test --filter VertexCompositionTests
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -151,10 +159,12 @@ jobs:
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
           BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          MINIMUM_OS="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP_PATH/Info.plist")"
           test "$DISPLAY_NAME" = "After Effects"
-          test "$VERSION" = "5.0.0"
-          test "$BUILD" = "5"
+          test "$VERSION" = "6.0.0"
+          test "$BUILD" = "6"
           test "$BUNDLE_ID" = "com.woo642778.aftereffects"
+          test "$MINIMUM_OS" = "17.0"
           /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
 
       - name: Package unsigned IPA and checksum
@@ -164,13 +174,13 @@ jobs:
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP_PATH" Payload/AfterEffects.app
-          /usr/bin/zip -qry artifacts/After-Effects-5.0.0-unsigned.ipa Payload
-          shasum -a 256 artifacts/After-Effects-5.0.0-unsigned.ipa > artifacts/After-Effects-5.0.0-unsigned.ipa.sha256
+          /usr/bin/zip -qry artifacts/After-Effects-6.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-6.0.0-unsigned.ipa > artifacts/After-Effects-6.0.0-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: After-Effects-5.0.0-unsigned-ipa
+          name: After-Effects-6.0.0-unsigned-ipa
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30

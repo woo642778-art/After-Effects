@@ -16,7 +16,7 @@ struct MediaImportView: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AfterEffectsTheme.accent)
                         .tracking(0.8)
-                    Text("Real AVFoundation inspection")
+                    Text("Real AVFoundation inspection · imported as a layer")
                         .font(.headline)
                         .foregroundStyle(.white)
                 }
@@ -58,7 +58,7 @@ struct MediaImportView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle:
-            Text("Choose a local movie to inspect its real video, audio, timing, color, thumbnail, and waveform data.")
+            Text("Choose a local movie. It is inspected with AVFoundation and inserted as the highest layer in the active composition.")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
 
@@ -67,7 +67,7 @@ struct MediaImportView: View {
                 ProgressView()
                     .tint(AfterEffectsTheme.accent)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Inspecting media")
+                    Text("Inspecting and registering media")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                     Text(filename)
@@ -142,11 +142,15 @@ struct MediaImportView: View {
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
         }
 
-        if let thumbnail = media.thumbnail {
-            Divider().overlay(Color.white.opacity(0.10))
-            RenderLabView(source: thumbnail)
-                .id(media.descriptor.id)
-        }
+        Label(
+            "Registered in the project and added to the active composition layer stack",
+            systemImage: "square.stack.3d.up.fill"
+        )
+        .font(.caption)
+        .foregroundStyle(AfterEffectsTheme.secondaryText)
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func metadataRow(_ label: String, value: String) -> some View {
