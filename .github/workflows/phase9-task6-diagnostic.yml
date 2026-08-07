@@ -1,0 +1,65 @@
+name: Phase 9 Task 6 Diagnostic
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - agent/phase9-sdd-runner
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-task6:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+      - name: Materialize Task 3 through Task 5 prerequisites
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task03_red.py
+          python3 Tools/phase9_tasks/task03_green.py
+          python3 Tools/phase9_tasks/task04_red.py
+          python3 Tools/phase9_tasks/task04_green.py
+          python3 Tools/phase9_tasks/task05_red.py
+          python3 Tools/phase9_tasks/task05_testfix.py
+          python3 Tools/phase9_tasks/task05_green.py
+          swift test --filter ProjectEffectTests
+      - name: Confirm Task 6 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task06_red.py
+          python3 Tools/phase9_tasks/task06_testfix.py
+          set +e
+          swift test --filter EffectGraphCompilerTests > "$RUNNER_TEMP/task6-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task6-red.log"
+          test "$status" -ne 0
+      - name: Apply Task 6 GREEN
+        run: python3 Tools/phase9_tasks/task06_green.py
+      - name: Capture Task 6 GREEN compiler and test output
+        id: task6
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          swift test --filter EffectGraphCompilerTests 2>&1 | tee "$RUNNER_TEMP/task6-green.log"
+      - name: Upload Task 6 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task6-green-log
+          path: ${{ runner.temp }}/task6-green.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Fail if Task 6 remains red
+        if: steps.task6.outcome == 'failure'
+        run: exit 1
