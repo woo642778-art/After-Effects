@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "systemCapabilities": [
+    {
+      "capabilityID": "apple-vision-foreground-instance-mask",
+      "task": "cutout",
+      "minimumOS": "17.0",
+      "runtime": "Vision",
+      "serverRequired": false
+    },
+    {
+      "capabilityID": "apple-vision-person-segmentation",
+      "task": "cutout-person",
+      "minimumOS": "17.0",
+      "runtime": "Vision",
+      "serverRequired": false
+    }
+  ],
+  "models": [
+    {
+      "modelID": "depth-anything-v2-small-f16",
+      "task": "depth",
+      "upstream": "https://huggingface.co/apple/coreml-depth-anything-v2-small",
+      "upstreamVersion": "cfef6f6f2a70783dedc0bfae40cecbc2052285d3",
+      "license": "Apache-2.0",
+      "noticePath": "AI/LICENSES/DEPTH_ANYTHING_V2_NOTICE.md",
+      "sourceSHA256": "fa60d9b6a155734f59029ebb882fd54e549bfaee3539c1a9cbd2cbbab64a0fed",
+      "precision": "float16",
+      "minimumTier": "preview",
+      "sourcePath": "DepthAnythingV2SmallF16.mlpackage",
+      "bundleRelativePath": "AIModels/DepthAnythingV2SmallF16.mlmodelc",
+      "download": {
+        "kind": "files",
+        "files": [
+          {
+            "url": "https://huggingface.co/apple/coreml-depth-anything-v2-small/resolve/cfef6f6f2a70783dedc0bfae40cecbc2052285d3/DepthAnythingV2SmallF16.mlpackage/Manifest.json?download=true",
+            "relativePath": "DepthAnythingV2SmallF16.mlpackage/Manifest.json",
+            "sha256": "2883ae290c48fe916dc5ececac03a7d847fa277165a49ef5652fa1d2b9cb55f7"
+          },
+          {
+            "url": "https://huggingface.co/apple/coreml-depth-anything-v2-small/resolve/cfef6f6f2a70783dedc0bfae40cecbc2052285d3/DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/model.mlmodel?download=true",
+            "relativePath": "DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+            "sha256": "44ac97a3efcfd52113183fb2862ff59cd0368e9ec2e30a90a54980dd11407042"
+          },
+          {
+            "url": "https://huggingface.co/apple/coreml-depth-anything-v2-small/resolve/cfef6f6f2a70783dedc0bfae40cecbc2052285d3/DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/weights/weight.bin?download=true",
+            "relativePath": "DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+            "sha256": "fa60d9b6a155734f59029ebb882fd54e549bfaee3539c1a9cbd2cbbab64a0fed"
+          }
+        ]
+      }
+    },
+    {
+      "modelID": "realesrgan-x4v3-f16",
+      "task": "upscale",
+      "upstream": "https://huggingface.co/VincentGOURBIN/RealESRGAN-CoreML",
+      "upstreamVersion": "f6a27905aacd7d04e6f47f15cc332059ce0970ba",
+      "license": "BSD-3-Clause",
+      "noticePath": "AI/LICENSES/REALESRGAN_NOTICE.md",
+      "sourceSHA256": "5a59e554794371b95fe61274b8a2040f1b3e274479abf15595dcdad0535afad4",
+      "precision": "float16",
+      "minimumTier": "preview",
+      "sourcePath": "RealESRGAN-x4v3.mlpackage.zip",
+      "bundleRelativePath": "AIModels/RealESRGAN-x4v3.mlmodelc",
+      "download": {
+        "kind": "archive",
+        "url": "https://huggingface.co/VincentGOURBIN/RealESRGAN-CoreML/resolve/f6a27905aacd7d04e6f47f15cc332059ce0970ba/RealESRGAN-x4v3.mlpackage.zip?download=true",
+        "sha256": "5a59e554794371b95fe61274b8a2040f1b3e274479abf15595dcdad0535afad4"
+      }
+    },
+    {
+      "modelID": "realesrgan-x4v3-denoise-f16",
+      "task": "restoration",
+      "upstream": "https://huggingface.co/VincentGOURBIN/RealESRGAN-CoreML",
+      "upstreamVersion": "78493a5ce26d2674d5ff705d250446f4884cd533",
+      "license": "BSD-3-Clause",
+      "noticePath": "AI/LICENSES/REALESRGAN_NOTICE.md",
+      "sourceSHA256": "a577c31ccc3025d84807f7e124d71656fb2cbbdc57c4c44d3ac2d9980da9c9c4",
+      "precision": "float16",
+      "minimumTier": "balanced",
+      "sourcePath": "RealESRGAN-x4v3-denoise.mlpackage.zip",
+      "bundleRelativePath": "AIModels/RealESRGAN-x4v3-denoise.mlmodelc",
+      "download": {
+        "kind": "archive",
+        "url": "https://huggingface.co/VincentGOURBIN/RealESRGAN-CoreML/resolve/78493a5ce26d2674d5ff705d250446f4884cd533/RealESRGAN-x4v3-denoise.mlpackage.zip?download=true",
+        "sha256": "a577c31ccc3025d84807f7e124d71656fb2cbbdc57c4c44d3ac2d9980da9c9c4"
+      }
+    }
+  ]
+}

@@ -9,3 +9,5 @@ artifacts/
 *.ipa
 *.ipa.sha256
 .swiftpm/
+App/GeneratedAIResources/AIModels/*
+!App/GeneratedAIResources/AIModels/.gitkeep

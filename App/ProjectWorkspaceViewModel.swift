@@ -64,6 +64,21 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         return project.mediaRegistry.first { $0.id == selectedID }
     }
 
+    var activeComposition: ProjectComposition? {
+        guard let project, let id = project.activeCompositionID else { return nil }
+        return project.composition(id: id)
+    }
+
+    var orderedLayers: [ProjectLayer] {
+        guard let project, let composition = activeComposition else { return [] }
+        return project.layers(in: composition.id)
+    }
+
+    var selectedLayer: ProjectLayer? {
+        guard let project, let id = project.selectedLayerID else { return nil }
+        return project.layer(id: id)
+    }
+
     func createProject(named name: String? = nil) {
         let token = beginPublishedOperation(.createProject)
         let requested = (name ?? projectNameInput)
@@ -216,6 +231,264 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         )
     }
 
+    func createComposition(name: String = "Composition") {
+        guard let project else { return }
+        let basis = activeComposition
+        let composition = ProjectComposition(
+            name: name,
+            width: basis?.width ?? 1080,
+            height: basis?.height ?? 1080,
+            duration: basis?.duration ?? RationalTime(value: 10, timescale: 1),
+            frameRate: basis?.frameRate ?? project.settings.frameRate,
+            color: basis?.color ?? project.settings.color,
+            backgroundColor: .transparent,
+            layerIDs: []
+        )
+        perform(.insertComposition(composition, ownedLayers: [], index: project.compositionRegistry.count), mergeKey: nil)
+        selectComposition(composition.id)
+    }
+
+    func duplicateActiveComposition() {
+        guard let project, let source = activeComposition else { return }
+        let duplicateID = VertexID()
+        var duplicate = source
+        duplicate.id = duplicateID
+        duplicate.name = source.name + " Copy"
+        var layers: [ProjectLayer] = []
+        for sourceLayer in project.layers(in: source.id) {
+            var layer = sourceLayer
+            layer.id = VertexID()
+            layer.compositionID = duplicateID
+            layer.name = sourceLayer.name + " Copy"
+            layers.append(layer)
+        }
+        duplicate.layerIDs = layers.map(\.id)
+        perform(.insertComposition(duplicate, ownedLayers: layers, index: project.compositionRegistry.count), mergeKey: nil)
+        selectComposition(duplicate.id)
+    }
+
+    func selectComposition(_ id: VertexID) {
+        guard project?.activeCompositionID != id else { return }
+        let token = beginPublishedOperation(.edit)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let snapshot = try await self.sessionActor.setActiveComposition(id)
+                self.publish(snapshot, token: token, message: "Active composition changed")
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    func removeActiveComposition() {
+        guard let project, let composition = activeComposition,
+              project.compositionRegistry.count > 1 else { return }
+        let isReferenced = project.layerRegistry.contains { layer in
+            guard layer.compositionID != composition.id,
+                  case .composition(let target, _) = layer.source else { return false }
+            return target == composition.id
+        }
+        guard !isReferenced,
+              let replacement = project.compositionRegistry.first(where: { $0.id != composition.id }) else { return }
+        let token = beginPublishedOperation(.edit)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.sessionActor.setActiveComposition(replacement.id)
+                let snapshot = try await self.sessionActor.apply(.removeComposition(id: composition.id), mergeKey: nil)
+                self.commandCountSinceAutosave += 1
+                self.publish(snapshot, token: token, message: "Composition removed")
+                self.scheduleAutosaveOrFlush()
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    func renameActiveComposition(_ name: String) {
+        guard let composition = activeComposition else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != composition.name else { return }
+        perform(.renameComposition(id: composition.id, to: trimmed), mergeKey: nil)
+    }
+
+    func setActiveCompositionDimensions(width: Int, height: Int) {
+        guard let composition = activeComposition,
+              width != composition.width || height != composition.height else { return }
+        perform(
+            .setCompositionDimensions(id: composition.id, width: width, height: height),
+            mergeKey: "composition.\(composition.id.rawValue).dimensions"
+        )
+    }
+
+    func setActiveCompositionDuration(seconds: Double) {
+        guard let composition = activeComposition,
+              let value = exactTime(seconds: seconds, frameRate: composition.frameRate),
+              value > .zero,
+              value != composition.duration,
+              orderedLayers.allSatisfy({ $0.timing.outPoint <= value }) else { return }
+        perform(
+            .setCompositionDuration(id: composition.id, duration: value),
+            mergeKey: "composition.\(composition.id.rawValue).duration"
+        )
+    }
+
+    func setActiveCompositionFrameRate(_ frameRate: RationalTime) {
+        guard let composition = activeComposition, frameRate > .zero, frameRate != composition.frameRate else { return }
+        perform(.setCompositionFrameRate(id: composition.id, frameRate: frameRate), mergeKey: nil)
+    }
+
+    func setActiveCompositionBackground(_ color: ProjectRGBAColor) {
+        guard let composition = activeComposition, composition.backgroundColor != color else { return }
+        perform(.setCompositionBackground(id: composition.id, color: color), mergeKey: nil)
+    }
+
+    func addSelectedMediaLayer() {
+        guard let composition = activeComposition, let media = selectedMedia else { return }
+        insertLayer(ProjectLayer(
+            compositionID: composition.id,
+            name: media.displayName,
+            source: .media(mediaID: media.id, sourceStartTime: .zero),
+            timing: fullTiming(composition)
+        ))
+    }
+
+    func addAdjustmentLayer() {
+        guard let composition = activeComposition else { return }
+        insertLayer(ProjectLayer(
+            compositionID: composition.id,
+            name: "Adjustment Layer",
+            source: .adjustment(scope: .belowAll),
+            timing: fullTiming(composition)
+        ))
+    }
+
+    func addNullLayer() { addModelLayer(name: "Null", source: .null) }
+    func addGuideLayer() { addModelLayer(name: "Guide", source: .guide) }
+    func addCameraLayer() { addModelLayer(name: "Camera", source: .camera(.default)) }
+    func addLightLayer() { addModelLayer(name: "Light", source: .light(.default)) }
+
+    func addNestedCompositionLayer(sourceCompositionID: VertexID) {
+        guard let composition = activeComposition,
+              sourceCompositionID != composition.id,
+              let source = project?.composition(id: sourceCompositionID) else { return }
+        insertLayer(ProjectLayer(
+            compositionID: composition.id,
+            name: source.name,
+            source: .composition(compositionID: sourceCompositionID, sourceStartTime: .zero),
+            timing: fullTiming(composition)
+        ))
+    }
+
+    func selectLayer(_ id: VertexID?) {
+        guard project?.selectedLayerID != id else { return }
+        let mediaID: VertexID? = id.flatMap { candidate in
+            guard let layer = project?.layer(id: candidate), case .media(let mediaID, _) = layer.source else { return nil }
+            return mediaID
+        }
+        let token = beginPublishedOperation(.edit)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                var snapshot = try await self.sessionActor.setSelectedLayer(id)
+                if let mediaID, snapshot.document.selectedMediaID != mediaID {
+                    snapshot = try await self.sessionActor.setSelectedMedia(mediaID)
+                }
+                self.publish(snapshot, token: token, message: "Layer selection changed")
+            } catch {
+                self.publish(error, token: token)
+            }
+        }
+    }
+
+    func removeSelectedLayer() {
+        guard let layer = selectedLayer else { return }
+        perform(.removeLayer(id: layer.id), mergeKey: nil)
+    }
+
+    func duplicateSelectedLayer() {
+        guard let project, let layer = selectedLayer,
+              let composition = project.composition(id: layer.compositionID),
+              let index = composition.layerIDs.firstIndex(of: layer.id) else { return }
+        var duplicate = layer
+        duplicate.id = VertexID()
+        duplicate.name += " Copy"
+        perform(.insertLayer(duplicate, index: min(index + 1, composition.layerIDs.count)), mergeKey: nil)
+        selectLayer(duplicate.id)
+    }
+
+    func moveLayer(_ id: VertexID, to newIndex: Int) {
+        guard let composition = activeComposition,
+              composition.layerIDs.indices.contains(newIndex),
+              composition.layerIDs.firstIndex(of: id) != newIndex else { return }
+        perform(.reorderLayer(id: id, toIndex: newIndex), mergeKey: nil)
+    }
+
+    func setLayerLocked(_ value: Bool) {
+        guard let layer = selectedLayer, layer.locked != value else { return }
+        perform(.setLayerLocked(id: layer.id, value: value), mergeKey: nil)
+    }
+
+    func setLayerEnabled(_ value: Bool) {
+        guard let layer = selectedLayer, layer.enabled != value else { return }
+        perform(.setLayerEnabled(id: layer.id, value: value), mergeKey: nil)
+    }
+
+    func setLayerSolo(_ value: Bool) {
+        guard let layer = selectedLayer, layer.solo != value else { return }
+        perform(.setLayerSolo(id: layer.id, value: value), mergeKey: nil)
+    }
+
+    func renameSelectedLayer(_ name: String) {
+        guard let layer = selectedLayer else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != layer.name else { return }
+        perform(.renameLayer(id: layer.id, to: trimmed), mergeKey: nil)
+    }
+
+    func setLayerTransform(_ transform: LayerTransform, mergeKey: String) {
+        guard let layer = selectedLayer, layer.transform != transform else { return }
+        perform(
+            .setLayerTransform(id: layer.id, transform: transform),
+            mergeKey: "layer.\(layer.id.rawValue).\(mergeKey)"
+        )
+    }
+
+    func setLayerTiming(_ timing: LayerTiming) {
+        guard let layer = selectedLayer, layer.timing != timing else { return }
+        perform(
+            .setLayerTiming(id: layer.id, timing: timing),
+            mergeKey: "layer.\(layer.id.rawValue).timing"
+        )
+    }
+
+    func setLayerBlendMode(_ mode: LayerBlendMode) {
+        guard let layer = selectedLayer, layer.blendMode != mode else { return }
+        perform(.setLayerBlendMode(id: layer.id, mode: mode), mergeKey: nil)
+    }
+
+    func setLayerSource(_ source: LayerSource) {
+        guard let layer = selectedLayer, layer.source != source else { return }
+        perform(.setLayerSource(id: layer.id, source: source), mergeKey: nil)
+    }
+
+    func setLayerExposure(_ value: Double) {
+        setLayerOperation(exposure: value, saturation: nil, inverted: nil)
+    }
+
+    func setLayerSaturation(_ value: Double) {
+        setLayerOperation(exposure: nil, saturation: value, inverted: nil)
+    }
+
+    func setLayerInverted(_ value: Bool) {
+        setLayerOperation(exposure: nil, saturation: nil, inverted: value)
+    }
+
+    func resolveMediaURL(_ mediaID: VertexID) async -> URL? {
+        try? await sessionActor.resolveMediaURL(mediaID)
+    }
+
     func undo() {
         let token = beginPublishedOperation(.undo)
         Task { [weak self] in
@@ -332,6 +605,60 @@ final class ProjectWorkspaceViewModel: ObservableObject {
                 self.publish(error, token: token)
             }
         }
+    }
+
+    private func insertLayer(_ layer: ProjectLayer) {
+        perform(.insertLayer(layer, index: 0), mergeKey: nil)
+        selectLayer(layer.id)
+    }
+
+    private func addModelLayer(name: String, source: LayerSource) {
+        guard let composition = activeComposition else { return }
+        insertLayer(ProjectLayer(
+            compositionID: composition.id,
+            name: name,
+            source: source,
+            timing: fullTiming(composition)
+        ))
+    }
+
+    private func fullTiming(_ composition: ProjectComposition) -> LayerTiming {
+        LayerTiming(startTime: .zero, inPoint: .zero, outPoint: composition.duration)
+    }
+
+    private func setLayerOperation(exposure: Double?, saturation: Double?, inverted: Bool?) {
+        guard let layer = selectedLayer else { return }
+        var currentExposure = 0.0
+        var currentSaturation = 1.0
+        var currentInvert = false
+        for operation in layer.operations {
+            switch operation {
+            case .exposure(let value): currentExposure = value
+            case .saturation(let value): currentSaturation = value
+            case .invert(let value): currentInvert = value
+            }
+        }
+        let operations: [LayerOperation] = [
+            .exposure(stops: exposure ?? currentExposure),
+            .saturation(value: saturation ?? currentSaturation),
+            .invert(enabled: inverted ?? currentInvert)
+        ]
+        guard operations != layer.operations else { return }
+        perform(
+            .setLayerOperations(id: layer.id, operations: operations),
+            mergeKey: "layer.\(layer.id.rawValue).operations"
+        )
+    }
+
+    func exactTime(seconds: Double, frameRate: RationalTime) -> RationalTime? {
+        guard seconds.isFinite, seconds >= 0,
+              frameRate.value > 0,
+              frameRate.value <= Int64(Int32.max) else { return nil }
+        let frame = (seconds * frameRate.seconds).rounded()
+        guard frame <= Double(Int64.max) else { return nil }
+        let numerator = Int64(frame).multipliedReportingOverflow(by: Int64(frameRate.timescale))
+        guard !numerator.overflow else { return nil }
+        return RationalTime(value: numerator.partialValue, timescale: Int32(frameRate.value))
     }
 
     private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {

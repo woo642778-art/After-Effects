@@ -13,22 +13,23 @@ on:
     branches:
       - agent/phase-4-gpu-render-graph
       - agent/phase-5-project-persistence
+      - agent/phase-6-layers-compositions
   workflow_dispatch:
 
 concurrency:
-  group: phase-build-${{ github.ref }}
+  group: phase-build-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   portable-tests:
-    name: Vertex portable core, media, render, and project tests
+    name: Vertex portable core, media, render, project, persistence, composition, and AI tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Verify corrected persistence contract
+      - name: Verify corrected persistence and Phase 7 contracts
         run: |
           set -euo pipefail
           if swift package dump-package | grep -q '"name" : "VertexProjectFoundation"'; then
@@ -63,11 +64,29 @@ jobs:
             echo "Persistent history remains outside read-only legacy import"
             exit 1
           fi
+          if grep -R --exclude-dir=LegacyImport --exclude='*.md' 'appendingPathExtension("aeproject")' App Sources/VertexProjectPersistence; then
+            echo "Writable .aeproject creation remains outside read-only legacy import"
+            exit 1
+          fi
+          grep -q 'currentSchemaVersion = 3' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'currentAppVersion = "7.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'MARKETING_VERSION: 7.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 7' project.yml
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
       - name: Run deterministic portable tests
-        run: swift test
+        run: |
+          set -euo pipefail
+          SWIFT_LOG="$RUNNER_TEMP/swift-test.log"
+          if ! swift test >"$SWIFT_LOG" 2>&1; then
+            echo "Portable Swift tests failed. Diagnostics:"
+            grep -n -C 4 -m 100 -E "error:|failed|Failure|✘" "$SWIFT_LOG" || tail -n 320 "$SWIFT_LOG"
+            exit 1
+          fi
+          tail -n 160 "$SWIFT_LOG"
 
   ios-app-tests:
-    name: Run iOS app session tests
+    name: Run iOS app and session tests
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -103,21 +122,8 @@ jobs:
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
           xcrun simctl shutdown all || true
           xcrun simctl boot "$SIM_UDID" || true
-          READY=0
-          for attempt in $(seq 1 60); do
-            state="$(xcrun simctl list devices -j | python3 -c 'import json,sys; p=json.load(sys.stdin); u=sys.argv[1]; print(next((d.get("state","") for ds in p.get("devices",{}).values() for d in ds if d.get("udid")==u), ""))' "$SIM_UDID")"
-            if [ "$state" = "Booted" ]; then
-              READY=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "$READY" -ne 1 ]; then
-            echo "Simulator did not boot within 120 seconds"
-            xcrun simctl list devices
-            exit 1
-          fi
-      - name: Run iOS app session tests
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Run iOS app session and startup tests
         run: |
           set -euo pipefail
           TEST_LOG="$RUNNER_TEMP/xcodebuild-tests.log"
@@ -134,10 +140,10 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             test >"$TEST_LOG" 2>&1; then
             echo "iOS app tests failed. Diagnostics:"
-            /usr/bin/grep -n -C 4 -E "error:|failed|Test Case" "$TEST_LOG" || /usr/bin/tail -n 300 "$TEST_LOG"
+            /usr/bin/grep -n -C 5 -m 120 -E "error:|failed|Test Case|Testing" "$TEST_LOG" || /usr/bin/tail -n 360 "$TEST_LOG"
             exit 1
           fi
-          /usr/bin/tail -n 120 "$TEST_LOG"
+          /usr/bin/tail -n 160 "$TEST_LOG"
       - name: Upload iOS app test log
         if: always()
         uses: actions/upload-artifact@v4
@@ -147,45 +153,79 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  unsigned-ipa:
-    name: Build After Effects 5.0.0 unsigned IPA
+  native-regression-tests:
+    name: Run macOS native Metal, persistence, composition, and AI tests
     runs-on: macos-15
     needs:
       - portable-tests
-      - ios-app-tests
     steps:
       - uses: actions/checkout@v4
-
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
-
       - name: Compile Metal shader source
         run: |
-          set -euo pipefail
           xcrun -sdk macosx metal \
             -c Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal \
             -o "$RUNNER_TEMP/VertexRenderKernels.air"
-
-      - name: Run native Metal fixture tests
-        run: swift test --filter VertexRenderMetalTests
-
-      - name: Run native project persistence tests
-        run: swift test --filter VertexProjectPersistenceTests
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate supplied icon assets
-        run: bash Tools/generate_app_assets.sh
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Build iOS application without signing
+      - name: Run native regression suites
         run: |
           set -euo pipefail
-          BUILD_LOG="$RUNNER_TEMP/xcodebuild.log"
-          if ! xcodebuild \
+          swift test --filter VertexRenderMetalTests
+          swift test --filter VertexProjectPersistenceTests
+          swift test --filter VertexCompositionTests
+          swift test --filter VertexAICoreMLTests
+
+  unsigned-ipa:
+    name: Final Phase 7 IPA publish gate
+    runs-on: macos-15
+    timeout-minutes: 120
+    needs:
+      - portable-tests
+      - ios-app-tests
+      - native-regression-tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Verify pinned model lock and licenses
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
+      - name: Fetch pinned model sources with SHA-256 verification
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+      - name: Compile audited Core ML models and runtime manifest
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+          cat App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+          test -d App/GeneratedAIResources/AIModels/DepthAnythingV2SmallF16.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3-denoise.mlmodelc
+      - name: Run real Core ML inference fixtures
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -euo pipefail
+          swift test --filter VertexAICoreMLTests
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate app assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Build unsigned iOS 17 arm64 Release application
+        run: |
+          set -euo pipefail
+          xcodebuild \
             -project Vertex.xcodeproj \
             -scheme Vertex \
             -configuration Release \
@@ -195,44 +235,48 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build >"$BUILD_LOG" 2>&1; then
-            echo "iOS build failed. Compiler diagnostics:"
-            /usr/bin/grep -n -C 4 "error:" "$BUILD_LOG" || /usr/bin/tail -n 250 "$BUILD_LOG"
-            exit 1
-          fi
-          /usr/bin/tail -n 80 "$BUILD_LOG"
-
-      - name: Verify product identity, version, architecture, and render resources
+            clean build | tee "$RUNNER_TEMP/phase7-release-build.log"
+      - name: Inspect built application before packaging
         run: |
           set -euo pipefail
-          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
-          test -d "$APP_PATH"
-          test -f "$APP_PATH/Assets.car"
-          test -f "$APP_PATH/Vertex_VertexRenderMetal.bundle/default.metallib"
-          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
-          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
-          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-          test "$DISPLAY_NAME" = "After Effects"
-          test "$VERSION" = "5.0.0"
-          test "$BUILD" = "5"
-          test "$BUNDLE_ID" = "com.woo642778.aftereffects"
-          /usr/bin/file "$APP_PATH/AfterEffects" | /usr/bin/grep -q "arm64"
-
-      - name: Package unsigned IPA and checksum
+          APP="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
+          test -d "$APP"
+          test -f "$APP/Assets.car"
+          test -f "$APP/AI_MODEL_MANIFEST.json"
+          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
+          test -f "$APP/Vertex_VertexRenderMetal.bundle/default.metallib"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = "After Effects"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "7.0.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = "7"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.woo642778.aftereffects"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")" = "17.0"
+          /usr/bin/file "$APP/AfterEffects" | /usr/bin/grep -q arm64
+          test ! -d "$APP/_CodeSignature"
+          test ! -f "$APP/embedded.mobileprovision"
+          du -ah "$APP/AIModels" | sort -h | tail -40
+      - name: Package and independently audit final unsigned IPA
         run: |
           set -euo pipefail
-          APP_PATH="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
+          APP="$PWD/DerivedData/Build/Products/Release-iphoneos/AfterEffects.app"
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
-          cp -R "$APP_PATH" Payload/AfterEffects.app
-          /usr/bin/zip -qry artifacts/After-Effects-5.0.0-unsigned.ipa Payload
-          shasum -a 256 artifacts/After-Effects-5.0.0-unsigned.ipa > artifacts/After-Effects-5.0.0-unsigned.ipa.sha256
-
-      - name: Upload unsigned IPA
+          cp -R "$APP" Payload/AfterEffects.app
+          /usr/bin/zip -qry artifacts/After-Effects-7.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/After-Effects-7.0.0-unsigned.ipa > artifacts/After-Effects-7.0.0-unsigned.ipa.sha256
+          python3 Tools/ai/audit_ipa.py \
+            artifacts/After-Effects-7.0.0-unsigned.ipa \
+            --inventory artifacts/After-Effects-7.0.0-artifact-inventory.json
+          cat artifacts/After-Effects-7.0.0-artifact-inventory.json
+      - name: Upload final Phase 7 IPA and evidence
         uses: actions/upload-artifact@v4
         with:
-          name: After-Effects-5.0.0-unsigned-ipa
-          path: artifacts/*
+          name: After-Effects-7.0.0-unsigned-ipa
+          path: |
+            artifacts/After-Effects-7.0.0-unsigned.ipa
+            artifacts/After-Effects-7.0.0-unsigned.ipa.sha256
+            artifacts/After-Effects-7.0.0-artifact-inventory.json
+            App/GeneratedAIResources/AI_MODEL_MANIFEST.json
           if-no-files-found: error
           retention-days: 30

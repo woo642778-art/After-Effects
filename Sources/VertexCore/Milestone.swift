@@ -55,68 +55,33 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 5,
-        title: "Project Persistence and Recovery",
-        status: .implemented,
+        number: 8,
+        title: "Masks and Mattes",
+        status: .inProgress,
         deliverables: [
-            "Versioned deterministic VertexProject schema with portable media and render settings",
-            "Command-based Undo and Redo with coalescing, revision checks, and idempotent command identities",
-            "Checksummed write-ahead journal, sequential replay, migration inspection, and strong media relinking",
-            "Atomic project package storage, history persistence, autosave rotation, backup recovery, and verified media embedding",
-            "Real project create, open, save, export, autosave, recovery, Undo, Redo, embed, and relink application flows",
-            "Versioned After Effects 5.0.0 unsigned IPA artifact"
+            "Reusable exact-time animation channels for layer and mask properties",
+            "Animated cubic Bezier masks with vertex and tangent editing",
+            "Feather, expansion, opacity, invert, and ordered Add/Subtract/Intersect mask modes",
+            "Alpha, Alpha Inverted, Luma, and Luma Inverted track mattes with reference-cycle protection",
+            "Metal-backed mask and matte rendering with preview/export semantic parity",
+            "Versioned Vertex2 8.0.0 unsigned IPA with deterministic schema-4 project migration"
         ],
         sourceAdoptions: [
             SourceAdoption(
-                id: "foundation",
-                repository: "Apple Foundation",
-                license: "Apple platform SDK and Swift core libraries",
-                mode: .wrappedDependency,
-                purpose: "Phase 5 file packages, deterministic JSON boundaries, atomic file replacement, bookmarks, and FileWrapper export"
-            ),
-            SourceAdoption(
-                id: "avfoundation",
-                repository: "Apple AVFoundation",
-                license: "Apple platform SDK",
-                mode: .wrappedDependency,
-                purpose: "Production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
-            ),
-            SourceAdoption(
-                id: "metal",
+                id: "apple-metal-phase8",
                 repository: "Apple Metal",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "GPU compute execution behind VertexRenderMetal without exposing Metal types"
+                purpose: "GPU mask coverage, matte extraction, and premultiplied-alpha compositing"
             ),
             SourceAdoption(
-                id: "metalpetal",
-                repository: "MetalPetal/MetalPetal",
-                license: "MIT",
-                mode: .researchOnly,
-                purpose: "Audited future filters and composition backend candidate; not linked into Phase 5"
-            ),
-            SourceAdoption(
-                id: "videoio",
-                repository: "MetalPetal/VideoIO",
-                license: "MIT",
-                mode: .researchOnly,
-                purpose: "Audited future timed preview and video export candidate; not linked into Phase 5"
-            ),
-            SourceAdoption(
-                id: "videolab",
-                repository: "ruanjx/VideoLab",
-                license: "MIT",
-                mode: .designReference,
-                purpose: "Future layer, keyframe, operation, and pre-composition architecture study"
-            ),
-            SourceAdoption(
-                id: "minicut",
-                repository: "fwcd/mini-cut",
-                license: "GPL-3.0",
-                mode: .behavioralReference,
-                purpose: "Timeline interaction research only; no source copied into the product"
+                id: "apple-swiftui-phase8",
+                repository: "Apple SwiftUI",
+                license: "Apple platform SDK",
+                mode: .wrappedDependency,
+                purpose: "Layer property, keyframe, mask-path, and track-matte editing surfaces"
             )
         ],
-        artifactPolicy: "Phase 5 publishes After-Effects-5.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
+        artifactPolicy: "Phase 8 publishes Vertex2-8.0.0-unsigned.ipa only after schema migration, animation, mask, matte, Metal pixel, persistence, Simulator, Phase 7 AI regression, iOS 17 arm64 Release, artifact inspection, and SHA-256 gates pass. The IPA remains unsigned until signing credentials are supplied."
     )
 }

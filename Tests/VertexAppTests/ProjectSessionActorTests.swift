@@ -48,8 +48,8 @@ func autosaveDoesNotBecomeExplicitSave() async throws {
     let actor = ProjectSessionActor()
     _ = try await actor.create(name: "Autosave", packageURL: url)
     let edited = try await actor.apply(
-        .setRenderParameter(.exposure, value: 1.25),
-        mergeKey: "render.exposure"
+        .renameProject(to: "Autosave Edited"),
+        mergeKey: nil
     )
     let autosave = try await actor.autosave(reason: .manualFlush)
     let duplicateAutosave = try await actor.autosave(reason: .manualFlush)
@@ -126,28 +126,72 @@ func saveFailurePreservesSessionState() async throws {
     #expect(!recoveredSave.hasUnsavedChanges)
 }
 
-@Test("Continuous edits with the same merge key coalesce into one Undo entry")
+@Test("Continuous layer transforms with the same merge key coalesce into one Undo entry")
 func actorCoalescesCompatibleEdits() async throws {
     let url = actorPackageURL("Coalescing")
     defer { try? FileManager.default.removeItem(at: url) }
 
     let actor = ProjectSessionActor()
-    _ = try await actor.create(name: "Coalescing", packageURL: url)
+    let created = try await actor.create(name: "Coalescing", packageURL: url)
+    let compositionID = try #require(created.document.activeCompositionID)
+    let composition = try #require(created.document.composition(id: compositionID))
+    let layerID = VertexID(rawValue: "58000000-0000-0000-0000-000000000010")
+    let layer = ProjectLayer(
+        id: layerID,
+        compositionID: compositionID,
+        name: "Adjustment",
+        source: .adjustment(scope: .belowAll),
+        timing: LayerTiming(
+            startTime: .zero,
+            inPoint: .zero,
+            outPoint: composition.duration
+        )
+    )
+    _ = try await actor.apply(.insertLayer(layer, index: 0), mergeKey: nil)
+    _ = try await actor.save()
+
+    guard case .opened(let reopened) = try await actor.openCanonical(packageURL: url) else {
+        Issue.record("Saved package should reopen directly before coalescing edits.")
+        return
+    }
+    #expect(reopened.undoCount == 0)
+
+    let firstTransform = LayerTransform(
+        positionX: 0.5,
+        positionY: 0.5,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        scaleX: 1,
+        scaleY: 1,
+        rotationDegrees: 0,
+        opacity: 0.75
+    )
+    let secondTransform = LayerTransform(
+        positionX: 0.5,
+        positionY: 0.5,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        scaleX: 1,
+        scaleY: 1,
+        rotationDegrees: 0,
+        opacity: 0.5
+    )
+
     let first = try await actor.apply(
-        .setRenderParameter(.exposure, value: 0.5),
-        mergeKey: "render.exposure"
+        .setLayerTransform(id: layerID, transform: firstTransform),
+        mergeKey: "layer.\(layerID.rawValue).transform"
     )
     let second = try await actor.apply(
-        .setRenderParameter(.exposure, value: 1.5),
-        mergeKey: "render.exposure"
+        .setLayerTransform(id: layerID, transform: secondTransform),
+        mergeKey: "layer.\(layerID.rawValue).transform"
     )
 
     #expect(first.undoCount == 1)
     #expect(second.undoCount == 1)
-    #expect(second.document.renderSettings.exposure == 1.5)
+    #expect(second.document.layer(id: layerID)?.transform.opacity == 0.5)
 
     let undone = try await actor.undo()
-    #expect(undone.document.renderSettings.exposure == 0.0)
+    #expect(undone.document.layer(id: layerID)?.transform.opacity == 1.0)
     #expect(!undone.canUndo)
     #expect(undone.canRedo)
 }
