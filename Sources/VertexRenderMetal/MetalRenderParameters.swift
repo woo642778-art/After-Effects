@@ -23,6 +23,23 @@ internal struct MetalAdjustmentParameters {
     var effectsAndMix: SIMD4<Float>
 }
 
+internal struct MetalMaskParameters {
+    var dimensionsAndCounts: SIMD4<UInt32>
+}
+
+internal struct MetalMaskHeader {
+    var metadata: SIMD4<UInt32>
+    var effects: SIMD4<Float>
+}
+
+internal struct MetalMaskSegment {
+    var endpoints: SIMD4<Float>
+}
+
+internal struct MetalMatteParameters {
+    var dimensionsAndMode: SIMD4<UInt32>
+}
+
 internal extension RenderBlendMode {
     var metalValue: UInt32 {
         switch self {
@@ -32,5 +49,13 @@ internal extension RenderBlendMode {
         case .screen: 3
         }
     }
+}
+
+internal extension RenderMaskMode {
+    var metalValue: UInt32 { rawValue }
+}
+
+internal extension RenderTrackMatteMode {
+    var metalValue: UInt32 { rawValue }
 }
 #endif
