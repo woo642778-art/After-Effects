@@ -44,8 +44,10 @@ jobs:
           set -e
           cat "$RUNNER_TEMP/task6-red.log"
           test "$status" -ne 0
-      - name: Apply Task 6 GREEN
-        run: python3 Tools/phase9_tasks/task06_green.py
+      - name: Apply Task 6 GREEN and isolated evaluator fix
+        run: |
+          python3 Tools/phase9_tasks/task06_green.py
+          python3 Tools/phase9_tasks/task06_green_fix.py
       - name: Capture Task 6 GREEN compiler and test output
         id: task6
         continue-on-error: true
