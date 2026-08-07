@@ -55,54 +55,33 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 7,
-        title: "Offline AI Studio",
+        number: 8,
+        title: "Masks and Mattes",
         status: .inProgress,
         deliverables: [
-            "Startup state that cannot deadlock on milestone, AI, Metal, or project readiness",
-            "Fully offline video Depth Map and Cutout workflows with project-usable results",
-            "Fully offline AI Upscale and Restoration with Preview, Balanced, and Max Quality tiers",
-            "Chunked full-video AI processing with progress, cancellation, checkpointing, and resume",
-            "Pinned model provenance, license, checksum, conversion, and packaged-resource audits",
-            "Versioned After Effects 7.0.0 unsigned IPA artifact with model inventory"
+            "Reusable exact-time animation channels for layer and mask properties",
+            "Animated cubic Bezier masks with vertex and tangent editing",
+            "Feather, expansion, opacity, invert, and ordered Add/Subtract/Intersect mask modes",
+            "Alpha, Alpha Inverted, Luma, and Luma Inverted track mattes with reference-cycle protection",
+            "Metal-backed mask and matte rendering with preview/export semantic parity",
+            "Versioned Vertex2 8.0.0 unsigned IPA with deterministic schema-4 project migration"
         ],
         sourceAdoptions: [
             SourceAdoption(
-                id: "vision",
-                repository: "Apple Vision",
+                id: "apple-metal-phase8",
+                repository: "Apple Metal",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "On-device person and foreground segmentation fast paths"
+                purpose: "GPU mask coverage, matte extraction, and premultiplied-alpha compositing"
             ),
             SourceAdoption(
-                id: "coreml",
-                repository: "Apple Core ML",
+                id: "apple-swiftui-phase8",
+                repository: "Apple SwiftUI",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "On-device neural inference, model loading, and compute-unit selection"
-            ),
-            SourceAdoption(
-                id: "depth-anything-v2-small",
-                repository: "DepthAnything/Depth-Anything-V2",
-                license: "Apache-2.0 for Small checkpoint; final inclusion requires lockfile audit",
-                mode: .researchOnly,
-                purpose: "Primary monocular depth candidate for an offline Core ML path"
-            ),
-            SourceAdoption(
-                id: "real-esrgan",
-                repository: "xinntao/Real-ESRGAN",
-                license: "BSD-3-Clause code; checkpoint redistribution audited separately",
-                mode: .researchOnly,
-                purpose: "General and anime/game super-resolution candidate family"
-            ),
-            SourceAdoption(
-                id: "sam2",
-                repository: "facebookresearch/sam2",
-                license: "Apache-2.0 upstream code/checkpoints; iOS runtime validation required",
-                mode: .researchOnly,
-                purpose: "Prompt-driven quality cutout and video mask propagation candidate"
+                purpose: "Layer property, keyframe, mask-path, and track-matte editing surfaces"
             )
         ],
-        artifactPolicy: "Phase 7 publishes After-Effects-7.0.0-unsigned.ipa only after startup, portable AI, native inference, full-video job, persistence, Simulator, Release, model-manifest, packaged-resource, architecture, and SHA-256 gates pass. The IPA remains unsigned until signing credentials are supplied."
+        artifactPolicy: "Phase 8 publishes Vertex2-8.0.0-unsigned.ipa only after schema migration, animation, mask, matte, Metal pixel, persistence, Simulator, Phase 7 AI regression, iOS 17 arm64 Release, artifact inspection, and SHA-256 gates pass. The IPA remains unsigned until signing credentials are supplied."
     )
 }
