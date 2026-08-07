@@ -18,6 +18,15 @@ targets:
       - path: App
         excludes:
           - Resources/AppIconSource.base64
+          - GeneratedAIResources
+      - path: App/GeneratedAIResources/AIModels
+        type: folder
+        buildPhase: resources
+      - path: App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+        buildPhase: resources
+      - path: App/GeneratedAIResources/AIModelNotices
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: Vertex
         product: VertexCore
@@ -33,13 +42,21 @@ targets:
         product: VertexProject
       - package: Vertex
         product: VertexProjectPersistence
+      - package: Vertex
+        product: VertexComposition
+      - package: Vertex
+        product: VertexAI
+      - package: Vertex
+        product: VertexAICoreML
+      - package: Vertex
+        product: VertexAIAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: AfterEffects
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 5.0.0
-        CURRENT_PROJECT_VERSION: 5
+        MARKETING_VERSION: 7.0.0
+        CURRENT_PROJECT_VERSION: 7
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: After Effects
@@ -78,6 +95,14 @@ targets:
         product: VertexProject
       - package: Vertex
         product: VertexProjectPersistence
+      - package: Vertex
+        product: VertexComposition
+      - package: Vertex
+        product: VertexAI
+      - package: Vertex
+        product: VertexAICoreML
+      - package: Vertex
+        product: VertexAIAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests

@@ -258,8 +258,18 @@ public struct VertexProjectPackageStore: Sendable {
         do {
             let projectData = try Data(contentsOf: layout.projectURL)
             let manifestData = try Data(contentsOf: layout.manifestURL)
-            let document = try DeterministicProjectCodec().decode(projectData)
+            let header = try ProjectSchemaHeader.decode(from: projectData)
             let manifest = try VertexProjectManifestCodec().decode(manifestData)
+
+            if header.schemaVersion < ProjectDocument.currentSchemaVersion {
+                return try migrateLegacyCanonicalPair(
+                    projectData: projectData,
+                    manifest: manifest,
+                    layout: layout
+                )
+            }
+
+            let document = try DeterministicProjectCodec().decode(projectData)
             try manifest.validate(document: document, projectData: projectData)
             return ProjectPackageSnapshot(
                 layout: layout,
@@ -275,6 +285,47 @@ public struct VertexProjectPackageStore: Sendable {
                 "The canonical project pair could not be opened: \(error.localizedDescription)"
             )
         }
+    }
+
+    private func migrateLegacyCanonicalPair(
+        projectData: Data,
+        manifest: VertexProjectManifest,
+        layout: VertexProjectPackageLayout
+    ) throws -> ProjectPackageSnapshot {
+        guard manifest.schemaVersion == 1 else {
+            throw ProjectPersistenceError.invalidManifest(
+                "Only canonical schema 1 packages can be upgraded by the schema 2 store."
+            )
+        }
+        let legacy = try Schema1ProjectCodec.decode(projectData)
+        guard manifest.minimumReaderVersion == legacy.minimumReaderVersion,
+              manifest.projectID == legacy.projectID,
+              manifest.projectRevision == legacy.revision else {
+            throw ProjectPersistenceError.invalidManifest(
+                "Schema 1 project identity, revision, or reader version does not match its manifest."
+            )
+        }
+        let actualChecksum = DeterministicProjectCodec().checksum(data: projectData)
+        guard actualChecksum == manifest.projectChecksum else {
+            throw ProjectPersistenceError.checksumMismatch(
+                expected: manifest.projectChecksum,
+                actual: actualChecksum
+            )
+        }
+
+        let migration = try ProjectMigrationRegistry.current.migrate(
+            projectData,
+            from: 1,
+            to: ProjectDocument.currentSchemaVersion
+        )
+        let migrated = try DeterministicProjectCodec().decode(migration.data)
+        guard migrated.projectID == legacy.projectID,
+              migrated.revision == legacy.revision else {
+            throw ProjectPersistenceError.invalidManifest(
+                "Schema migration changed project identity or revision."
+            )
+        }
+        return try performTransaction(document: migrated, layout: layout)
     }
 
     private func install(

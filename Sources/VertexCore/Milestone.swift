@@ -55,68 +55,54 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 5,
-        title: "Project Persistence and Recovery",
-        status: .implemented,
+        number: 7,
+        title: "Offline AI Studio",
+        status: .inProgress,
         deliverables: [
-            "Versioned deterministic VertexProject schema with portable media and render settings",
-            "Command-based Undo and Redo with coalescing, revision checks, and idempotent command identities",
-            "Checksummed write-ahead journal, sequential replay, migration inspection, and strong media relinking",
-            "Atomic project package storage, history persistence, autosave rotation, backup recovery, and verified media embedding",
-            "Real project create, open, save, export, autosave, recovery, Undo, Redo, embed, and relink application flows",
-            "Versioned After Effects 5.0.0 unsigned IPA artifact"
+            "Startup state that cannot deadlock on milestone, AI, Metal, or project readiness",
+            "Fully offline video Depth Map and Cutout workflows with project-usable results",
+            "Fully offline AI Upscale and Restoration with Preview, Balanced, and Max Quality tiers",
+            "Chunked full-video AI processing with progress, cancellation, checkpointing, and resume",
+            "Pinned model provenance, license, checksum, conversion, and packaged-resource audits",
+            "Versioned After Effects 7.0.0 unsigned IPA artifact with model inventory"
         ],
         sourceAdoptions: [
             SourceAdoption(
-                id: "foundation",
-                repository: "Apple Foundation",
-                license: "Apple platform SDK and Swift core libraries",
-                mode: .wrappedDependency,
-                purpose: "Phase 5 file packages, deterministic JSON boundaries, atomic file replacement, bookmarks, and FileWrapper export"
-            ),
-            SourceAdoption(
-                id: "avfoundation",
-                repository: "Apple AVFoundation",
+                id: "vision",
+                repository: "Apple Vision",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Production media metadata, frame decoding, and PCM extraction behind Vertex adapters"
+                purpose: "On-device person and foreground segmentation fast paths"
             ),
             SourceAdoption(
-                id: "metal",
-                repository: "Apple Metal",
+                id: "coreml",
+                repository: "Apple Core ML",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "GPU compute execution behind VertexRenderMetal without exposing Metal types"
+                purpose: "On-device neural inference, model loading, and compute-unit selection"
             ),
             SourceAdoption(
-                id: "metalpetal",
-                repository: "MetalPetal/MetalPetal",
-                license: "MIT",
+                id: "depth-anything-v2-small",
+                repository: "DepthAnything/Depth-Anything-V2",
+                license: "Apache-2.0 for Small checkpoint; final inclusion requires lockfile audit",
                 mode: .researchOnly,
-                purpose: "Audited future filters and composition backend candidate; not linked into Phase 5"
+                purpose: "Primary monocular depth candidate for an offline Core ML path"
             ),
             SourceAdoption(
-                id: "videoio",
-                repository: "MetalPetal/VideoIO",
-                license: "MIT",
+                id: "real-esrgan",
+                repository: "xinntao/Real-ESRGAN",
+                license: "BSD-3-Clause code; checkpoint redistribution audited separately",
                 mode: .researchOnly,
-                purpose: "Audited future timed preview and video export candidate; not linked into Phase 5"
+                purpose: "General and anime/game super-resolution candidate family"
             ),
             SourceAdoption(
-                id: "videolab",
-                repository: "ruanjx/VideoLab",
-                license: "MIT",
-                mode: .designReference,
-                purpose: "Future layer, keyframe, operation, and pre-composition architecture study"
-            ),
-            SourceAdoption(
-                id: "minicut",
-                repository: "fwcd/mini-cut",
-                license: "GPL-3.0",
-                mode: .behavioralReference,
-                purpose: "Timeline interaction research only; no source copied into the product"
+                id: "sam2",
+                repository: "facebookresearch/sam2",
+                license: "Apache-2.0 upstream code/checkpoints; iOS runtime validation required",
+                mode: .researchOnly,
+                purpose: "Prompt-driven quality cutout and video mask propagation candidate"
             )
         ],
-        artifactPolicy: "Phase 5 publishes After-Effects-5.0.0-unsigned.ipa. Every later successful phase increments the major version to match its phase number. The IPA remains unsigned until user-provided signing credentials are applied."
+        artifactPolicy: "Phase 7 publishes After-Effects-7.0.0-unsigned.ipa only after startup, portable AI, native inference, full-video job, persistence, Simulator, Release, model-manifest, packaged-resource, architecture, and SHA-256 gates pass. The IPA remains unsigned until signing credentials are supplied."
     )
 }

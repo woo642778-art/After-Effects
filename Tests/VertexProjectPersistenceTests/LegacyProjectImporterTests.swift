@@ -29,32 +29,30 @@ private func legacyEncoder() -> JSONEncoder {
     return encoder
 }
 
-private func legacyProjectData(
-    from document: ProjectDocument,
-    bookmarkPayloads: [VertexID: Data]
-) throws -> Data {
-    let canonical = try DeterministicProjectCodec().encode(document)
-    let object = try #require(try JSONSerialization.jsonObject(with: canonical) as? [String: Any])
-    var changed = object
-    var media = try #require(changed["mediaRegistry"] as? [[String: Any]])
-
-    for index in media.indices {
-        let rawID = try #require(media[index]["id"] as? String)
-        guard let payload = bookmarkPayloads.first(where: { $0.key.rawValue == rawID })?.value else {
-            continue
-        }
-        var locator = (media[index]["locator"] as? [String: Any]) ?? [:]
-        locator["bookmarkData"] = payload.base64EncodedString()
-        media[index]["locator"] = locator
-    }
-    changed["mediaRegistry"] = media
-    changed["appliedCommandIDs"] = [
-        "57000000-0000-0000-0000-000000000099"
-    ]
-
-    return try JSONSerialization.data(
-        withJSONObject: changed,
-        options: [.sortedKeys, .withoutEscapingSlashes]
+private func legacyMediaDTO(
+    id: VertexID,
+    name: String,
+    fileSize: Int64,
+    modificationDate: Date,
+    fingerprint: String?,
+    bookmarkData: Data?,
+    embeddedPath: String?,
+    availability: MediaAvailabilityStatus
+) -> LegacyMediaReferenceDTO {
+    LegacyMediaReferenceDTO(
+        id: id,
+        displayName: name,
+        originalFilename: name,
+        fileSize: fileSize,
+        modificationDate: modificationDate,
+        contentFingerprint: fingerprint,
+        locator: LegacyMediaLocatorDTO(
+            relativeHint: name,
+            bookmarkData: bookmarkData,
+            embeddedPath: embeddedPath
+        ),
+        kind: .video,
+        availabilityStatus: availability
     )
 }
 
@@ -74,44 +72,40 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
     let embeddedBytes = Data("verified-embedded-media".utf8)
     let embeddedFingerprint = StableProjectSHA256.hexDigest(embeddedBytes)
 
-    let external = MediaReference(
+    let external = legacyMediaDTO(
         id: legacyBookmarkMediaID,
-        displayName: "external.mov",
-        originalFilename: "external.mov",
+        name: "external.mov",
         fileSize: 100,
         modificationDate: modifiedAt,
-        contentFingerprint: nil,
-        locator: MediaLocator(relativeHint: "external.mov"),
-        kind: .video,
-        availabilityStatus: .external
+        fingerprint: nil,
+        bookmarkData: Data("valid-bookmark-sidecar".utf8),
+        embeddedPath: nil,
+        availability: .external
     )
-    let missing = MediaReference(
+    let missing = legacyMediaDTO(
         id: legacyMissingMediaID,
-        displayName: "missing.mov",
-        originalFilename: "missing.mov",
+        name: "missing.mov",
         fileSize: 200,
         modificationDate: modifiedAt,
-        contentFingerprint: nil,
-        locator: MediaLocator(relativeHint: "missing.mov"),
-        kind: .video,
-        availabilityStatus: .external
+        fingerprint: nil,
+        bookmarkData: Data(),
+        embeddedPath: nil,
+        availability: .external
     )
-    let embedded = MediaReference(
+    let embedded = legacyMediaDTO(
         id: legacyEmbeddedMediaID,
-        displayName: "embedded clip.mov",
-        originalFilename: "embedded clip.mov",
+        name: "embedded clip.mov",
         fileSize: Int64(embeddedBytes.count),
         modificationDate: modifiedAt,
-        contentFingerprint: embeddedFingerprint,
-        locator: MediaLocator(
-            relativeHint: "embedded clip.mov",
-            embeddedPath: "media/embedded-source.mov"
-        ),
-        kind: .video,
-        availabilityStatus: .embedded
+        fingerprint: embeddedFingerprint,
+        bookmarkData: nil,
+        embeddedPath: "media/embedded-source.mov",
+        availability: .embedded
     )
 
-    var document = ProjectDocument(
+    let legacy = LegacySchema1ProjectDTO(
+        schemaVersion: 1,
+        minimumReaderVersion: 1,
         projectID: legacyImportProjectID,
         revision: 0,
         metadata: ProjectMetadata(
@@ -124,40 +118,26 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
         settings: ProjectSettings(),
         mediaRegistry: [external, missing, embedded],
         compositionRegistry: [
-            ProjectCompositionPlaceholder(id: legacyImportCompositionID, name: "Main")
+            LegacyCompositionPlaceholderDTO(id: legacyImportCompositionID, name: "Main")
         ],
         activeCompositionID: legacyImportCompositionID,
         selectedMediaID: legacyBookmarkMediaID,
-        renderSettings: ProjectRenderSettings()
-    )
-    document = try document.validated()
-
-    let rename = ProjectCommandRecord(
-        commandID: VertexID(rawValue: "57000000-0000-0000-0000-000000000030"),
-        projectID: document.projectID,
-        baseRevision: 0,
-        timestamp: Date(timeIntervalSince1970: 1_650_000_200),
-        mergeKey: nil,
-        forwardOperation: .renameProject(before: "Legacy Original", after: "Legacy Replayed"),
-        inverseOperation: .renameProject(before: "Legacy Replayed", after: "Legacy Original")
-    )
-
-    let projectData = try legacyProjectData(
-        from: document,
-        bookmarkPayloads: [
-            legacyBookmarkMediaID: Data("valid-bookmark-sidecar".utf8),
-            legacyMissingMediaID: Data()
+        renderSettings: ProjectRenderSettings(),
+        legacyRenderSettings: nil,
+        appliedCommandIDs: [
+            VertexID(rawValue: "57000000-0000-0000-0000-000000000099")
         ]
     )
+    let projectData = try legacyEncoder().encode(legacy)
     try projectData.write(to: sourceURL.appendingPathComponent("project.json"))
 
     let manifest = LegacyManifestDTO(
-        schemaVersion: document.schemaVersion,
-        minimumReaderVersion: document.minimumReaderVersion,
-        projectID: document.projectID,
-        createdByAppVersion: document.metadata.createdByAppVersion,
-        lastSavedByAppVersion: document.metadata.lastSavedByAppVersion,
-        projectRevision: document.revision,
+        schemaVersion: 1,
+        minimumReaderVersion: 1,
+        projectID: legacyImportProjectID,
+        createdByAppVersion: legacy.metadata.createdByAppVersion,
+        lastSavedByAppVersion: legacy.metadata.lastSavedByAppVersion,
+        projectRevision: 0,
         projectChecksum: DeterministicProjectCodec().checksum(data: projectData),
         committedJournalSequence: 0,
         lastSuccessfulSave: modifiedAt,
@@ -165,6 +145,16 @@ private func makeLegacyImportFixture(at root: URL) throws -> LegacyImportFixture
     )
     try legacyEncoder().encode(manifest).write(
         to: sourceURL.appendingPathComponent("manifest.json")
+    )
+
+    let rename = ProjectCommandRecord(
+        commandID: VertexID(rawValue: "57000000-0000-0000-0000-000000000030"),
+        projectID: legacyImportProjectID,
+        baseRevision: 0,
+        timestamp: Date(timeIntervalSince1970: 1_650_000_200),
+        mergeKey: nil,
+        forwardOperation: .renameProject(before: "Legacy Original", after: "Legacy Replayed"),
+        inverseOperation: .renameProject(before: "Legacy Replayed", after: "Legacy Original")
     )
 
     let discardedHistory: [String: Any] = [
@@ -233,7 +223,7 @@ func legacyImportIsNonDestructiveAndDeterministic() throws {
     #expect(resultA.snapshot.projectData == resultB.snapshot.projectData)
 
     #expect(resultA.inspection.compositionCount == 1)
-    #expect(resultA.inspection.layerCount == 0)
+    #expect(resultA.inspection.layerCount == 1)
     #expect(resultA.inspection.mediaCount == 3)
     #expect(resultA.inspection.embeddedMediaEligibleCount == 1)
     #expect(resultA.inspection.bookmarkSuccessCount == 1)
@@ -244,25 +234,34 @@ func legacyImportIsNonDestructiveAndDeterministic() throws {
     #expect(resultA.inspection.validJournalRecordCount == 1)
     #expect(resultA.inspection.ignoredJournalRecordCount == 0)
 
+    let migratedLayer = try #require(resultA.snapshot.document.layerRegistry.first)
+    #expect(migratedLayer.compositionID == legacyImportCompositionID)
+    #expect(migratedLayer.source == .media(mediaID: legacyBookmarkMediaID, sourceStartTime: .zero))
+
     let bookmark = try BookmarkSidecarStore().read(mediaID: legacyBookmarkMediaID, in: destinationA)
     #expect(bookmark == Data("valid-bookmark-sidecar".utf8))
     let missingBookmark = try BookmarkSidecarStore().read(mediaID: legacyMissingMediaID, in: destinationA)
     #expect(missingBookmark == nil)
 
-    let missing = try #require(resultA.snapshot.document.mediaRegistry.first {
+    let missingReference = try #require(resultA.snapshot.document.mediaRegistry.first {
         $0.id == legacyMissingMediaID
     })
-    #expect(missing.availabilityStatus == .missing)
+    #expect(missingReference.availabilityStatus == .missing)
 
-    let embedded = try #require(resultA.snapshot.document.mediaRegistry.first {
+    let embeddedReference = try #require(resultA.snapshot.document.mediaRegistry.first {
         $0.id == legacyEmbeddedMediaID
     })
     let embeddedURLOptional = try EmbeddedMediaStore().resolve(
-        reference: embedded,
+        reference: embeddedReference,
         packageURL: destinationA
     )
     let embeddedURL = try #require(embeddedURLOptional)
     #expect(try Data(contentsOf: embeddedURL) == fixture.embeddedBytes)
+
+    let canonicalJSON = String(decoding: resultA.snapshot.projectData, as: UTF8.self)
+    #expect(!canonicalJSON.contains("bookmarkData"))
+    #expect(!canonicalJSON.contains("appliedCommandIDs"))
+    #expect(!canonicalJSON.contains("legacyRenderSettings"))
 
     let canonicalEntries = try FileManager.default.contentsOfDirectory(atPath: destinationA.path)
     for forbidden in ["history.json", "project.json.backup", "journal", "autosaves", "proxies", "thumbnails", "recovery"] {
