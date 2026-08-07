@@ -88,9 +88,9 @@ public enum CutoutMaskProcessing {
 
 #if canImport(Vision) && canImport(CoreVideo)
 import CoreVideo
-import Vision
+@preconcurrency import Vision
 
-public actor VisionCutoutEngine {
+public final class VisionCutoutEngine: @unchecked Sendable {
     public init() {}
 
     public func infer(
@@ -222,7 +222,6 @@ private enum PromptInstanceSelector {
     ) -> Int? {
         guard (0...1).contains(x), (0...1).contains(y) else { return nil }
         let pixelX = min(labels.width - 1, max(0, Int((x * Double(labels.width - 1)).rounded())))
-        // Vision normalized coordinates use a bottom-left origin; CVPixelBuffer rows use top-left.
         let pixelY = min(labels.height - 1, max(0, Int(((1 - y) * Double(labels.height - 1)).rounded())))
         return labels.values[pixelY * labels.width + pixelX]
     }
