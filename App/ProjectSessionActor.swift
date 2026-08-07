@@ -71,6 +71,12 @@ actor ProjectSessionActor {
         }
     }
 
+    func applyPendingAndOpen(packageURL: URL) async throws -> ProjectSessionSnapshot {
+        let snapshot = try packageStore.applyPending(in: packageURL)
+        try install(snapshot)
+        return try currentSnapshot()
+    }
+
     func discardPendingAndOpen(packageURL: URL) async throws -> ProjectSessionSnapshot {
         let snapshot = try packageStore.discardPending(in: packageURL)
         try install(snapshot)
@@ -117,6 +123,20 @@ actor ProjectSessionActor {
     func setSelectedMedia(_ mediaID: VertexID?) async throws -> ProjectSessionSnapshot {
         var session = try requireSession()
         try session.setSelectedMedia(mediaID)
+        editingSession = session
+        return try currentSnapshot()
+    }
+
+    func setActiveComposition(_ compositionID: VertexID) async throws -> ProjectSessionSnapshot {
+        var session = try requireSession()
+        try session.setActiveComposition(compositionID)
+        editingSession = session
+        return try currentSnapshot()
+    }
+
+    func setSelectedLayer(_ layerID: VertexID?) async throws -> ProjectSessionSnapshot {
+        var session = try requireSession()
+        try session.setSelectedLayer(layerID)
         editingSession = session
         return try currentSnapshot()
     }
@@ -264,6 +284,19 @@ actor ProjectSessionActor {
         )
     }
 
+    func resolveMediaURL(_ mediaID: VertexID) async throws -> URL? {
+        let session = try requireSession()
+        let destination = try requirePackageURL()
+        guard let reference = session.document.mediaRegistry.first(where: { $0.id == mediaID }) else {
+            throw ProjectError.missingMedia(mediaID.rawValue)
+        }
+        if let embedded = try? embeddedMediaStore.resolve(reference: reference, packageURL: destination),
+           FileManager.default.fileExists(atPath: embedded.path) {
+            return embedded
+        }
+        return try? bookmarkStore.resolveAndRefreshIfNeeded(mediaID: mediaID, in: destination)
+    }
+
     func snapshot() async throws -> ProjectSessionSnapshot {
         try currentSnapshot()
     }
@@ -340,7 +373,6 @@ actor ProjectSessionActor {
                     continue
                 }
             } catch {
-                // Embedded corruption is isolated to this media reference.
             }
 
             do {
@@ -351,7 +383,6 @@ actor ProjectSessionActor {
                     continue
                 }
             } catch {
-                // Bookmark failure is isolated to this media reference.
             }
             missing.insert(reference.id)
         }

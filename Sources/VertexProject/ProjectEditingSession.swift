@@ -17,21 +17,9 @@ public struct ProjectEditingSession: Sendable {
     private var recentCommandIDSet: Set<VertexID>
     private let engine = ProjectCommandEngine()
 
-    public init(
-        document: ProjectDocument,
-        coalescingInterval: TimeInterval = 0.5,
-        historyLimit: Int = 200,
-        recentCommandLimit: Int = 512
-    ) throws {
-        guard coalescingInterval >= 0, coalescingInterval.isFinite else {
-            throw ProjectError.invalidValue("Coalescing interval must be finite and non-negative.")
-        }
-        guard historyLimit > 0 else {
-            throw ProjectError.invalidValue("History limit must be positive.")
-        }
-        guard recentCommandLimit > 0 else {
-            throw ProjectError.invalidValue("Recent command limit must be positive.")
-        }
+    public init(document: ProjectDocument, coalescingInterval: TimeInterval = 0.5, historyLimit: Int = 200, recentCommandLimit: Int = 512) throws {
+        guard coalescingInterval >= 0, coalescingInterval.isFinite else { throw ProjectError.invalidValue("Coalescing interval must be finite and non-negative.") }
+        guard historyLimit > 0, recentCommandLimit > 0 else { throw ProjectError.invalidValue("Session limits must be positive.") }
         let validated = try document.validated()
         self.loadedSnapshot = validated
         self.document = validated
@@ -57,9 +45,7 @@ public struct ProjectEditingSession: Sendable {
         try rejectDuplicate(request.commandID)
         let transition = try engine.prepare(request, for: document)
         let changed = try engine.apply(transition, to: document)
-
-        if let previous = undoStack.last,
-           let merged = coalesced(previous, with: transition) {
+        if let previous = undoStack.last, let merged = coalesced(previous, with: transition) {
             undoStack[undoStack.count - 1] = merged
         } else {
             undoStack.append(transition)
@@ -73,23 +59,10 @@ public struct ProjectEditingSession: Sendable {
     }
 
     @discardableResult
-    public mutating func undo(
-        commandID: VertexID = VertexID(),
-        timestamp: Date = Date()
-    ) throws -> ProjectTransition {
+    public mutating func undo(commandID: VertexID = VertexID(), timestamp: Date = Date()) throws -> ProjectTransition {
         try rejectDuplicate(commandID)
-        guard let original = undoStack.last else {
-            throw ProjectError.invalidOperation("There is no command to undo.")
-        }
-        let transition = ProjectTransition(
-            commandID: commandID,
-            projectID: document.projectID,
-            baseRevision: document.revision,
-            timestamp: timestamp,
-            mergeKey: nil,
-            forward: original.inverse,
-            inverse: original.forward
-        )
+        guard let original = undoStack.last else { throw ProjectError.invalidOperation("There is no command to undo.") }
+        let transition = ProjectTransition(commandID: commandID, projectID: document.projectID, baseRevision: document.revision, timestamp: timestamp, mergeKey: nil, forward: original.inverse, inverse: original.forward)
         let changed = try engine.apply(transition, to: document)
         _ = undoStack.popLast()
         redoStack.append(original)
@@ -101,23 +74,10 @@ public struct ProjectEditingSession: Sendable {
     }
 
     @discardableResult
-    public mutating func redo(
-        commandID: VertexID = VertexID(),
-        timestamp: Date = Date()
-    ) throws -> ProjectTransition {
+    public mutating func redo(commandID: VertexID = VertexID(), timestamp: Date = Date()) throws -> ProjectTransition {
         try rejectDuplicate(commandID)
-        guard let original = redoStack.last else {
-            throw ProjectError.invalidOperation("There is no command to redo.")
-        }
-        let transition = ProjectTransition(
-            commandID: commandID,
-            projectID: document.projectID,
-            baseRevision: document.revision,
-            timestamp: timestamp,
-            mergeKey: nil,
-            forward: original.forward,
-            inverse: original.inverse
-        )
+        guard let original = redoStack.last else { throw ProjectError.invalidOperation("There is no command to redo.") }
+        let transition = ProjectTransition(commandID: commandID, projectID: document.projectID, baseRevision: document.revision, timestamp: timestamp, mergeKey: nil, forward: original.forward, inverse: original.inverse)
         let changed = try engine.apply(transition, to: document)
         _ = redoStack.popLast()
         undoStack.append(original)
@@ -128,20 +88,41 @@ public struct ProjectEditingSession: Sendable {
         return transition
     }
 
-    public mutating func setSelectedMedia(
-        _ mediaID: VertexID?,
-        timestamp: Date = Date()
-    ) throws {
-        if let mediaID,
-           !document.mediaRegistry.contains(where: { $0.id == mediaID }) {
-            throw ProjectError.missingMedia(mediaID.rawValue)
+    public mutating func setSelectedMedia(_ mediaID: VertexID?, timestamp: Date = Date()) throws {
+        if let mediaID, !document.mediaRegistry.contains(where: { $0.id == mediaID }) { throw ProjectError.missingMedia(mediaID.rawValue) }
+        try applyWorkspaceSelection(timestamp: timestamp) { $0.selectedMediaID = mediaID }
+    }
+
+    public mutating func setActiveComposition(_ compositionID: VertexID, timestamp: Date = Date()) throws {
+        guard document.composition(id: compositionID) != nil else { throw ProjectError.invalidOperation("Active composition is missing.") }
+        guard document.activeCompositionID != compositionID else { return }
+        try applyWorkspaceSelection(timestamp: timestamp) {
+            $0.activeCompositionID = compositionID
+            if let selected = $0.selectedLayerID, $0.layer(id: selected)?.compositionID != compositionID { $0.selectedLayerID = nil }
         }
-        guard document.selectedMediaID != mediaID else { return }
-        guard document.revision < UInt64.max else {
-            throw ProjectError.invalidRevision
+    }
+
+    public mutating func setSelectedLayer(_ layerID: VertexID?, timestamp: Date = Date()) throws {
+        if let layerID {
+            guard let layer = document.layer(id: layerID) else { throw ProjectError.invalidOperation("Selected layer is missing.") }
+            guard document.activeCompositionID == layer.compositionID else { throw ProjectError.invalidOperation("Selected layer must belong to the active composition.") }
         }
+        try applyWorkspaceSelection(timestamp: timestamp) { $0.selectedLayerID = layerID }
+    }
+
+    public mutating func markSaved(revision: UInt64) throws {
+        guard revision == document.revision else { throw ProjectError.staleBaseRevision(expected: revision, actual: document.revision) }
+        savedRevision = revision
+        loadedSnapshot = document
+        hasUnsavedChanges = false
+    }
+
+    private mutating func applyWorkspaceSelection(timestamp: Date, mutation: (inout ProjectDocument) -> Void) throws {
         var changed = document
-        changed.selectedMediaID = mediaID
+        let before = changed
+        mutation(&changed)
+        guard changed != before else { return }
+        guard changed.revision < UInt64.max else { throw ProjectError.invalidRevision }
         changed.revision += 1
         changed.metadata.modifiedAt = timestamp
         changed.metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
@@ -149,18 +130,8 @@ public struct ProjectEditingSession: Sendable {
         hasUnsavedChanges = true
     }
 
-    public mutating func markSaved(revision: UInt64) throws {
-        guard revision == document.revision else {
-            throw ProjectError.staleBaseRevision(expected: revision, actual: document.revision)
-        }
-        savedRevision = revision
-        hasUnsavedChanges = false
-    }
-
     private func rejectDuplicate(_ commandID: VertexID) throws {
-        guard !recentCommandIDSet.contains(commandID) else {
-            throw ProjectError.duplicateCommand(commandID.rawValue)
-        }
+        guard !recentCommandIDSet.contains(commandID) else { throw ProjectError.duplicateCommand(commandID.rawValue) }
     }
 
     private mutating func registerRecent(_ commandID: VertexID) {
@@ -170,85 +141,40 @@ public struct ProjectEditingSession: Sendable {
             let overflow = recentCommandIDs.count - recentCommandLimit
             let removed = recentCommandIDs.prefix(overflow)
             recentCommandIDs.removeFirst(overflow)
-            for id in removed {
-                recentCommandIDSet.remove(id)
-            }
+            for id in removed { recentCommandIDSet.remove(id) }
         }
     }
 
     private func trimHistory(_ stack: inout [ProjectTransition]) {
-        if stack.count > historyLimit {
-            stack.removeFirst(stack.count - historyLimit)
-        }
+        if stack.count > historyLimit { stack.removeFirst(stack.count - historyLimit) }
     }
 
-    private func coalesced(
-        _ previous: ProjectTransition,
-        with current: ProjectTransition
-    ) -> ProjectTransition? {
-        guard let previousKey = previous.mergeKey,
-              previousKey == current.mergeKey,
-              previous.projectID == current.projectID,
+    private func coalesced(_ previous: ProjectTransition, with current: ProjectTransition) -> ProjectTransition? {
+        guard let key = previous.mergeKey, key == current.mergeKey, previous.projectID == current.projectID,
               current.timestamp.timeIntervalSince(previous.timestamp) >= 0,
               current.timestamp.timeIntervalSince(previous.timestamp) <= coalescingInterval,
-              let forward = merged(previous.forward, current.forward) else {
-            return nil
-        }
-        return ProjectTransition(
-            commandID: current.commandID,
-            projectID: previous.projectID,
-            baseRevision: previous.baseRevision,
-            timestamp: current.timestamp,
-            mergeKey: previousKey,
-            forward: forward,
-            inverse: forward.inverse
-        )
+              let forward = merged(previous.forward, current.forward) else { return nil }
+        return ProjectTransition(commandID: current.commandID, projectID: previous.projectID, baseRevision: previous.baseRevision, timestamp: current.timestamp, mergeKey: key, forward: forward, inverse: forward.inverse)
     }
 
-    private func merged(
-        _ previous: ProjectMutation,
-        _ current: ProjectMutation
-    ) -> ProjectMutation? {
+    private func merged(_ previous: ProjectMutation, _ current: ProjectMutation) -> ProjectMutation? {
         switch (previous, current) {
-        case let (
-            .setRenderParameter(previousParameter, previousBefore, previousAfter),
-            .setRenderParameter(currentParameter, currentBefore, currentAfter)
-        ) where previousParameter == currentParameter && previousAfter == currentBefore:
-            return .setRenderParameter(
-                previousParameter,
-                before: previousBefore,
-                after: currentAfter
-            )
-
-        case let (
-            .setRenderBoolean(previousParameter, previousBefore, previousAfter),
-            .setRenderBoolean(currentParameter, currentBefore, currentAfter)
-        ) where previousParameter == currentParameter && previousAfter == currentBefore:
-            return .setRenderBoolean(
-                previousParameter,
-                before: previousBefore,
-                after: currentAfter
-            )
-
-        case let (
-            .setOutputDimensions(previousBeforeWidth, previousBeforeHeight, previousAfterWidth, previousAfterHeight),
-            .setOutputDimensions(currentBeforeWidth, currentBeforeHeight, currentAfterWidth, currentAfterHeight)
-        ) where previousAfterWidth == currentBeforeWidth && previousAfterHeight == currentBeforeHeight:
-            return .setOutputDimensions(
-                beforeWidth: previousBeforeWidth,
-                beforeHeight: previousBeforeHeight,
-                afterWidth: currentAfterWidth,
-                afterHeight: currentAfterHeight
-            )
-
-        case let (
-            .setProjectColor(previousBefore, previousAfter),
-            .setProjectColor(currentBefore, currentAfter)
-        ) where previousAfter == currentBefore:
-            return .setProjectColor(before: previousBefore, after: currentAfter)
-
+        case let (.setRenderParameter(pp, pb, pa), .setRenderParameter(cp, cb, ca)) where pp == cp && pa == cb:
+            .setRenderParameter(pp, before: pb, after: ca)
+        case let (.setRenderBoolean(pp, pb, pa), .setRenderBoolean(cp, cb, ca)) where pp == cp && pa == cb:
+            .setRenderBoolean(pp, before: pb, after: ca)
+        case let (.setOutputDimensions(pbw, pbh, paw, pah), .setOutputDimensions(cbw, cbh, caw, cah)) where paw == cbw && pah == cbh:
+            .setOutputDimensions(beforeWidth: pbw, beforeHeight: pbh, afterWidth: caw, afterHeight: cah)
+        case let (.setProjectColor(pb, pa), .setProjectColor(cb, ca)) where pa == cb:
+            .setProjectColor(before: pb, after: ca)
+        case let (.setLayerTransform(pid, pb, pa), .setLayerTransform(cid, cb, ca)) where pid == cid && pa == cb:
+            .setLayerTransform(layerID: pid, before: pb, after: ca)
+        case let (.setLayerTiming(pid, pb, pa), .setLayerTiming(cid, cb, ca)) where pid == cid && pa == cb:
+            .setLayerTiming(layerID: pid, before: pb, after: ca)
+        case let (.setLayerOperations(pid, pb, pa), .setLayerOperations(cid, cb, ca)) where pid == cid && pa == cb:
+            .setLayerOperations(layerID: pid, before: pb, after: ca)
         default:
-            return nil
+            nil
         }
     }
 }

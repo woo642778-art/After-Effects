@@ -4,6 +4,7 @@ import VertexMedia
 
 public enum RenderOperation: Codable, Equatable, Sendable {
     case transform(scale: Double, translationX: Double, translationY: Double)
+    case transform2D(RenderTransform2D)
     case exposure(stops: Double)
     case saturation(Double)
     case invert(Bool)
@@ -15,14 +16,20 @@ public enum RenderOperation: Codable, Equatable, Sendable {
             guard scale.isFinite, scale > 0, x.isFinite, y.isFinite else {
                 throw RenderError.invalidRequest("Transform values must be finite and scale must be positive.")
             }
+        case .transform2D(let transform):
+            _ = try transform.validated()
         case .exposure(let stops):
             guard stops.isFinite else { throw RenderError.invalidRequest("Exposure must be finite.") }
         case .saturation(let value):
-            guard value.isFinite else { throw RenderError.invalidRequest("Saturation must be finite.") }
+            guard value.isFinite, value >= 0 else {
+                throw RenderError.invalidRequest("Saturation must be finite and nonnegative.")
+            }
         case .invert:
             break
         case .opacity(let value):
-            guard value.isFinite else { throw RenderError.invalidRequest("Opacity must be finite.") }
+            guard value.isFinite, (0...1).contains(value) else {
+                throw RenderError.invalidRequest("Opacity must be finite and within 0...1.")
+            }
         }
         return self
     }
@@ -53,7 +60,11 @@ public struct RenderMetrics: Codable, Equatable, Sendable {
     public let totalMilliseconds: Double
     public let inputPixelCount: Int
     public let outputPixelCount: Int
-    public let estimatedTextureBytes: Int
+    public let expandedNodeCount: Int
+    public let renderedLayerCount: Int
+    public let estimatedPeakTextureBytes: Int
+
+    public var estimatedTextureBytes: Int { estimatedPeakTextureBytes }
 
     public init(
         cpuEncodingMilliseconds: Double,
@@ -61,14 +72,38 @@ public struct RenderMetrics: Codable, Equatable, Sendable {
         totalMilliseconds: Double,
         inputPixelCount: Int,
         outputPixelCount: Int,
-        estimatedTextureBytes: Int
+        estimatedTextureBytes: Int,
+        expandedNodeCount: Int = 0,
+        renderedLayerCount: Int = 0
     ) {
         self.cpuEncodingMilliseconds = cpuEncodingMilliseconds
         self.gpuExecutionMilliseconds = gpuExecutionMilliseconds
         self.totalMilliseconds = totalMilliseconds
         self.inputPixelCount = inputPixelCount
         self.outputPixelCount = outputPixelCount
-        self.estimatedTextureBytes = estimatedTextureBytes
+        self.expandedNodeCount = expandedNodeCount
+        self.renderedLayerCount = renderedLayerCount
+        self.estimatedPeakTextureBytes = estimatedTextureBytes
+    }
+
+    public init(
+        cpuEncodingMilliseconds: Double,
+        gpuExecutionMilliseconds: Double?,
+        totalMilliseconds: Double,
+        inputPixelCount: Int,
+        outputPixelCount: Int,
+        expandedNodeCount: Int,
+        renderedLayerCount: Int,
+        estimatedPeakTextureBytes: Int
+    ) {
+        self.cpuEncodingMilliseconds = cpuEncodingMilliseconds
+        self.gpuExecutionMilliseconds = gpuExecutionMilliseconds
+        self.totalMilliseconds = totalMilliseconds
+        self.inputPixelCount = inputPixelCount
+        self.outputPixelCount = outputPixelCount
+        self.expandedNodeCount = expandedNodeCount
+        self.renderedLayerCount = renderedLayerCount
+        self.estimatedPeakTextureBytes = estimatedPeakTextureBytes
     }
 }
 
@@ -86,13 +121,20 @@ public struct RenderRequest: Codable, Equatable, Sendable {
     public let graph: RenderGraph
     public let time: RationalTime
     public let output: RenderOutputSpecification
+    public let context: RenderCacheContext?
 
-    public init(graph: RenderGraph, time: RationalTime, output: RenderOutputSpecification) throws {
+    public init(
+        graph: RenderGraph,
+        time: RationalTime,
+        output: RenderOutputSpecification,
+        context: RenderCacheContext? = nil
+    ) throws {
         guard time.value >= 0 else { throw RenderError.invalidRequest("Render time must be non-negative.") }
         self.graph = graph
         self.time = time
         self.output = output
-        _ = try graph.validatedNodes()
+        self.context = context
+        _ = try graph.evaluationPlan()
     }
 
     public var cacheKey: RenderCacheKey {

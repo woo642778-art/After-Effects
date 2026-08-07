@@ -61,7 +61,7 @@ public protocol ProjectMigrator: Sendable {
 }
 
 public struct ProjectMigrationRegistry: Sendable {
-    public static let current = ProjectMigrationRegistry(migrators: [])
+    public static let current = ProjectMigrationRegistry(migrators: [Schema1To2Migrator()])
 
     private let migrators: [any ProjectMigrator]
 

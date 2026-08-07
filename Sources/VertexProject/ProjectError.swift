@@ -26,6 +26,7 @@ public enum ProjectError: Error, Equatable, Sendable, LocalizedError {
     case relinkMismatch(String)
     case embeddingFailure(String)
     case invalidPackagePath(String)
+    case nestedCompositionCycle([String])
     case cancelled
 
     public var code: String {
@@ -55,6 +56,7 @@ public enum ProjectError: Error, Equatable, Sendable, LocalizedError {
         case .relinkMismatch: "project.relink-mismatch"
         case .embeddingFailure: "project.embedding-failure"
         case .invalidPackagePath: "project.invalid-package-path"
+        case .nestedCompositionCycle: "project.nested-composition-cycle"
         case .cancelled: "project.cancelled"
         }
     }
@@ -95,6 +97,8 @@ public enum ProjectError: Error, Equatable, Sendable, LocalizedError {
             "Command \(commandID) has already been applied."
         case .journalGap(let expected, let actual):
             "Journal sequence gap. Expected \(expected), found \(actual)."
+        case .nestedCompositionCycle(let ids):
+            "Nested composition cycle: \(ids.joined(separator: " -> "))."
         case .cancelled:
             "The project operation was cancelled."
         }

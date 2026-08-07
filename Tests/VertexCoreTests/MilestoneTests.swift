@@ -1,15 +1,15 @@
 import Testing
 @testable import VertexCore
 
-@Test("Phase 5 is the active implemented milestone")
-func phaseFiveIsActiveMilestone() {
+@Test("Phase 6 is the active implemented milestone")
+func phaseSixIsActiveMilestone() {
     let milestone = MilestoneCatalog.current
 
-    #expect(milestone.number == 5)
+    #expect(milestone.number == 6)
     #expect(milestone.status == .implemented)
-    #expect(milestone.title == "Project Persistence and Recovery")
-    #expect(milestone.deliverables.contains { $0.contains("write-ahead journal") })
-    #expect(milestone.deliverables.contains { $0.contains("5.0.0") })
+    #expect(milestone.title == "Layers, Compositions, and Multi-Source Rendering")
+    #expect(milestone.deliverables.contains { $0.contains("schema 2") })
+    #expect(milestone.deliverables.contains { $0.contains("6.0.0") })
 }
 
 @Test("Core source candidates retain explicit adoption boundaries")
@@ -21,7 +21,6 @@ func sourceCandidatesHaveBoundaries() {
     #expect(repositories.contains("Apple AVFoundation"))
     #expect(repositories.contains("Apple Metal"))
     #expect(repositories.contains("MetalPetal/MetalPetal"))
-    #expect(repositories.contains("MetalPetal/VideoIO"))
     #expect(repositories.contains("ruanjx/VideoLab"))
     #expect(sources.allSatisfy { !$0.license.isEmpty && !$0.purpose.isEmpty })
 }
@@ -30,22 +29,20 @@ func sourceCandidatesHaveBoundaries() {
 func gpuCandidatesRemainIsolated() {
     let sources = MilestoneCatalog.current.sourceAdoptions
     let metalPetal = sources.first { $0.repository == "MetalPetal/MetalPetal" }
-    let videoIO = sources.first { $0.repository == "MetalPetal/VideoIO" }
 
     #expect(metalPetal?.mode == .researchOnly)
-    #expect(videoIO?.mode == .researchOnly)
 }
 
-@Test("GPL UI source remains isolated to behavioral reference")
-func gplSourceIsNotAdoptedIntoProduct() {
-    let miniCut = MilestoneCatalog.current.sourceAdoptions.first { $0.repository == "fwcd/mini-cut" }
-    #expect(miniCut?.mode == .behavioralReference)
+@Test("Design references remain non-product dependencies")
+func designReferencesRemainIsolated() {
+    let videoLab = MilestoneCatalog.current.sourceAdoptions.first { $0.repository == "ruanjx/VideoLab" }
+    #expect(videoLab?.mode == .designReference)
 }
 
 @Test("Artifact policy fixes the phase-major version and signing boundary")
 func artifactPolicyIsExplicit() {
     let policy = MilestoneCatalog.current.artifactPolicy.lowercased()
-    #expect(policy.contains("after-effects-5.0.0-unsigned.ipa"))
+    #expect(policy.contains("after-effects-6.0.0-unsigned.ipa"))
     #expect(policy.contains("signing credentials"))
-    #expect(policy.contains("major version"))
+    #expect(policy.contains("phase 6"))
 }
