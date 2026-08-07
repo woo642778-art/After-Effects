@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/phase-6-persistence-integration
+  pull_request:
+    branches:
+      - agent/phase-5-project-persistence
 
 permissions:
   contents: write
@@ -39,6 +42,7 @@ jobs:
           fi
           rm -rf .integration
           rm -f .github/workflows/export-integration-sources.yml
+          rm -f .github/workflows/apply-phase6-integration.yml
           git add -A
           git commit -m "merge: integrate corrected Phase 5 persistence"
           git push origin HEAD:agent/phase-6-persistence-integration --force
