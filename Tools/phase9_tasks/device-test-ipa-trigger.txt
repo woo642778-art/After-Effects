@@ -1,0 +1,2 @@
+Trigger temporary Vertex2 9.0 device-test IPA packaging from the Phase 9 release staging head.
+Retry 2 after diagnostic packaging workflow update.

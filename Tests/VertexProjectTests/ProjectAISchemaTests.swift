@@ -35,12 +35,12 @@ private func aiAsset() -> ProjectAIAsset {
     )
 }
 
-@Test("New projects use schema 3 and app version 7")
-func newProjectUsesSchema3() throws {
+@Test("New projects use schema 5 and app version 9")
+func newProjectUsesCurrentPhase9Schema() throws {
     let document = try aiDocument()
-    #expect(ProjectDocument.currentSchemaVersion == 3)
-    #expect(ProjectDocument.currentAppVersion == "7.0.0")
-    #expect(document.schemaVersion == 3)
+    #expect(ProjectDocument.currentSchemaVersion == 5)
+    #expect(ProjectDocument.currentAppVersion == "9.0.0")
+    #expect(document.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(document.aiAssetRegistry.isEmpty)
 }
 

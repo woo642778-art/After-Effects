@@ -19,14 +19,17 @@ struct IPadEditorWorkspaceView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 ScrollView {
-                    AIWorkspaceView()
+                    VStack(spacing: 10) {
+                        EffectControlsView()
+                        GraphEditorView(editorState: editorState)
+                    }
                 }
-                .frame(minWidth: 270, idealWidth: 310, maxWidth: 360)
+                .frame(minWidth: 300, idealWidth: 340, maxWidth: 410)
             }
             .frame(maxHeight: .infinity)
 
-            WorkspaceTimelineOverview(editorState: editorState)
-                .frame(minHeight: 190, idealHeight: 250, maxHeight: 320)
+            AETimelineView(editorState: editorState)
+                .frame(minHeight: 220, idealHeight: 300, maxHeight: 390)
         }
         .padding(8)
     }

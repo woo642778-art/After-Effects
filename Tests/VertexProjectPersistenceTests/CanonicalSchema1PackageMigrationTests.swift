@@ -71,7 +71,7 @@ private func writeNativeSchema1Package(at url: URL) throws -> (VertexID, VertexI
     return (projectID, compositionID, mediaID)
 }
 
-@Test("Native schema 1 vertexproject opens by atomically migrating through schema 3")
+@Test("Native schema 1 vertexproject opens by atomically migrating to the current schema")
 func nativeSchema1PackageMigratesOnOpen() throws {
     let url = schema1PackageURL()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -81,8 +81,8 @@ func nativeSchema1PackageMigratesOnOpen() throws {
         Issue.record("Native schema 1 package should migrate without a pending user decision.")
         return
     }
-    #expect(snapshot.document.schemaVersion == 3)
-    #expect(snapshot.manifest.schemaVersion == 3)
+    #expect(snapshot.document.schemaVersion == ProjectDocument.currentSchemaVersion)
+    #expect(snapshot.manifest.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(snapshot.document.projectID == identities.0)
     #expect(snapshot.document.activeCompositionID == identities.1)
     #expect(snapshot.document.selectedMediaID == identities.2)
@@ -93,12 +93,12 @@ func nativeSchema1PackageMigratesOnOpen() throws {
     #expect(!FileManager.default.fileExists(atPath: snapshot.layout.pendingSaveURL.path))
 
     let persistedHeader = try ProjectSchemaHeader.decode(from: Data(contentsOf: snapshot.layout.projectURL))
-    #expect(persistedHeader.schemaVersion == 3)
+    #expect(persistedHeader.schemaVersion == ProjectDocument.currentSchemaVersion)
     let persistedManifest = try VertexProjectManifestCodec().decode(Data(contentsOf: snapshot.layout.manifestURL))
-    #expect(persistedManifest.schemaVersion == 3)
+    #expect(persistedManifest.schemaVersion == ProjectDocument.currentSchemaVersion)
 
     guard case .opened(let reopened) = try VertexProjectPackageStore().open(at: url) else {
-        Issue.record("Migrated schema 3 package should reopen directly.")
+        Issue.record("Migrated current-schema package should reopen directly.")
         return
     }
     #expect(reopened.document == snapshot.document)

@@ -14,13 +14,18 @@ struct IPhoneEditorWorkspaceView: View {
             }
             .pickerStyle(.segmented)
 
-            ScrollView {
-                switch editorState.compactPanel {
-                case .timeline:
-                    WorkspaceTimelineOverview(editorState: editorState)
-                case .effects:
-                    AIWorkspaceView()
-                case .project:
+            switch editorState.compactPanel {
+            case .timeline:
+                AETimelineView(editorState: editorState)
+            case .effects:
+                ScrollView {
+                    VStack(spacing: 10) {
+                        EffectControlsView()
+                        GraphEditorView(editorState: editorState)
+                    }
+                }
+            case .project:
+                ScrollView {
                     VStack(spacing: 12) {
                         ProjectWorkspaceView()
                         MediaImportView()

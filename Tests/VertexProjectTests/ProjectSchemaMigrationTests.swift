@@ -43,17 +43,17 @@ private func schema1Bytes(selectedMedia: Bool) throws -> Data {
     return try encoder.encode(legacy)
 }
 
-@Test("Schema 1 migrates deterministically through schema 2 to canonical schema 3")
-func schema1MigratesToSchema3() throws {
+@Test("Schema 1 migrates deterministically through every registered migration to the current schema")
+func schema1MigratesToCurrentSchema() throws {
     let source = try schema1Bytes(selectedMedia: true)
     let codec = DeterministicProjectCodec()
     let first = try codec.decode(source)
     let second = try codec.decode(source)
 
     #expect(first == second)
-    #expect(first.schemaVersion == 3)
-    #expect(first.minimumReaderVersion == 3)
-    #expect(first.metadata.lastSavedByAppVersion == "7.0.0")
+    #expect(first.schemaVersion == ProjectDocument.currentSchemaVersion)
+    #expect(first.minimumReaderVersion == ProjectDocument.currentSchemaVersion)
+    #expect(first.metadata.lastSavedByAppVersion == ProjectDocument.currentAppVersion)
     #expect(first.revision == 7)
     #expect(first.compositionRegistry.count == 1)
     #expect(first.layerRegistry.count == 1)
@@ -76,10 +76,10 @@ func schema1MigratesToSchema3() throws {
     #expect(!json.contains("renderSettings"))
 }
 
-@Test("Schema 1 without selected media creates an empty composition")
+@Test("Schema 1 without selected media creates an empty current-schema composition")
 func schema1WithoutSelectionCreatesEmptyComposition() throws {
     let migrated = try DeterministicProjectCodec().decode(schema1Bytes(selectedMedia: false))
-    #expect(migrated.schemaVersion == 3)
+    #expect(migrated.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(migrated.compositionRegistry.count == 1)
     #expect(migrated.layerRegistry.isEmpty)
     #expect(migrated.aiAssetRegistry.isEmpty)
