@@ -72,10 +72,10 @@ private func makeDocument(
     )
 }
 
-@Test("New schema 3 projects contain one active empty composition and no AI assets")
+@Test("New current-schema projects contain one active empty composition and no AI assets")
 func newProjectContainsMainComposition() throws {
     let project = try ProjectDocument.makeNew(id: projectID, name: "New", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
-    #expect(project.schemaVersion == 3)
+    #expect(project.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(project.compositionRegistry.count == 1)
     #expect(project.layerRegistry.isEmpty)
     #expect(project.aiAssetRegistry.isEmpty)
@@ -83,7 +83,7 @@ func newProjectContainsMainComposition() throws {
     #expect(project.compositionRegistry[0].name == "Main Composition")
 }
 
-@Test("Canonical schema 3 preserves authoritative Z-order")
+@Test("Canonical project preserves authoritative Z-order")
 func canonicalSchemaPreservesZOrder() throws {
     let composition = makeComposition(layerIDs: [topLayerID, bottomLayerID])
     let top = makeMediaLayer(id: topLayerID, compositionID: composition.id, mediaID: mediaID, name: "Top")
