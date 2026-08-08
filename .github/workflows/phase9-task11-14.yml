@@ -1,20 +1,19 @@
-name: Phase 9 Tasks 11-14
+name: Phase 9 Tasks 11-14 GREEN
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches:
-      - agent/phase9-task11-14-runner
+    branches: [agent/phase9-task11-14-runner]
 
 permissions:
   contents: write
   pull-requests: read
 
 jobs:
-  editor-red:
+  editor-green:
     if: startsWith(github.head_ref, 'agent/phase9-task11-14-staging')
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,43 +21,78 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup
         run: |
+          set -euo pipefail
           sudo xcode-select -s /Applications/Xcode.app
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          git config user.name vertex2-phase9-bot
+          git config user.email actions@users.noreply.github.com
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('App/ProjectWorkspaceViewModel.swift')
+          t=p.read_text()
+          old='    private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {'
+          new='    func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {'
+          if old not in t and new not in t: raise SystemExit('perform anchor missing')
+          if old in t: p.write_text(t.replace(old,new,1))
+          PY
           bash Tools/generate_app_assets.sh
           xcodegen generate
-      - name: Select iPhone simulator
+      - name: Select simulators
         run: |
           python3 - <<'PY' >> "$GITHUB_ENV"
           import json,re,subprocess
           p=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
-          rows=[]
+          iph=[]; ipad=[]
           for runtime,devs in p.get('devices',{}).items():
             m=re.search(r'iOS-(\d+)-(\d+)',runtime)
             if not m: continue
             v=(int(m.group(1)),int(m.group(2)))
             for d in devs:
-              if d.get('isAvailable') and d['name'].startswith('iPhone'): rows.append((v,d['name'],d['udid']))
-          rows.sort(reverse=True)
-          if not rows: raise SystemExit('No iPhone simulator')
-          print('IPHONE_UDID='+rows[0][2])
+              if not d.get('isAvailable'): continue
+              row=(v,d['name'],d['udid'])
+              if d['name'].startswith('iPhone'): iph.append(row)
+              if d['name'].startswith('iPad'): ipad.append(row)
+          iph.sort(reverse=True); ipad.sort(reverse=True)
+          if not iph or not ipad: raise SystemExit('Missing iPhone or iPad simulator')
+          print('IPHONE_UDID='+iph[0][2]); print('IPAD_UDID='+ipad[0][2])
           PY
-      - name: RED - editor integration types are absent
+      - name: iPhone editor GREEN
         run: |
-          set +e
-          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" -derivedDataPath "$PWD/DDPhase9EditorRed" CODE_SIGNING_ALLOWED=NO \
+          set -o pipefail
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" -derivedDataPath "$PWD/DDPhase9EditorPhone" CODE_SIGNING_ALLOWED=NO \
             -only-testing:VertexAppTests/AETimelineInteractionTests \
             -only-testing:VertexAppTests/EffectControlsInteractionTests \
             -only-testing:VertexAppTests/GraphEditorInteractionTests \
-            -only-testing:VertexAppTests/AIEffectFailureSemanticsTests > "$RUNNER_TEMP/phase9-editor-red.log" 2>&1
-          s=$?
-          set -e
-          test "$s" -ne 0
-          grep -Eq "cannot find '(AETimelineInteractionModel|EffectControlAction|GraphEditorMath|AIEffectPresentationState)' in scope" "$RUNNER_TEMP/phase9-editor-red.log"
-      - name: Upload RED log
+            -only-testing:VertexAppTests/AIEffectFailureSemanticsTests \
+            -only-testing:VertexAppTests/EditorWorkspaceStateTests \
+            -only-testing:VertexAppTests/AppStartupStateTests | tee "$RUNNER_TEMP/phase9-editor-phone.log"
+      - name: iPad editor GREEN
+        run: |
+          set -o pipefail
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPAD_UDID" -derivedDataPath "$PWD/DDPhase9EditorPad" CODE_SIGNING_ALLOWED=NO \
+            -only-testing:VertexAppTests/AETimelineInteractionTests \
+            -only-testing:VertexAppTests/EffectControlsInteractionTests \
+            -only-testing:VertexAppTests/GraphEditorInteractionTests \
+            -only-testing:VertexAppTests/AIEffectFailureSemanticsTests | tee "$RUNNER_TEMP/phase9-editor-pad.log"
+      - name: Portable render and timeline regression
+        run: |
+          set -o pipefail
+          swift test --filter EffectPreviewExportParityTests | tee "$RUNNER_TEMP/phase9-parity.log"
+          swift test --filter VertexTimelineTests | tee "$RUNNER_TEMP/phase9-timeline.log"
+          git diff --check
+      - name: Commit validated bridge visibility
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- App/ProjectWorkspaceViewModel.swift; then
+            git add App/ProjectWorkspaceViewModel.swift
+            git commit -m 'feat(ui): expose project command bridge to phase9 editor'
+            git push origin HEAD:"${{ github.head_ref }}"
+          fi
+      - name: Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase9-task11-14-red-log
-          path: ${{ runner.temp }}/phase9-editor-red.log
-          if-no-files-found: error
+          name: phase9-task11-14-green-logs
+          path: ${{ runner.temp }}/phase9-*.log
+          if-no-files-found: warn
           retention-days: 3
