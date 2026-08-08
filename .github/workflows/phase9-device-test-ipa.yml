@@ -1,0 +1,107 @@
+name: Vertex2 9.0 Device Test IPA
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [agent/phase9-release-runner]
+
+permissions:
+  contents: read
+
+jobs:
+  package-device-test-ipa:
+    if: startsWith(github.head_ref, 'agent/phase9-release-staging')
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Select Xcode and tools
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -version
+          swift --version
+      - name: Verify test-build identity
+        run: |
+          set -euo pipefail
+          grep -q 'MARKETING_VERSION: 9.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 9' project.yml
+          grep -q 'currentAppVersion = "9.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'number: 9' Sources/VertexCore/Milestone.swift
+          git diff --check
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/audit_models.py
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py --source-root .build/ai-source --output-root App/GeneratedAIResources --repository-root .
+          test -f App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+          test -d App/GeneratedAIResources/AIModels/DepthAnythingV2SmallF16.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3-denoise.mlmodelc
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Build unsigned iOS 17 arm64 Release app
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$PWD/DerivedDataDeviceTest" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" clean build | tee "$RUNNER_TEMP/device-test-release-build.log"
+      - name: Inspect and package device-test IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedDataDeviceTest/Build/Products/Release-iphoneos/Vertex2.app"
+          test -d "$APP"
+          test -f "$APP/Assets.car"
+          test -f "$APP/AI_MODEL_MANIFEST.json"
+          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
+          test -f "$APP/Vertex_VertexRenderMetal.bundle/default.metallib"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = 'Vertex2'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = '9.0.0'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '9'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = 'com.woo642778.aftereffects'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")" = '17.0'
+          /usr/bin/file "$APP/Vertex2" | /usr/bin/grep -q arm64
+          test ! -d "$APP/_CodeSignature"
+          test ! -f "$APP/embedded.mobileprovision"
+          rm -rf Payload artifacts-device-test
+          mkdir -p Payload artifacts-device-test
+          cp -R "$APP" Payload/Vertex2.app
+          /usr/bin/zip -qry artifacts-device-test/Vertex2-9.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts-device-test/Vertex2-9.0.0-unsigned.ipa > artifacts-device-test/Vertex2-9.0.0-unsigned.ipa.sha256
+          python3 Tools/ai/audit_ipa.py artifacts-device-test/Vertex2-9.0.0-unsigned.ipa --inventory artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json
+          cp App/GeneratedAIResources/AI_MODEL_MANIFEST.json artifacts-device-test/AI_MODEL_MANIFEST-9.0.json
+          /usr/bin/file "$APP/Vertex2" > artifacts-device-test/Vertex2-9.0.0-binary.txt
+          cat artifacts-device-test/Vertex2-9.0.0-unsigned.ipa.sha256
+          cat artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json
+      - name: Upload device-test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-9.0.0-device-test-unsigned-ipa
+          path: |
+            artifacts-device-test/Vertex2-9.0.0-unsigned.ipa
+            artifacts-device-test/Vertex2-9.0.0-unsigned.ipa.sha256
+            artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json
+            artifacts-device-test/AI_MODEL_MANIFEST-9.0.json
+            artifacts-device-test/Vertex2-9.0.0-binary.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload device-test build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-9.0.0-device-test-build-log
+          path: ${{ runner.temp }}/device-test-release-build.log
+          if-no-files-found: warn
+          retention-days: 7
