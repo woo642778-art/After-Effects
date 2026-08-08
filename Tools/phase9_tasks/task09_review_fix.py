@@ -175,4 +175,20 @@ if "coordinatorRejectsMalformedFinalMedia" not in t:
 }
 '''
 write(p, t)
-print("Task 9 review hardening applied: AVFoundation output validation + malformed-media atomicity test")
+
+# The canonical package location on ProjectWorkspaceViewModel is packageURL.
+view_model_path = "App/ProjectWorkspaceViewModel.swift"
+view_model = read(view_model_path)
+view_model = view_model.replace(
+    'guard let project, let projectURL else { throw ProjectError.invalidOperation("Save the project package before baking AI output.") }',
+    'guard let project, let packageURL else { throw ProjectError.invalidOperation("Save the project package before baking AI output.") }'
+)
+view_model = view_model.replace(
+    'try await coordinator.bake(project: project, packageURL: projectURL, layerID: layerID, effectID: effectID)',
+    'try await coordinator.bake(project: project, packageURL: packageURL, layerID: layerID, effectID: effectID)'
+)
+if "let projectURL" in view_model or "packageURL: projectURL" in view_model:
+    raise RuntimeError("Task 9 ViewModel package URL fix did not apply")
+write(view_model_path, view_model)
+
+print("Task 9 review hardening applied: AVFoundation validation, malformed-media atomicity, canonical packageURL")
