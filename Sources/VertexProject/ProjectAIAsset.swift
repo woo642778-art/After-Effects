@@ -93,3 +93,45 @@ public struct ProjectAIAsset: Codable, Equatable, Sendable, Identifiable {
         return self
     }
 }
+
+
+public struct ProjectAIEffectBakeRegistration: Codable, Equatable, Sendable {
+    public var media: MediaReference
+    public var aiAsset: ProjectAIAsset
+    public var layer: ProjectLayer
+    public var insertionIndex: Int
+
+    public init(media: MediaReference, aiAsset: ProjectAIAsset, layer: ProjectLayer, insertionIndex: Int) {
+        self.media = media
+        self.aiAsset = aiAsset
+        self.layer = layer
+        self.insertionIndex = insertionIndex
+    }
+
+    public func validated(in document: ProjectDocument) throws -> Self {
+        _ = try media.validated()
+        guard insertionIndex >= 0,
+              let composition = document.composition(id: layer.compositionID),
+              insertionIndex <= composition.layerIDs.count else {
+            throw ProjectError.invalidValue("Baked AI layer insertion index is invalid.")
+        }
+        guard document.mediaRegistry.allSatisfy({ $0.id != media.id }),
+              document.aiAssetRegistry.allSatisfy({ $0.id != aiAsset.id }),
+              document.layerRegistry.allSatisfy({ $0.id != layer.id }) else {
+            throw ProjectError.duplicateIdentity("baked AI registration")
+        }
+        guard case .media(let outputMediaID, _) = layer.source, outputMediaID == media.id,
+              aiAsset.outputMediaID == media.id,
+              document.mediaRegistry.contains(where: { $0.id == aiAsset.sourceMediaID }) else {
+            throw ProjectError.invalidValue("Baked AI registration media relationships are inconsistent.")
+        }
+        var candidate = document
+        candidate.mediaRegistry.append(media)
+        candidate.aiAssetRegistry.append(aiAsset)
+        candidate.layerRegistry.append(layer)
+        candidate.compositionRegistry[candidate.compositionRegistry.firstIndex(where: { $0.id == layer.compositionID })!].layerIDs.insert(layer.id, at: insertionIndex)
+        candidate.selectedLayerID = layer.id
+        _ = try candidate.validated()
+        return self
+    }
+}

@@ -63,6 +63,11 @@ public struct ProjectCommandEngine: Sendable {
             }
             forward = .removeAIAsset(asset)
 
+
+        case .registerBakedAIEffect(let registration):
+            _ = try registration.validated(in: document)
+            forward = .registerBakedAIEffect(registration, previousSelectedLayerID: document.selectedLayerID)
+
         case .setRenderParameter(let parameter, let value):
             guard value.isFinite else { throw ProjectError.invalidValue("Render parameter must be finite.") }
             let previous = document.renderSettings.value(for: parameter)
@@ -401,6 +406,37 @@ public struct ProjectCommandEngine: Sendable {
                 throw ProjectError.invalidOperation("AI asset removal precondition did not match.")
             }
             document.aiAssetRegistry.remove(at: index)
+
+
+        case .registerBakedAIEffect(let registration, let previousSelectedLayerID):
+            guard document.selectedLayerID == previousSelectedLayerID else {
+                throw ProjectError.invalidOperation("Baked AI registration selection precondition did not match.")
+            }
+            _ = try registration.validated(in: document)
+            guard let compositionIndex = document.compositionRegistry.firstIndex(where: { $0.id == registration.layer.compositionID }) else {
+                throw ProjectError.invalidOperation("Baked AI owner composition is missing.")
+            }
+            document.mediaRegistry.append(registration.media)
+            document.aiAssetRegistry.append(registration.aiAsset)
+            document.layerRegistry.append(registration.layer)
+            document.compositionRegistry[compositionIndex].layerIDs.insert(registration.layer.id, at: registration.insertionIndex)
+            document.selectedLayerID = registration.layer.id
+
+        case .removeBakedAIEffect(let registration, let restoreSelectedLayerID):
+            guard document.selectedLayerID == registration.layer.id,
+                  let compositionIndex = document.compositionRegistry.firstIndex(where: { $0.id == registration.layer.compositionID }),
+                  document.compositionRegistry[compositionIndex].layerIDs.indices.contains(registration.insertionIndex),
+                  document.compositionRegistry[compositionIndex].layerIDs[registration.insertionIndex] == registration.layer.id,
+                  document.layer(id: registration.layer.id) == registration.layer,
+                  document.mediaRegistry.contains(registration.media),
+                  document.aiAssetRegistry.contains(registration.aiAsset) else {
+                throw ProjectError.invalidOperation("Baked AI removal precondition did not match.")
+            }
+            document.compositionRegistry[compositionIndex].layerIDs.remove(at: registration.insertionIndex)
+            document.layerRegistry.removeAll { $0.id == registration.layer.id }
+            document.aiAssetRegistry.removeAll { $0.id == registration.aiAsset.id }
+            document.mediaRegistry.removeAll { $0.id == registration.media.id }
+            document.selectedLayerID = restoreSelectedLayerID
         case .setRenderParameter(let parameter, let before, let after):
             var settings = document.renderSettings
             guard settings.value(for: parameter) == before else { throw ProjectError.invalidOperation("Render parameter precondition did not match.") }

@@ -520,6 +520,15 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         perform(.setLayerMarkers(id: layer.id, markers: markers), mergeKey: nil)
     }
 
+
+    func bakeEffect(layerID: VertexID, effectID: VertexID) async throws {
+        guard let project, let packageURL else { throw ProjectError.invalidOperation("Save the project package before baking AI output.") }
+        let coordinator = AIEffectBakeCoordinator { [weak self] registration in
+            self?.perform(.registerBakedAIEffect(registration), mergeKey: nil)
+        }
+        try await coordinator.bake(project: project, packageURL: packageURL, layerID: layerID, effectID: effectID)
+    }
+
     func setLayerBlendMode(_ mode: LayerBlendMode) {
         guard let layer = selectedLayer, layer.blendMode != mode else { return }
         perform(.setLayerBlendMode(id: layer.id, mode: mode), mergeKey: nil)
