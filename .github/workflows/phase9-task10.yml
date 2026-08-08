@@ -1,0 +1,84 @@
+name: Phase 9 Task 10 Workspace
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - agent/phase9-task10-runner
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  task10:
+    if: startsWith(github.head_ref, 'agent/phase9-task10-staging')
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          git config user.name vertex2-phase9-bot
+          git config user.email actions@users.noreply.github.com
+      - name: Select simulators
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json,re,subprocess
+          p=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          iph=[]; ipad=[]
+          for runtime,devs in p.get('devices',{}).items():
+            m=re.search(r'iOS-(\d+)-(\d+)',runtime)
+            if not m: continue
+            v=(int(m.group(1)),int(m.group(2)))
+            for d in devs:
+              if not d.get('isAvailable'): continue
+              row=(v,d['name'],d['udid'])
+              if d['name'].startswith('iPhone'): iph.append(row)
+              if d['name'].startswith('iPad'): ipad.append(row)
+          iph.sort(reverse=True); ipad.sort(reverse=True)
+          if not iph or not ipad: raise SystemExit('Missing iPhone or iPad simulator')
+          print('IPHONE_UDID='+iph[0][2]); print('IPAD_UDID='+ipad[0][2])
+          PY
+      - name: Task 10 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task10_red.py
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+          set +e
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" -derivedDataPath "$PWD/DD10Red" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/EditorWorkspaceStateTests > "$RUNNER_TEMP/task10-red.log" 2>&1
+          s=$?
+          set -e
+          test "$s" -ne 0
+          grep -n -C 3 -m 40 -E 'EditorWorkspaceState|error:' "$RUNNER_TEMP/task10-red.log" || true
+      - name: Task 10 GREEN
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task10_green.py
+          xcodegen generate
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" -derivedDataPath "$PWD/DD10Phone" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/EditorWorkspaceStateTests -only-testing:VertexAppTests/AppStartupStateTests | tee "$RUNNER_TEMP/task10-phone.log"
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPAD_UDID" -derivedDataPath "$PWD/DD10Pad" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/EditorWorkspaceStateTests | tee "$RUNNER_TEMP/task10-pad.log"
+          git diff --check
+      - name: Commit Task 10
+        run: |
+          set -euo pipefail
+          git add App/EditorWorkspaceState.swift App/VertexEditorWorkspaceView.swift App/IPadEditorWorkspaceView.swift App/IPhoneEditorWorkspaceView.swift App/RootView.swift App/CompositionPreviewController.swift Tests/VertexAppTests/EditorWorkspaceStateTests.swift
+          git commit -m 'feat(ui): add adaptive AE-style editor workspace shell'
+          git reset --hard HEAD
+          git clean -fd
+          git diff --check HEAD~1..HEAD
+          git push origin HEAD:"${{ github.head_ref }}"
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task10-logs
+          path: ${{ runner.temp }}/task10-*.log
+          if-no-files-found: warn
+          retention-days: 3
