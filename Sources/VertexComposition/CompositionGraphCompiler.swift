@@ -5,13 +5,14 @@ import VertexProject
 import VertexRender
 
 public struct CompositionGraphCompiler: Sendable {
-    public static let compilerVersion = 2
+    public static let compilerVersion = 3
 
     public init() {}
 
     public func compile(
         _ request: CompositionRenderRequest,
         resolver: any CompositionFrameResolver,
+        effectResolver: any CompositionEffectResolver = RejectingCompositionEffectResolver(),
         cancellationToken: RenderCancellationToken
     ) async throws -> RenderRequest {
         let project = try request.project.validated()
@@ -31,6 +32,8 @@ public struct CompositionGraphCompiler: Sendable {
             output: request.output,
             limits: limits,
             resolver: resolver,
+            effectResolver: effectResolver,
+            purpose: request.purpose,
             cancellationToken: cancellationToken
         )
         let rootPath = [request.compositionID.rawValue]
@@ -67,6 +70,8 @@ private final class CompilerState: @unchecked Sendable {
     let output: RenderOutputSpecification
     let limits: CompositionRenderLimits
     let resolver: any CompositionFrameResolver
+    let effectResolver: any CompositionEffectResolver
+    let purpose: CompositionRenderPurpose
     let cancellationToken: RenderCancellationToken
     var nodes: [RenderNode] = []
     var frameCache: [CompositionFrameCacheKey: CompositionFrameResolution] = [:]
@@ -76,12 +81,16 @@ private final class CompilerState: @unchecked Sendable {
         output: RenderOutputSpecification,
         limits: CompositionRenderLimits,
         resolver: any CompositionFrameResolver,
+        effectResolver: any CompositionEffectResolver,
+        purpose: CompositionRenderPurpose,
         cancellationToken: RenderCancellationToken
     ) {
         self.project = project
         self.output = output
         self.limits = limits
         self.resolver = resolver
+        self.effectResolver = effectResolver
+        self.purpose = purpose
         self.cancellationToken = cancellationToken
     }
 
@@ -228,9 +237,39 @@ private final class CompilerState: @unchecked Sendable {
             let sourceTime = try compositionTime
                 .subtracting(layer.timing.startTime)
                 .adding(sourceStartTime)
+                .adding(layer.timing.sourceOffset)
             guard sourceTime >= .zero else { return nil }
             let resolution = try await resolveFrame(mediaID: mediaID, time: sourceTime)
-            guard case .frame(let image) = resolution else { return nil }
+            guard case .frame(let decodedImage) = resolution else { return nil }
+            var image = decodedImage
+            for effect in layer.effects where effect.enabled {
+                try await cancellationToken.throwIfCancelled()
+                let evaluatedEffect = try EffectAnimationEvaluator.evaluate(
+                    effect: effect,
+                    channels: layer.animationChannels,
+                    at: compositionTime
+                )
+                do {
+                    image = try await effectResolver.resolve(CompositionEffectRequest(
+                        projectID: project.projectID,
+                        projectRevision: project.revision,
+                        compositionID: layer.compositionID,
+                        layerID: layer.id,
+                        effect: evaluatedEffect,
+                        exactCompositionTime: compositionTime,
+                        exactSourceTime: sourceTime,
+                        input: image,
+                        targetSize: VertexSize(width: Double(output.width), height: Double(output.height)),
+                        purpose: purpose
+                    ))
+                } catch let error as CompositionError {
+                    throw error
+                } catch {
+                    throw CompositionError.graphCompilationFailed(
+                        "Effect \(effect.type.rawValue) on layer \(layer.id.rawValue) failed at \(compositionTime.description): \(error.localizedDescription)"
+                    )
+                }
+            }
             sourceID = try nodeID(path: path, role: "source")
             try append(RenderNode(
                 id: sourceID,
@@ -239,9 +278,13 @@ private final class CompilerState: @unchecked Sendable {
             ))
 
         case .composition(let childID, let sourceStartTime):
+            guard !layer.effects.contains(where: \.enabled) else {
+                throw CompositionError.graphCompilationFailed("Phase 9 AI effects cannot be applied to nested-composition layers until nested output materialization is implemented.")
+            }
             let childTime = try compositionTime
                 .subtracting(layer.timing.startTime)
                 .adding(sourceStartTime)
+                .adding(layer.timing.sourceOffset)
             guard childTime >= .zero else { return nil }
             guard let child = project.composition(id: childID) else {
                 throw CompositionError.missingComposition(childID.rawValue)

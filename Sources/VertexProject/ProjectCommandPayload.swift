@@ -9,6 +9,7 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setEmbeddedPath(id: VertexID, path: String?)
     case registerAIAsset(ProjectAIAsset)
     case removeAIAsset(id: VertexID)
+    case registerBakedAIEffect(ProjectAIEffectBakeRegistration)
 
     // Transitional non-persistent Render Lab compatibility while the Phase 6
     // workspace is being reconnected. These mutate actual composition/layer
@@ -26,6 +27,9 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setCompositionDuration(id: VertexID, duration: RationalTime)
     case setCompositionFrameRate(id: VertexID, frameRate: RationalTime)
     case setCompositionBackground(id: VertexID, color: ProjectRGBAColor)
+    case setCompositionWorkArea(id: VertexID, workArea: ProjectWorkArea?)
+    case setCompositionMarkers(id: VertexID, markers: [ProjectMarker])
+    case applyTimelineEdit(compositionID: VertexID, result: TimelineProjectMutation)
 
     case insertLayer(ProjectLayer, index: Int)
     case removeLayer(id: VertexID)
@@ -38,7 +42,14 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setLayerTransform(id: VertexID, transform: LayerTransform)
     case setLayerBlendMode(id: VertexID, mode: LayerBlendMode)
     case setLayerSource(id: VertexID, source: LayerSource)
+    case setLayerMarkers(id: VertexID, markers: [ProjectMarker])
+    case setLayerParent(id: VertexID, parentLayerID: VertexID?)
     case setLayerOperations(id: VertexID, operations: [LayerOperation])
+    case setLayerEffects(id: VertexID, effects: [ProjectEffect])
+    case insertLayerEffect(id: VertexID, effect: ProjectEffect, index: Int)
+    case removeLayerEffect(id: VertexID, effectID: VertexID)
+    case moveLayerEffect(id: VertexID, effectID: VertexID, toIndex: Int)
+    case setLayerEffectEnabled(id: VertexID, effectID: VertexID, value: Bool)
     case setLayerMotionState(
         id: VertexID,
         animationChannels: [ProjectAnimationChannel],

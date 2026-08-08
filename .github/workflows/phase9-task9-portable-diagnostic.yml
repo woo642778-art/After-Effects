@@ -1,0 +1,53 @@
+name: Phase 9 Task 9 Portable Diagnostic
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - agent/phase9-sdd-runner
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-task9-portable:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+      - name: Task 9 RED
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task09_red.py
+          set +e
+          swift test --filter AIEffectBakeCommandTests > "$RUNNER_TEMP/task9-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/task9-red.log"
+          test "$status" -ne 0
+      - name: Task 9 GREEN generator
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task09_anchor_fix.py
+          python3 Tools/phase9_tasks/task09_green.py 2>&1 | tee "$RUNNER_TEMP/task9-python.log"
+          python3 Tools/phase9_tasks/task09_review_fix.py
+      - name: Task 9 GREEN portable tests
+        run: |
+          set -o pipefail
+          swift test --filter AIEffectBakeCommandTests 2>&1 | tee "$RUNNER_TEMP/task9-swift.log"
+          git diff --check
+      - name: Upload Task 9 portable diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task9-portable-diagnostics
+          path: ${{ runner.temp }}/task9-*.log
+          if-no-files-found: warn
+          retention-days: 3

@@ -21,6 +21,7 @@ public enum LayerAnimationEvaluator {
         let maskIndices = Dictionary(uniqueKeysWithValues: masks.enumerated().map { ($0.element.id, $0.offset) })
 
         for channel in layer.animationChannels {
+            if case .effect = channel.property { continue }
             let value = try channel.evaluatedValue(at: time)
             switch (channel.property, value) {
             case (.layer(let property), .scalar(let scalar)):
