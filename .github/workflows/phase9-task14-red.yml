@@ -1,0 +1,30 @@
+name: Phase 9 Task 14 RED
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [agent/phase9-task11-14-runner]
+
+jobs:
+  task14-red:
+    if: startsWith(github.head_ref, 'agent/phase9-task11-14-staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prove contextual effect error is missing
+        run: |
+          set +e
+          swift test --filter EffectPreviewExportParityTests > "$RUNNER_TEMP/task14-red.log" 2>&1
+          s=$?
+          set -e
+          test "$s" -ne 0
+          grep -q "effectResolutionFailed" "$RUNNER_TEMP/task14-red.log"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task14-red
+          path: ${{ runner.temp }}/task14-red.log
+          retention-days: 3
