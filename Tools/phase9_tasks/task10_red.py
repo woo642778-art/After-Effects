@@ -26,16 +26,17 @@ private func workspaceFixture() throws -> ProjectDocument {
         timing: timing
     )
     let secondID = VertexID()
-    let second = try ProjectComposition(
+    let second = ProjectComposition(
         id: secondID,
         name: "Second",
         width: 1920,
         height: 1080,
-        frameRate: RationalTime(value: 30, timescale: 1),
         duration: RationalTime(value: 5, timescale: 1),
-        backgroundColor: .black,
+        frameRate: RationalTime(value: 30, timescale: 1),
+        color: project.compositionRegistry[firstIndex].color,
+        backgroundColor: .transparent,
         layerIDs: []
-    ).validated()
+    )
     project.layerRegistry.append(firstLayer)
     project.compositionRegistry[firstIndex].layerIDs = [firstLayer.id]
     project.compositionRegistry.append(second)
@@ -60,17 +61,15 @@ private func workspaceFixture() throws -> ProjectDocument {
         Issue.record("Fixture incomplete")
         return
     }
-    stateful: do {
-        let state = EditorWorkspaceState()
-        state.selectedLayerIDs = [firstLayer.id]
-        state.selectedKeyframeIDs = [VertexID()]
-        state.synchronize(project: project)
-        #expect(state.selectedLayerIDs == [firstLayer.id])
-        project.activeCompositionID = second.id
-        state.synchronize(project: project)
-        #expect(state.selectedLayerIDs.isEmpty)
-        #expect(state.selectedKeyframeIDs.isEmpty)
-    }
+    let state = EditorWorkspaceState()
+    state.selectedLayerIDs = [firstLayer.id]
+    state.selectedKeyframeIDs = [VertexID()]
+    state.synchronize(project: project)
+    #expect(state.selectedLayerIDs == [firstLayer.id])
+    project.activeCompositionID = second.id
+    state.synchronize(project: project)
+    #expect(state.selectedLayerIDs.isEmpty)
+    #expect(state.selectedKeyframeIDs.isEmpty)
 }
 
 @Test("Presentation-only workspace state never mutates the project document")
