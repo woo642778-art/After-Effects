@@ -45,10 +45,116 @@ jobs:
           if not iph or not ipad: raise SystemExit('Missing iPhone or iPad simulator')
           print('IPHONE_UDID='+iph[0][2]); print('IPAD_UDID='+ipad[0][2])
           PY
+      - name: Write current-API workspace tests
+        run: |
+          cat > "$RUNNER_TEMP/editor-tests.swift" <<'SWIFT'
+          import Testing
+          import VertexCore
+          import VertexProject
+          @testable import Vertex
+
+          private func workspaceFixture() throws -> ProjectDocument {
+              var project = try ProjectDocument.makeNew(name: "Workspace")
+              guard let firstID = project.activeCompositionID,
+                    let firstIndex = project.compositionRegistry.firstIndex(where: { $0.id == firstID }) else {
+                  throw ProjectError.invalidOperation("Fixture has no active composition")
+              }
+              let firstComposition = project.compositionRegistry[firstIndex]
+              let timing = try LayerTiming(
+                  startTime: .zero,
+                  inPoint: .zero,
+                  outPoint: RationalTime(value: 5, timescale: 1),
+                  sourceOffset: .zero
+              ).validated(for: firstComposition)
+              let firstLayer = ProjectLayer(
+                  compositionID: firstID,
+                  name: "First",
+                  source: .null,
+                  timing: timing
+              )
+              let secondID = VertexID()
+              let second = ProjectComposition(
+                  id: secondID,
+                  name: "Second",
+                  width: 1920,
+                  height: 1080,
+                  duration: RationalTime(value: 5, timescale: 1),
+                  frameRate: RationalTime(value: 30, timescale: 1),
+                  color: firstComposition.color,
+                  backgroundColor: .transparent,
+                  layerIDs: []
+              )
+              project.layerRegistry.append(firstLayer)
+              project.compositionRegistry[firstIndex].layerIDs = [firstLayer.id]
+              project.compositionRegistry.append(second)
+              project.selectedLayerID = firstLayer.id
+              return try project.validated()
+          }
+
+          @Test("Editor workspace clamps exact playhead to active composition duration")
+          @MainActor func workspaceClampsPlayhead() throws {
+              let project = try workspaceFixture()
+              let state = EditorWorkspaceState()
+              state.playhead = RationalTime(value: 50, timescale: 1)
+              state.synchronize(project: project)
+              guard let id = project.activeCompositionID, let composition = project.composition(id: id) else {
+                  Issue.record("Missing active composition")
+                  return
+              }
+              #expect(state.playhead == composition.duration)
+          }
+
+          @Test("Changing active composition removes invalid layer and keyframe selection")
+          @MainActor func workspaceFiltersSelectionWhenCompositionChanges() throws {
+              var project = try workspaceFixture()
+              guard let firstLayer = project.layerRegistry.first,
+                    let second = project.compositionRegistry.last else {
+                  Issue.record("Fixture incomplete")
+                  return
+              }
+              let state = EditorWorkspaceState()
+              state.selectedLayerIDs = [firstLayer.id]
+              state.selectedKeyframeIDs = [VertexID()]
+              state.synchronize(project: project)
+              #expect(state.selectedLayerIDs == [firstLayer.id])
+              project.activeCompositionID = second.id
+              project.selectedLayerID = nil
+              state.synchronize(project: project)
+              #expect(state.selectedLayerIDs.isEmpty)
+              #expect(state.selectedKeyframeIDs.isEmpty)
+          }
+
+          @Test("Presentation-only workspace state never mutates the project document")
+          @MainActor func workspacePresentationStateIsDocumentNeutral() throws {
+              let project = try workspaceFixture()
+              let snapshot = project
+              let state = EditorWorkspaceState()
+              state.synchronize(project: project)
+              state.compactPanel = .effects
+              state.graphMode = .value
+              state.snappingEnabled = false
+              state.pixelsPerSecond = 240
+              state.activeTool = .slip
+              #expect(project == snapshot)
+          }
+
+          @Test("Exact frame selection derives RationalTime from composition frame rate")
+          @MainActor func workspaceExactFrameTime() throws {
+              let project = try workspaceFixture()
+              guard let id = project.activeCompositionID, let composition = project.composition(id: id) else {
+                  Issue.record("Fixture has no active composition")
+                  return
+              }
+              let state = EditorWorkspaceState()
+              state.setPlayhead(frameIndex: 15, composition: composition)
+              #expect(state.playhead == RationalTime(value: 1, timescale: 2))
+          }
+          SWIFT
       - name: Task 10 RED
         run: |
           set -euo pipefail
           python3 Tools/phase9_tasks/task10_red.py
+          cp "$RUNNER_TEMP/editor-tests.swift" Tests/VertexAppTests/EditorWorkspaceStateTests.swift
           bash Tools/generate_app_assets.sh
           xcodegen generate
           set +e
@@ -56,11 +162,22 @@ jobs:
           s=$?
           set -e
           test "$s" -ne 0
-          grep -n -C 3 -m 40 -E 'EditorWorkspaceState|error:' "$RUNNER_TEMP/task10-red.log" || true
+          grep -q "cannot find 'EditorWorkspaceState' in scope" "$RUNNER_TEMP/task10-red.log"
       - name: Task 10 GREEN
         run: |
           set -euo pipefail
           python3 Tools/phase9_tasks/task10_green.py
+          cp "$RUNNER_TEMP/editor-tests.swift" Tests/VertexAppTests/EditorWorkspaceStateTests.swift
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['App/IPadEditorWorkspaceView.swift','App/IPhoneEditorWorkspaceView.swift']:
+              p=Path(name); t=p.read_text(); t=t.replace('Phase8LayerEditorView()', 'AIWorkspaceView()'); p.write_text(t)
+          p=Path('App/RootView.swift'); t=p.read_text()
+          old='''        var gate = OneTimePresentationGate(hasPresented: didPresentTelegramPromotion)\n        guard gate.consumePresentation() else { return }\n        didPresentTelegramPromotion = gate.hasPresented\n        DispatchQueue.main.async { isTelegramPromotionPresented = true }'''
+          new='''        guard !didPresentTelegramPromotion else { return }\n        didPresentTelegramPromotion = true\n        DispatchQueue.main.async { isTelegramPromotionPresented = true }'''
+          if old not in t: raise SystemExit('RootView one-time gate anchor not found')
+          p.write_text(t.replace(old,new))
+          PY
           xcodegen generate
           xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" -derivedDataPath "$PWD/DD10Phone" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/EditorWorkspaceStateTests -only-testing:VertexAppTests/AppStartupStateTests | tee "$RUNNER_TEMP/task10-phone.log"
           xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPAD_UDID" -derivedDataPath "$PWD/DD10Pad" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/EditorWorkspaceStateTests | tee "$RUNNER_TEMP/task10-pad.log"
