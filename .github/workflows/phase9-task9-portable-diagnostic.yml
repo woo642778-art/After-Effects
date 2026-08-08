@@ -32,30 +32,21 @@ jobs:
           set -e
           cat "$RUNNER_TEMP/task9-red.log"
           test "$status" -ne 0
-      - name: Apply Task 9 GREEN script
-        id: green_script
-        continue-on-error: true
+      - name: Task 9 GREEN generator
         run: |
-          set -o pipefail
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task09_anchor_fix.py
           python3 Tools/phase9_tasks/task09_green.py 2>&1 | tee "$RUNNER_TEMP/task9-python.log"
-      - name: Run Task 9 portable tests
-        id: green_swift
-        if: steps.green_script.outcome == 'success'
-        continue-on-error: true
+      - name: Task 9 GREEN portable tests
         run: |
           set -o pipefail
           swift test --filter AIEffectBakeCommandTests 2>&1 | tee "$RUNNER_TEMP/task9-swift.log"
+          git diff --check
       - name: Upload Task 9 portable diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: phase9-task9-portable-diagnostics
           path: ${{ runner.temp }}/task9-*.log
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 3
-      - name: Enforce Task 9 portable GREEN
-        if: always()
-        run: |
-          test '${{ steps.green_script.outcome }}' = 'success'
-          test '${{ steps.green_swift.outcome }}' = 'success'
-          git diff --check
