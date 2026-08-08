@@ -56,10 +56,6 @@ targets.append(.target(
     name: "VertexAIAVFoundation",
     dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]
 ))
-targets.append(.testTarget(
-    name: "VertexAIAVFoundationTests",
-    dependencies: ["VertexAIAVFoundation", "VertexAICoreML", "VertexAI", "VertexCore"]
-))
 #endif
 
 let package = Package(
