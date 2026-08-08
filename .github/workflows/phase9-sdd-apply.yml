@@ -70,6 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 Tools/phase9_tasks/task08_green.py
+          python3 Tools/phase9_tasks/task08_green_import_fix.py
           xcodegen generate
           xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask8" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIFrameEffectServiceTests | tee "$RUNNER_TEMP/task8-green.log"
           git diff --check
