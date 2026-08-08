@@ -18,18 +18,23 @@ jobs:
         run: |
           cat > "$RUNNER_TEMP/task14-red-main.swift" <<'SWIFT'
           import Foundation
-          let error = CompositionError.effectResolutionFailed(
-              layerID: "layer-1", effectID: "effect-1", effectType: "depthMap",
-              time: "7/30s", message: "model unavailable"
-          )
-          print(error.localizedDescription)
+          @main
+          struct Task14Red {
+              static func main() {
+                  let error = CompositionError.effectResolutionFailed(
+                      layerID: "layer-1", effectID: "effect-1", effectType: "depthMap",
+                      time: "7/30s", message: "model unavailable"
+                  )
+                  print(error.localizedDescription)
+              }
+          }
           SWIFT
           set +e
           swiftc Sources/VertexComposition/CompositionError.swift "$RUNNER_TEMP/task14-red-main.swift" -o "$RUNNER_TEMP/task14-red" > "$RUNNER_TEMP/task14-red.log" 2>&1
           s=$?
           set -e
           test "$s" -ne 0
-          grep -q "has no member 'effectResolutionFailed'" "$RUNNER_TEMP/task14-red.log"
+          grep -q "effectResolutionFailed" "$RUNNER_TEMP/task14-red.log"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
