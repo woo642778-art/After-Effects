@@ -1,0 +1,120 @@
+name: Phase 9 Task 8 9 Finalize
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - agent/phase9-sdd-runner
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: phase9-task89-finalize-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  finalize-task89:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Select Xcode and configure git
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          git config user.name 'vertex2-phase9-bot'
+          git config user.email 'actions@users.noreply.github.com'
+      - name: Select newest iPhone Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json,re,subprocess
+          payload=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates=[]
+          for runtime,devices in payload.get('devices',{}).items():
+              m=re.search(r'iOS-(\d+)-(\d+)',runtime)
+              if not m: continue
+              version=(int(m.group(1)),int(m.group(2)))
+              for d in devices:
+                  if d.get('isAvailable') and d.get('name','').startswith('iPhone'):
+                      candidates.append((version,d['name'],d['udid']))
+          if not candidates: raise SystemExit('No available iPhone Simulator')
+          candidates.sort(reverse=True)
+          print(candidates[0][2])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Materialize verified Task 8 implementation
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task08_red.py
+          python3 Tools/phase9_tasks/task08_testfix.py
+          python3 Tools/phase9_tasks/task08_green.py
+          python3 Tools/phase9_tasks/task08_green_import_fix.py
+      - name: Materialize reviewed Task 9 implementation
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task09_red.py
+          python3 Tools/phase9_tasks/task09_anchor_fix.py
+          python3 Tools/phase9_tasks/task09_green.py
+          python3 Tools/phase9_tasks/task09_review_fix.py
+          swift test --filter AIEffectBakeCommandTests
+      - name: Generate Xcode project
+        run: |
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+          xcodebuild -list -project Vertex.xcodeproj
+      - name: Run final Task 8 and 9 iOS regression
+        run: |
+          set -euo pipefail
+          LOG="$RUNNER_TEMP/task89-final.log"
+          if ! xcodebuild test \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataTask89Final" \
+            CODE_SIGNING_ALLOWED=NO \
+            -only-testing:VertexAppTests/AIFrameEffectServiceTests \
+            -only-testing:VertexAppTests/AIEffectBakeCoordinatorTests >"$LOG" 2>&1; then
+            grep -n -C 5 -m 120 -E 'error:|failed|Failure|Testing' "$LOG" || tail -n 360 "$LOG"
+            exit 1
+          fi
+          tail -n 180 "$LOG"
+      - name: Portable and diff regression
+        run: |
+          set -euo pipefail
+          swift test --filter ProjectEffectTests
+          swift test --filter EffectGraphCompilerTests
+          swift test --filter AIEffectBakeCommandTests
+          git diff --check
+      - name: Commit Task 8 and Task 9 separately
+        run: |
+          set -euo pipefail
+          git add App/AIFrameEffectService.swift App/BundledAIEnvironment+FrameEffects.swift App/CompositionEffectResolverAdapter.swift Tests/VertexAppTests/AIFrameEffectServiceTests.swift
+          if ! git diff --cached --quiet; then git commit -m 'feat(ai): add prioritized frame effect service'; fi
+          git add Sources/VertexProject App/AIEffectBakeCoordinator.swift App/ProjectWorkspaceViewModel.swift Tests/VertexProjectTests/AIEffectBakeCommandTests.swift Tests/VertexAppTests/AIEffectBakeCoordinatorTests.swift
+          if ! git diff --cached --quiet; then git commit -m 'feat(ai): add atomic bake-to-layer workflow'; fi
+          git diff --check
+          test -z "$(git status --porcelain)"
+      - name: Push verified task commits
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: git push origin HEAD:"$HEAD_BRANCH"
+      - name: Upload final log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task89-final-log
+          path: ${{ runner.temp }}/task89-final.log
+          if-no-files-found: warn
+          retention-days: 3
