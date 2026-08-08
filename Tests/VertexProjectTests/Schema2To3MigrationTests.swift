@@ -35,15 +35,15 @@ private func schema2FixtureBytes() throws -> Data {
     return try Schema2ProjectCodec.encode(schema2)
 }
 
-@Test("Current codec migrates schema 2 through schema 4 without inventing AI or motion state")
+@Test("Current codec migrates schema 2 through every registered migration without inventing AI or motion state")
 func schema2MigratesThroughCurrentSchema() throws {
     let source = try schema2FixtureBytes()
     let codec = DeterministicProjectCodec()
     let migrated = try codec.decode(source)
 
-    #expect(migrated.schemaVersion == 4)
-    #expect(migrated.minimumReaderVersion == 4)
-    #expect(migrated.metadata.lastSavedByAppVersion == "8.0.0")
+    #expect(migrated.schemaVersion == ProjectDocument.currentSchemaVersion)
+    #expect(migrated.minimumReaderVersion == ProjectDocument.currentSchemaVersion)
+    #expect(migrated.metadata.lastSavedByAppVersion == ProjectDocument.currentAppVersion)
     #expect(migrated.revision == 12)
     #expect(migrated.mediaRegistry.count == 1)
     #expect(migrated.compositionRegistry.count == 1)
