@@ -76,7 +76,7 @@ struct AETimelineView: View {
                             .environmentObject(workspace)
                         }
                     }
-                    .frame(minWidth: 760, alignment: .leading)
+                    .frame(minWidth: 920, alignment: .leading)
                 }
             } else {
                 ContentUnavailableView("No Composition", systemImage: "rectangle.stack", description: Text("Create or select a composition to edit the timeline."))
@@ -128,21 +128,19 @@ struct AETimelineView: View {
 
     private func ruler(_ composition: ProjectComposition) -> some View {
         VStack(spacing: 4) {
-            GeometryReader { proxy in
+            GeometryReader { _ in
                 ZStack(alignment: .leading) {
                     Canvas { context, size in
-                        let width = max(size.width, composition.duration.seconds * editorState.pixelsPerSecond)
                         let secondsStep = max(1.0 / max(composition.frameRate.seconds, 1), 40 / editorState.pixelsPerSecond)
                         var t = 0.0
                         while t <= composition.duration.seconds + 0.0001 {
-                            let x = t * editorState.pixelsPerSecond
+                            let x = CGFloat(t * editorState.pixelsPerSecond)
                             var path = Path()
                             path.move(to: CGPoint(x: x, y: size.height - 9))
                             path.addLine(to: CGPoint(x: x, y: size.height))
                             context.stroke(path, with: .color(.white.opacity(0.45)), lineWidth: 1)
                             t += secondsStep
                         }
-                        _ = width
                     }
                     Rectangle()
                         .fill(AfterEffectsTheme.accent)
@@ -173,7 +171,7 @@ struct AETimelineView: View {
         guard let composition = workspace.activeComposition,
               let id = editorState.selectedLayerIDs.sorted(by: { $0.rawValue < $1.rawValue }).first else { return }
         do {
-            try workspace.commitTimelineEdit(.split(layerID: id, at: editorState.playhead), compositionID: composition.id)
+            try workspace.commitTimelineEdit(AETimelineInteractionModel.splitEdit(layerID: id, playhead: editorState.playhead), compositionID: composition.id)
             interactionError = nil
         } catch {
             interactionError = error.localizedDescription
