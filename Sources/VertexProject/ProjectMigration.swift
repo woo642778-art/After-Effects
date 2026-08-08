@@ -64,7 +64,8 @@ public struct ProjectMigrationRegistry: Sendable {
     public static let current = ProjectMigrationRegistry(migrators: [
         Schema1To2Migrator(),
         Schema2To3Migrator(),
-        Schema3To4Migrator()
+        Schema3To4Migrator(),
+        Schema4To5Migrator()
     ])
 
     private let migrators: [any ProjectMigrator]

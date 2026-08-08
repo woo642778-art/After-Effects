@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "VertexRender", targets: ["VertexRender"]),
         .library(name: "VertexRenderMetal", targets: ["VertexRenderMetal"]),
         .library(name: "VertexProject", targets: ["VertexProject"]),
+        .library(name: "VertexTimeline", targets: ["VertexTimeline"]),
         .library(name: "VertexProjectPersistence", targets: ["VertexProjectPersistence"]),
         .library(name: "VertexComposition", targets: ["VertexComposition"]),
         .library(name: "VertexAI", targets: ["VertexAI"]),
@@ -42,6 +43,10 @@ let package = Package(
         .target(
             name: "VertexProject",
             dependencies: ["VertexCore", "VertexMedia", "VertexRender"]
+        ),
+        .target(
+            name: "VertexTimeline",
+            dependencies: ["VertexCore", "VertexProject"]
         ),
         .target(
             name: "VertexProjectPersistence",
@@ -89,6 +94,10 @@ let package = Package(
         .testTarget(
             name: "VertexProjectTests",
             dependencies: ["VertexProject", "VertexCore", "VertexMedia", "VertexRender"]
+        ),
+        .testTarget(
+            name: "VertexTimelineTests",
+            dependencies: ["VertexTimeline", "VertexProject", "VertexCore"]
         ),
         .testTarget(
             name: "VertexProjectPersistenceTests",

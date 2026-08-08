@@ -3,6 +3,7 @@ import SwiftUI
 import VertexCore
 import VertexProject
 import VertexProjectPersistence
+import VertexTimeline
 
 @MainActor
 final class ProjectWorkspaceViewModel: ObservableObject {
@@ -463,6 +464,71 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         )
     }
 
+
+    func commitTimelineEdit(_ edit: TimelineEdit, compositionID: VertexID) throws {
+        guard let project, let composition = project.composition(id: compositionID) else { return }
+        let beforeLayers = project.layers(in: compositionID)
+        let result = try TimelineEngine().apply(edit, to: project, compositionID: compositionID)
+        var byID = Dictionary(uniqueKeysWithValues: beforeLayers.map { ($0.id, $0) })
+        for removed in result.removedLayerIDs { byID.removeValue(forKey: removed) }
+        for layer in result.updatedLayers { byID[layer.id] = layer }
+        for layer in result.insertedLayers { byID[layer.id] = layer }
+        let afterLayers = try result.resultingLayerOrder.map { id -> ProjectLayer in
+            guard let layer = byID[id] else { throw ProjectError.invalidOperation("Timeline result omitted a layer snapshot.") }
+            return layer
+        }
+        let afterSelected: VertexID?
+        switch edit {
+        case .split:
+            afterSelected = result.insertedLayers.first?.id ?? project.selectedLayerID
+        default:
+            afterSelected = project.selectedLayerID
+        }
+        let mutation = TimelineProjectMutation(
+            beforeLayers: beforeLayers,
+            afterLayers: afterLayers,
+            beforeLayerOrder: composition.layerIDs,
+            afterLayerOrder: result.resultingLayerOrder,
+            beforeSelectedLayerID: project.selectedLayerID,
+            afterSelectedLayerID: afterSelected
+        )
+        let mergeKey: String?
+        switch edit {
+        case .move(let ids, _): mergeKey = "timeline.move." + ids.map(\.rawValue).sorted().joined(separator: ".")
+        case .trimIn(let id, _), .trimOut(let id, _): mergeKey = "timeline.trim.\(id.rawValue)"
+        default: mergeKey = nil
+        }
+        perform(.applyTimelineEdit(compositionID: compositionID, result: mutation), mergeKey: mergeKey)
+    }
+
+    func setLayerParent(layerID: VertexID, parentLayerID: VertexID?) {
+        perform(.setLayerParent(id: layerID, parentLayerID: parentLayerID), mergeKey: nil)
+    }
+
+    func setWorkArea(_ workArea: ProjectWorkArea?) {
+        guard let composition = activeComposition else { return }
+        perform(.setCompositionWorkArea(id: composition.id, workArea: workArea), mergeKey: "timeline.workarea.\(composition.id.rawValue)")
+    }
+
+    func setCompositionMarkers(_ markers: [ProjectMarker]) {
+        guard let composition = activeComposition else { return }
+        perform(.setCompositionMarkers(id: composition.id, markers: markers), mergeKey: nil)
+    }
+
+    func setLayerMarkers(_ markers: [ProjectMarker]) {
+        guard let layer = selectedLayer else { return }
+        perform(.setLayerMarkers(id: layer.id, markers: markers), mergeKey: nil)
+    }
+
+
+    func bakeEffect(layerID: VertexID, effectID: VertexID) async throws {
+        guard let project, let packageURL else { throw ProjectError.invalidOperation("Save the project package before baking AI output.") }
+        let coordinator = AIEffectBakeCoordinator { [weak self] registration in
+            self?.perform(.registerBakedAIEffect(registration), mergeKey: nil)
+        }
+        try await coordinator.bake(project: project, packageURL: packageURL, layerID: layerID, effectID: effectID)
+    }
+
     func setLayerBlendMode(_ mode: LayerBlendMode) {
         guard let layer = selectedLayer, layer.blendMode != mode else { return }
         perform(.setLayerBlendMode(id: layer.id, mode: mode), mergeKey: nil)
@@ -661,7 +727,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         return RationalTime(value: numerator.partialValue, timescale: Int32(frameRate.value))
     }
 
-    private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
+    func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
         let token = beginPublishedOperation(.edit)
         Task { [weak self] in
             guard let self else { return }

@@ -8,6 +8,7 @@ var products: [Product] = [
     .library(name: "VertexRender", targets: ["VertexRender"]),
     .library(name: "VertexRenderMetal", targets: ["VertexRenderMetal"]),
     .library(name: "VertexProject", targets: ["VertexProject"]),
+    .library(name: "VertexTimeline", targets: ["VertexTimeline"]),
     .library(name: "VertexProjectPersistence", targets: ["VertexProjectPersistence"]),
     .library(name: "VertexComposition", targets: ["VertexComposition"]),
     .library(name: "VertexAI", targets: ["VertexAI"]),
@@ -25,6 +26,7 @@ var targets: [Target] = [
         resources: [.process("Shaders")]
     ),
     .target(name: "VertexProject", dependencies: ["VertexCore", "VertexMedia", "VertexRender"]),
+    .target(name: "VertexTimeline", dependencies: ["VertexCore", "VertexProject"]),
     .target(name: "VertexProjectPersistence", dependencies: ["VertexCore", "VertexMedia", "VertexProject"]),
     .target(name: "VertexComposition", dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexRender"]),
     .target(name: "VertexAI", dependencies: ["VertexCore"]),
@@ -38,6 +40,7 @@ var targets: [Target] = [
         dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]
     ),
     .testTarget(name: "VertexProjectTests", dependencies: ["VertexProject", "VertexCore", "VertexMedia", "VertexRender"]),
+    .testTarget(name: "VertexTimelineTests", dependencies: ["VertexTimeline", "VertexProject", "VertexCore"]),
     .testTarget(
         name: "VertexProjectPersistenceTests",
         dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]
@@ -52,10 +55,6 @@ products.append(.library(name: "VertexAIAVFoundation", targets: ["VertexAIAVFoun
 targets.append(.target(
     name: "VertexAIAVFoundation",
     dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]
-))
-targets.append(.testTarget(
-    name: "VertexAIAVFoundationTests",
-    dependencies: ["VertexAIAVFoundation", "VertexAICoreML", "VertexAI", "VertexCore"]
 ))
 #endif
 

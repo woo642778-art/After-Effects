@@ -11,6 +11,12 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
     public var color: ColorDescriptor
     public var backgroundColor: ProjectRGBAColor
     public var layerIDs: [VertexID]
+    public var workArea: ProjectWorkArea?
+    public var markers: [ProjectMarker]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, width, height, duration, frameRate, color, backgroundColor, layerIDs, workArea, markers
+    }
 
     public init(
         id: VertexID = VertexID(),
@@ -21,7 +27,9 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         frameRate: RationalTime,
         color: ColorDescriptor,
         backgroundColor: ProjectRGBAColor = .transparent,
-        layerIDs: [VertexID] = []
+        layerIDs: [VertexID] = [],
+        workArea: ProjectWorkArea? = nil,
+        markers: [ProjectMarker] = []
     ) {
         self.id = id
         self.name = name
@@ -32,6 +40,38 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         self.color = color
         self.backgroundColor = backgroundColor
         self.layerIDs = layerIDs
+        self.workArea = workArea
+        self.markers = markers
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(VertexID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        width = try container.decode(Int.self, forKey: .width)
+        height = try container.decode(Int.self, forKey: .height)
+        duration = try container.decode(RationalTime.self, forKey: .duration)
+        frameRate = try container.decode(RationalTime.self, forKey: .frameRate)
+        color = try container.decode(ColorDescriptor.self, forKey: .color)
+        backgroundColor = try container.decode(ProjectRGBAColor.self, forKey: .backgroundColor)
+        layerIDs = try container.decode([VertexID].self, forKey: .layerIDs)
+        workArea = try container.decodeIfPresent(ProjectWorkArea.self, forKey: .workArea)
+        markers = try container.decodeIfPresent([ProjectMarker].self, forKey: .markers) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(width, forKey: .width)
+        try container.encode(height, forKey: .height)
+        try container.encode(duration, forKey: .duration)
+        try container.encode(frameRate, forKey: .frameRate)
+        try container.encode(color, forKey: .color)
+        try container.encode(backgroundColor, forKey: .backgroundColor)
+        try container.encode(layerIDs, forKey: .layerIDs)
+        try container.encodeIfPresent(workArea, forKey: .workArea)
+        try container.encode(markers, forKey: .markers)
     }
 
     public func validated(layerByID: [VertexID: ProjectLayer]) throws -> Self {
@@ -54,6 +94,11 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
             throw ProjectError.duplicateIdentity("composition layer order")
         }
         _ = try backgroundColor.validated()
+        if let workArea { _ = try workArea.validated(compositionDuration: duration) }
+        guard Set(markers.map(\.id)).count == markers.count else {
+            throw ProjectError.duplicateIdentity("composition marker")
+        }
+        for marker in markers { _ = try marker.validated(compositionDuration: duration) }
         for layerID in layerIDs {
             guard let layer = layerByID[layerID] else {
                 throw ProjectError.invalidValue("Composition layer order references a missing layer: \(layerID.rawValue).")

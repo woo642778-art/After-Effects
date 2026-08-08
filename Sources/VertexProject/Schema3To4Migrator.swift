@@ -66,7 +66,7 @@ public struct Schema3To4Migrator: ProjectMigrator {
     public func migrate(_ data: Data) throws -> ProjectMigrationStepResult {
         let legacy = try Schema3ProjectCodec.decode(data)
         var metadata = legacy.metadata
-        metadata.lastSavedByAppVersion = ProjectDocument.currentAppVersion
+        metadata.lastSavedByAppVersion = "8.0.0"
         var layers = legacy.layerRegistry
         for index in layers.indices {
             layers[index].animationChannels = []
@@ -74,7 +74,7 @@ public struct Schema3To4Migrator: ProjectMigrator {
             layers[index].trackMatte = nil
         }
 
-        let migrated = try ProjectDocument(
+        let migrated = Schema4ProjectDocument(
             schemaVersion: 4,
             minimumReaderVersion: 4,
             projectID: legacy.projectID,
@@ -88,10 +88,10 @@ public struct Schema3To4Migrator: ProjectMigrator {
             activeCompositionID: legacy.activeCompositionID,
             selectedLayerID: legacy.selectedLayerID,
             selectedMediaID: legacy.selectedMediaID
-        ).validated()
+        )
 
         return ProjectMigrationStepResult(
-            data: try DeterministicProjectCodec().encode(migrated),
+            data: try Schema4ProjectCodec.encode(migrated),
             report: ProjectMigrationReport(
                 sourceVersion: 3,
                 destinationVersion: 4,

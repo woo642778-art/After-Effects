@@ -9,6 +9,8 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
     case selectMedia(before: VertexID?, after: VertexID?)
     case registerAIAsset(ProjectAIAsset)
     case removeAIAsset(ProjectAIAsset)
+    case registerBakedAIEffect(ProjectAIEffectBakeRegistration, previousSelectedLayerID: VertexID?)
+    case removeBakedAIEffect(ProjectAIEffectBakeRegistration, restoreSelectedLayerID: VertexID?)
     case setRenderParameter(ProjectRenderParameter, before: Double, after: Double)
     case setRenderBoolean(ProjectRenderBooleanParameter, before: Bool, after: Bool)
     case setOutputDimensions(beforeWidth: Int, beforeHeight: Int, afterWidth: Int, afterHeight: Int)
@@ -21,6 +23,9 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
     case setCompositionDuration(compositionID: VertexID, before: RationalTime, after: RationalTime)
     case setCompositionFrameRate(compositionID: VertexID, before: RationalTime, after: RationalTime)
     case setCompositionBackground(compositionID: VertexID, before: ProjectRGBAColor, after: ProjectRGBAColor)
+    case setCompositionWorkArea(compositionID: VertexID, before: ProjectWorkArea?, after: ProjectWorkArea?)
+    case setCompositionMarkers(compositionID: VertexID, before: [ProjectMarker], after: [ProjectMarker])
+    case applyTimelineEdit(compositionID: VertexID, change: TimelineProjectMutation)
 
     case insertLayer(ProjectLayer, compositionID: VertexID, index: Int)
     case removeLayer(ProjectLayer, compositionID: VertexID, index: Int)
@@ -33,7 +38,10 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
     case setLayerTransform(layerID: VertexID, before: LayerTransform, after: LayerTransform)
     case setLayerBlendMode(layerID: VertexID, before: LayerBlendMode, after: LayerBlendMode)
     case setLayerSource(layerID: VertexID, before: LayerSource, after: LayerSource)
+    case setLayerMarkers(layerID: VertexID, before: [ProjectMarker], after: [ProjectMarker])
+    case setLayerParent(layerID: VertexID, before: VertexID?, after: VertexID?)
     case setLayerOperations(layerID: VertexID, before: [LayerOperation], after: [LayerOperation])
+    case setLayerEffects(layerID: VertexID, before: [ProjectEffect], after: [ProjectEffect])
     case setLayerMotionState(
         layerID: VertexID,
         beforeAnimationChannels: [ProjectAnimationChannel],
@@ -54,6 +62,8 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
         case .selectMedia(let before, let after): .selectMedia(before: after, after: before)
         case .registerAIAsset(let asset): .removeAIAsset(asset)
         case .removeAIAsset(let asset): .registerAIAsset(asset)
+        case .registerBakedAIEffect(let registration, let previous): .removeBakedAIEffect(registration, restoreSelectedLayerID: previous)
+        case .removeBakedAIEffect(let registration, let restore): .registerBakedAIEffect(registration, previousSelectedLayerID: restore)
         case .setRenderParameter(let parameter, let before, let after): .setRenderParameter(parameter, before: after, after: before)
         case .setRenderBoolean(let parameter, let before, let after): .setRenderBoolean(parameter, before: after, after: before)
         case .setOutputDimensions(let bw, let bh, let aw, let ah): .setOutputDimensions(beforeWidth: aw, beforeHeight: ah, afterWidth: bw, afterHeight: bh)
@@ -65,6 +75,9 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
         case .setCompositionDuration(let id, let before, let after): .setCompositionDuration(compositionID: id, before: after, after: before)
         case .setCompositionFrameRate(let id, let before, let after): .setCompositionFrameRate(compositionID: id, before: after, after: before)
         case .setCompositionBackground(let id, let before, let after): .setCompositionBackground(compositionID: id, before: after, after: before)
+        case .setCompositionWorkArea(let id, let before, let after): .setCompositionWorkArea(compositionID: id, before: after, after: before)
+        case .setCompositionMarkers(let id, let before, let after): .setCompositionMarkers(compositionID: id, before: after, after: before)
+        case .applyTimelineEdit(let id, let change): .applyTimelineEdit(compositionID: id, change: change.inverse)
         case .insertLayer(let layer, let compositionID, let index): .removeLayer(layer, compositionID: compositionID, index: index)
         case .removeLayer(let layer, let compositionID, let index): .insertLayer(layer, compositionID: compositionID, index: index)
         case .reorderLayer(let compositionID, let layerID, let beforeIndex, let afterIndex): .reorderLayer(compositionID: compositionID, layerID: layerID, beforeIndex: afterIndex, afterIndex: beforeIndex)
@@ -76,7 +89,10 @@ public enum ProjectMutation: Codable, Equatable, Sendable {
         case .setLayerTransform(let id, let before, let after): .setLayerTransform(layerID: id, before: after, after: before)
         case .setLayerBlendMode(let id, let before, let after): .setLayerBlendMode(layerID: id, before: after, after: before)
         case .setLayerSource(let id, let before, let after): .setLayerSource(layerID: id, before: after, after: before)
+        case .setLayerMarkers(let id, let before, let after): .setLayerMarkers(layerID: id, before: after, after: before)
+        case .setLayerParent(let id, let before, let after): .setLayerParent(layerID: id, before: after, after: before)
         case .setLayerOperations(let id, let before, let after): .setLayerOperations(layerID: id, before: after, after: before)
+        case .setLayerEffects(let id, let before, let after): .setLayerEffects(layerID: id, before: after, after: before)
         case .setLayerMotionState(
             let id,
             let beforeChannels,

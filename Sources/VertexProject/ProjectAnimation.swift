@@ -30,6 +30,7 @@ public enum ProjectAnimatableValueKind: String, Codable, Sendable {
 public enum ProjectPropertyAddress: Codable, Equatable, Sendable {
     case layer(ProjectLayerAnimatableProperty)
     case mask(maskID: VertexID, property: ProjectMaskAnimatableProperty)
+    case effect(effectID: VertexID, parameterID: String, valueKind: ProjectAnimatableValueKind)
 
     public var expectedValueKind: ProjectAnimatableValueKind {
         switch self {
@@ -37,6 +38,8 @@ public enum ProjectPropertyAddress: Codable, Equatable, Sendable {
             return .scalar
         case .mask(_, let property):
             return property == .path ? .bezierPath : .scalar
+        case .effect(_, _, let valueKind):
+            return valueKind
         }
     }
 
@@ -46,6 +49,8 @@ public enum ProjectPropertyAddress: Codable, Equatable, Sendable {
             return "layer.\(property.rawValue)"
         case .mask(let maskID, let property):
             return "mask.\(maskID.rawValue).\(property.rawValue)"
+        case .effect(let effectID, let parameterID, let valueKind):
+            return "effect.\(effectID.rawValue).\(parameterID).\(valueKind.rawValue)"
         }
     }
 }
@@ -436,7 +441,7 @@ public struct ProjectAnimationChannel: Codable, Equatable, Sendable, Identifiabl
 }
 
 public extension Array where Element == ProjectAnimationChannel {
-    func validatedAnimationChannels(for masks: [ProjectMask] = []) throws -> [ProjectAnimationChannel] {
+    func validatedAnimationChannels(for masks: [ProjectMask] = [], effects: [ProjectEffect] = []) throws -> [ProjectAnimationChannel] {
         guard Set(map(\.id)).count == count else {
             throw ProjectError.duplicateIdentity("animation channel")
         }
@@ -449,6 +454,14 @@ public extension Array where Element == ProjectAnimationChannel {
             _ = try channel.validated()
             if case .mask(let maskID, _) = channel.property, !maskIDs.contains(maskID) {
                 throw ProjectError.invalidValue("Mask animation channel references a missing mask.")
+            }
+            if case .effect(let effectID, let parameterID, let valueKind) = channel.property {
+                guard let effect = effects.first(where: { $0.id == effectID }),
+                      let parameter = effect.parameter(id: parameterID),
+                      let animatableKind = parameter.value.animatableKind,
+                      animatableKind == valueKind else {
+                    throw ProjectError.invalidValue("Effect animation channel references a missing or non-animatable parameter.")
+                }
             }
         }
         return self
