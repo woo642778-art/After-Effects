@@ -1,0 +1,64 @@
+name: Phase 9 Tasks 11-14
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - agent/phase9-task11-14-runner
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  editor-red:
+    if: startsWith(github.head_ref, 'agent/phase9-task11-14-staging')
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Select iPhone simulator
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json,re,subprocess
+          p=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          rows=[]
+          for runtime,devs in p.get('devices',{}).items():
+            m=re.search(r'iOS-(\d+)-(\d+)',runtime)
+            if not m: continue
+            v=(int(m.group(1)),int(m.group(2)))
+            for d in devs:
+              if d.get('isAvailable') and d['name'].startswith('iPhone'): rows.append((v,d['name'],d['udid']))
+          rows.sort(reverse=True)
+          if not rows: raise SystemExit('No iPhone simulator')
+          print('IPHONE_UDID='+rows[0][2])
+          PY
+      - name: RED - editor integration types are absent
+        run: |
+          set +e
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" -derivedDataPath "$PWD/DDPhase9EditorRed" CODE_SIGNING_ALLOWED=NO \
+            -only-testing:VertexAppTests/AETimelineInteractionTests \
+            -only-testing:VertexAppTests/EffectControlsInteractionTests \
+            -only-testing:VertexAppTests/GraphEditorInteractionTests \
+            -only-testing:VertexAppTests/AIEffectFailureSemanticsTests > "$RUNNER_TEMP/phase9-editor-red.log" 2>&1
+          s=$?
+          set -e
+          test "$s" -ne 0
+          grep -Eq "cannot find '(AETimelineInteractionModel|EffectControlAction|GraphEditorMath|AIEffectPresentationState)' in scope" "$RUNNER_TEMP/phase9-editor-red.log"
+      - name: Upload RED log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task11-14-red-log
+          path: ${{ runner.temp }}/phase9-editor-red.log
+          if-no-files-found: error
+          retention-days: 3
