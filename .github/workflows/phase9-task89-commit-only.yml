@@ -1,0 +1,66 @@
+name: Phase 9 Task 8 9 Commit Only
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - agent/phase9-sdd-runner
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: phase9-task89-commit-only-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  commit-verified-task89:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Configure git
+        run: |
+          git config user.name 'vertex2-phase9-bot'
+          git config user.email 'actions@users.noreply.github.com'
+      - name: Materialize exact implementation already verified by run 31232143877
+        run: |
+          set -euo pipefail
+          python3 Tools/phase9_tasks/task08_red.py
+          python3 Tools/phase9_tasks/task08_testfix.py
+          python3 Tools/phase9_tasks/task08_green.py
+          python3 Tools/phase9_tasks/task08_green_import_fix.py
+          python3 Tools/phase9_tasks/task09_red.py
+          python3 Tools/phase9_tasks/task09_anchor_fix.py
+          python3 Tools/phase9_tasks/task09_green.py
+          python3 Tools/phase9_tasks/task09_review_fix.py
+          git diff --check
+      - name: Commit verified Task 8
+        run: |
+          set -euo pipefail
+          git add App/AIFrameEffectService.swift App/BundledAIEnvironment+FrameEffects.swift App/CompositionEffectResolverAdapter.swift Tests/VertexAppTests/AIFrameEffectServiceTests.swift
+          test -n "$(git diff --cached --name-only)"
+          git commit -m 'feat(ai): add prioritized frame effect service'
+      - name: Commit verified Task 9
+        run: |
+          set -euo pipefail
+          git add Sources/VertexProject App/AIEffectBakeCoordinator.swift App/ProjectWorkspaceViewModel.swift Tests/VertexProjectTests/AIEffectBakeCommandTests.swift Tests/VertexAppTests/AIEffectBakeCoordinatorTests.swift
+          test -n "$(git diff --cached --name-only)"
+          git commit -m 'feat(ai): add atomic bake-to-layer workflow'
+      - name: Discard generator-only residue and verify committed diff
+        run: |
+          set -euo pipefail
+          git reset --hard HEAD
+          git clean -fd
+          git diff --check HEAD~2..HEAD
+          test -z "$(git status --porcelain)"
+          git log -2 --oneline
+      - name: Push verified commits
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: git push origin HEAD:"$HEAD_BRANCH"
