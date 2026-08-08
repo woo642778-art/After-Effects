@@ -1,0 +1,75 @@
+name: Phase 9 Tasks 11-14 GREEN Intel
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [agent/phase9-task11-14-runner]
+
+permissions:
+  contents: read
+
+jobs:
+  editor-green-intel:
+    if: startsWith(github.head_ref, 'agent/phase9-task11-14-staging')
+    runs-on: macos-14
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup Xcode 16
+        run: |
+          set -euo pipefail
+          XCODE=$(find /Applications -maxdepth 1 -type d -name 'Xcode_16*.app' | sort -V | tail -1)
+          test -n "$XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('App/ProjectWorkspaceViewModel.swift'); t=p.read_text()
+          old='    private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {'
+          if old in t: p.write_text(t.replace(old,'    func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {',1))
+          PY
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Select simulators
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json,re,subprocess
+          p=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          iph=[]; ipad=[]
+          for runtime,devs in p.get('devices',{}).items():
+            m=re.search(r'iOS-(\d+)-(\d+)',runtime)
+            if not m: continue
+            v=(int(m.group(1)),int(m.group(2)))
+            for d in devs:
+              if not d.get('isAvailable'): continue
+              row=(v,d['name'],d['udid'])
+              if d['name'].startswith('iPhone'): iph.append(row)
+              if d['name'].startswith('iPad'): ipad.append(row)
+          iph.sort(reverse=True); ipad.sort(reverse=True)
+          if not iph or not ipad: raise SystemExit('Missing simulator')
+          print('IPHONE_UDID='+iph[0][2]); print('IPAD_UDID='+ipad[0][2])
+          PY
+      - name: iPhone targeted tests
+        run: |
+          set -o pipefail
+          xcodebuild test -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPHONE_UDID" CODE_SIGNING_ALLOWED=NO \
+            -only-testing:VertexAppTests/AETimelineInteractionTests \
+            -only-testing:VertexAppTests/EffectControlsInteractionTests \
+            -only-testing:VertexAppTests/GraphEditorInteractionTests \
+            -only-testing:VertexAppTests/AIEffectFailureSemanticsTests \
+            -only-testing:VertexAppTests/EditorWorkspaceStateTests | tee "$RUNNER_TEMP/green-intel.log"
+      - name: iPad compile gate
+        run: |
+          xcodebuild build -project Vertex.xcodeproj -scheme Vertex -sdk iphonesimulator -destination "id=$IPAD_UDID" CODE_SIGNING_ALLOWED=NO
+      - name: Diff check
+        run: git diff --check
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-task11-14-green-intel
+          path: ${{ runner.temp }}/green-intel.log
+          if-no-files-found: warn
+          retention-days: 3
