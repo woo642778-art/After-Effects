@@ -55,33 +55,49 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 8,
-        title: "Masks and Mattes",
-        status: .inProgress,
+        number: 9,
+        title: "AE Workspace and Live AI Effects",
+        status: .implemented,
         deliverables: [
-            "Reusable exact-time animation channels for layer and mask properties",
-            "Animated cubic Bezier masks with vertex and tangent editing",
-            "Feather, expansion, opacity, invert, and ordered Add/Subtract/Intersect mask modes",
-            "Alpha, Alpha Inverted, Luma, and Luma Inverted track mattes with reference-cycle protection",
-            "Metal-backed mask and matte rendering with preview/export semantic parity",
-            "Versioned Vertex2 8.0.0 unsigned IPA with deterministic schema-4 project migration"
+            "Adaptive AE-style iPad workspace with Project, Composition, Effect Controls, Graph Editor, and Timeline panels",
+            "Compact iPhone workspace backed by the same canonical playhead, selection, project commands, and render state",
+            "Exact-time editable layer timeline with trim, move, split, ripple, roll, slip, slide, parenting, track mattes, blend mode, lock, solo, and visibility controls",
+            "Ordered non-destructive Depth Map, Cutout, Upscale, and Restore layer effects with typed parameters and live preview rerendering",
+            "Bounded AI frame scheduling and cache reuse with explicit computing, stale, cached, and failure semantics",
+            "Value and Speed Graph Editor surfaces over canonical animation channels and temporal Bezier handles",
+            "Atomic Extract / Bake to Layer workflow that verifies derived media before project registration",
+            "Versioned Vertex2 9.0.0 build 9 unsigned iOS 17 arm64 IPA"
         ],
         sourceAdoptions: [
             SourceAdoption(
-                id: "apple-metal-phase8",
-                repository: "Apple Metal",
-                license: "Apple platform SDK",
-                mode: .wrappedDependency,
-                purpose: "GPU mask coverage, matte extraction, and premultiplied-alpha compositing"
-            ),
-            SourceAdoption(
-                id: "apple-swiftui-phase8",
+                id: "apple-swiftui-phase9",
                 repository: "Apple SwiftUI",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Layer property, keyframe, mask-path, and track-matte editing surfaces"
+                purpose: "Adaptive iPad and iPhone professional editing workspace and interaction surfaces"
+            ),
+            SourceAdoption(
+                id: "apple-coreml-phase9",
+                repository: "Apple Core ML and Vision",
+                license: "Apple platform SDK",
+                mode: .wrappedDependency,
+                purpose: "On-device AI frame inference without a server dependency"
+            ),
+            SourceAdoption(
+                id: "opentimelineio-phase9",
+                repository: "AcademySoftwareFoundation/OpenTimelineIO",
+                license: "Apache-2.0",
+                mode: .designReference,
+                purpose: "Timeline and track data-model reference only; no runtime dependency or copied implementation"
+            ),
+            SourceAdoption(
+                id: "natron-phase9",
+                repository: "NatronGitHub/Natron",
+                license: "GPL-2.0",
+                mode: .designReference,
+                purpose: "Professional compositor workspace and effect-control interaction reference only; no source code copied"
             )
         ],
-        artifactPolicy: "Phase 8 publishes Vertex2-8.0.0-unsigned.ipa only after schema migration, animation, mask, matte, Metal pixel, persistence, Simulator, Phase 7 AI regression, iOS 17 arm64 Release, artifact inspection, and SHA-256 gates pass. The IPA remains unsigned until signing credentials are supplied."
+        artifactPolicy: "Phase 9 publishes Vertex2-9.0.0-unsigned.ipa only after AI model/license audits, complete Swift tests, iPhone and iPad Simulator tests, Metal compilation, unsigned iOS 17 arm64 Release build, bundle inspection, independent IPA audit, and SHA-256 verification pass. The IPA remains unsigned until external signing credentials are supplied."
     )
 }
