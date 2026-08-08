@@ -37,6 +37,7 @@ jobs:
           set -euo pipefail
           python3 Tools/phase9_tasks/task09_anchor_fix.py
           python3 Tools/phase9_tasks/task09_green.py 2>&1 | tee "$RUNNER_TEMP/task9-python.log"
+          python3 Tools/phase9_tasks/task09_review_fix.py
       - name: Task 9 GREEN portable tests
         run: |
           set -o pipefail
