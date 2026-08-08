@@ -93,6 +93,7 @@ jobs:
           set -euo pipefail
           python3 Tools/phase9_tasks/task09_anchor_fix.py
           python3 Tools/phase9_tasks/task09_green.py
+          python3 Tools/phase9_tasks/task09_review_fix.py
           swift test --filter AIEffectBakeCommandTests
           xcodegen generate
           xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask9" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIEffectBakeCoordinatorTests | tee "$RUNNER_TEMP/task9-green.log"
