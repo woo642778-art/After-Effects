@@ -1,4 +1,5 @@
 import SwiftUI
+import VertexCore
 import VertexProject
 
 struct EffectControlsView: View {
