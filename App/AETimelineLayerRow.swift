@@ -17,10 +17,10 @@ struct AETimelineLayerRow: View {
     var body: some View {
         HStack(spacing: 0) {
             controls
-                .frame(width: 280, alignment: .leading)
+                .frame(width: 420, alignment: .leading)
             Divider().overlay(Color.white.opacity(0.08))
             timelineBar
-                .frame(width: max(480, composition.duration.seconds * editorState.pixelsPerSecond), height: 34)
+                .frame(width: CGFloat(max(480, composition.duration.seconds * editorState.pixelsPerSecond)), height: 34)
         }
         .frame(height: 36)
         .background(editorState.selectedLayerIDs.contains(layer.id) ? AfterEffectsTheme.accent.opacity(0.09) : Color.clear)
@@ -52,11 +52,39 @@ struct AETimelineLayerRow: View {
             } label: {
                 Image(systemName: layer.locked ? "lock.fill" : "lock.open")
             }
-            .buttonStyle(.plain)
             Text(layer.name)
                 .font(.caption)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            Menu {
+                Button("None") { setParent(nil) }
+                Divider()
+                ForEach(workspace.orderedLayers.filter { $0.id != layer.id }) { candidate in
+                    Button(candidate.name) { setParent(candidate.id) }
+                }
+            } label: {
+                Label(layer.parentLayerID == nil ? "Parent" : "P", systemImage: "point.3.connected.trianglepath.dotted")
+                    .labelStyle(.iconOnly)
+            }
+
+            Menu {
+                Button("No Matte") { setMatte(nil) }
+                Divider()
+                ForEach(workspace.orderedLayers.filter { $0.id != layer.id }) { source in
+                    Menu(source.name) {
+                        ForEach(ProjectTrackMatteMode.allCases, id: \.self) { mode in
+                            Button(matteLabel(mode)) {
+                                setMatte(ProjectTrackMatte(sourceLayerID: source.id, mode: mode))
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label(layer.trackMatte == nil ? "Matte" : "M", systemImage: "circle.lefthalf.filled")
+                    .labelStyle(.iconOnly)
+            }
+
             Menu {
                 ForEach(LayerBlendMode.allCases, id: \.self) { mode in
                     Button(mode.rawValue.capitalized) {
@@ -67,7 +95,6 @@ struct AETimelineLayerRow: View {
                 Text(layer.blendMode.rawValue.prefix(3).uppercased())
                     .font(.caption2.monospaced())
             }
-            .menuStyle(.button)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 5)
@@ -76,8 +103,8 @@ struct AETimelineLayerRow: View {
 
     private var timelineBar: some View {
         GeometryReader { _ in
-            let startX = layer.timing.inPoint.seconds * editorState.pixelsPerSecond
-            let width = max(4, (layer.timing.outPoint.seconds - layer.timing.inPoint.seconds) * editorState.pixelsPerSecond)
+            let startX = CGFloat(layer.timing.inPoint.seconds * editorState.pixelsPerSecond)
+            let width = CGFloat(max(4, (layer.timing.outPoint.seconds - layer.timing.inPoint.seconds) * editorState.pixelsPerSecond))
             ZStack(alignment: .leading) {
                 Rectangle().fill(Color.white.opacity(0.025))
                 RoundedRectangle(cornerRadius: 3)
@@ -89,7 +116,7 @@ struct AETimelineLayerRow: View {
                         Rectangle().fill(AfterEffectsTheme.accent).frame(width: 3)
                     }
                     .frame(width: width)
-                    .offset(x: startX + Double(moveOffset))
+                    .offset(x: startX + moveOffset)
                     .gesture(moveGesture)
                     .overlay(alignment: .leading) {
                         Color.clear
@@ -108,7 +135,7 @@ struct AETimelineLayerRow: View {
                 Rectangle()
                     .fill(AfterEffectsTheme.accent)
                     .frame(width: 1)
-                    .offset(x: editorState.playhead.seconds * editorState.pixelsPerSecond)
+                    .offset(x: CGFloat(editorState.playhead.seconds * editorState.pixelsPerSecond))
             }
         }
     }
@@ -120,15 +147,37 @@ struct AETimelineLayerRow: View {
                 defer { moveOffset = 0 }
                 guard !layer.locked else { return }
                 do {
-                    let selection = editorState.selectedLayerIDs.contains(layer.id)
-                        ? editorState.selectedLayerIDs.sorted(by: { $0.rawValue < $1.rawValue })
-                        : [layer.id]
-                    let edit = try AETimelineInteractionModel.moveEdit(
-                        layerIDs: selection,
-                        dragPoints: Double(value.translation.width),
+                    let delta = try AETimelineInteractionModel.exactDelta(
+                        points: Double(value.translation.width),
                         pixelsPerSecond: editorState.pixelsPerSecond,
                         frameRate: composition.frameRate
                     )
+                    let edit: TimelineEdit
+                    switch editorState.activeTool {
+                    case .selection:
+                        let selection = editorState.selectedLayerIDs.contains(layer.id)
+                            ? editorState.selectedLayerIDs.sorted(by: { $0.rawValue < $1.rawValue })
+                            : [layer.id]
+                        edit = .move(layerIDs: selection, delta: delta)
+                    case .slip:
+                        edit = .slip(layerID: layer.id, sourceDelta: delta)
+                    case .slide:
+                        let layers = workspace.orderedLayers
+                        let previous = index > 0 ? layers[index - 1].id : nil
+                        let next = index + 1 < layers.count ? layers[index + 1].id : nil
+                        edit = .slide(layerID: layer.id, delta: delta, previousLayerID: previous, nextLayerID: next)
+                    case .roll:
+                        guard index > 0 else {
+                            throw ProjectError.invalidOperation("Roll needs a layer immediately before the selected layer.")
+                        }
+                        edit = .roll(
+                            leftLayerID: workspace.orderedLayers[index - 1].id,
+                            rightLayerID: layer.id,
+                            boundary: try layer.timing.inPoint.adding(delta)
+                        )
+                    case .ripple:
+                        throw ProjectError.invalidOperation("Use a layer trim handle while Ripple is selected.")
+                    }
                     try workspace.commitTimelineEdit(edit, compositionID: composition.id)
                     interactionError = nil
                 } catch {
@@ -151,11 +200,19 @@ struct AETimelineLayerRow: View {
                         pixelsPerSecond: editorState.pixelsPerSecond,
                         frameRate: composition.frameRate
                     )
+                    let proposed = edge == .in
+                        ? try layer.timing.inPoint.adding(delta)
+                        : try layer.timing.outPoint.adding(delta)
                     let edit: TimelineEdit
-                    if edge == .in {
-                        edit = .trimIn(layerID: layer.id, to: try layer.timing.inPoint.adding(delta))
+                    if editorState.activeTool == .ripple {
+                        let affected = workspace.orderedLayers
+                            .filter { $0.id != layer.id && $0.timing.inPoint >= (edge == .in ? layer.timing.inPoint : layer.timing.outPoint) }
+                            .map(\.id)
+                        edit = .ripple(layerID: layer.id, edge: edge, to: proposed, affectedLayerIDs: affected)
+                    } else if edge == .in {
+                        edit = .trimIn(layerID: layer.id, to: proposed)
                     } else {
-                        edit = .trimOut(layerID: layer.id, to: try layer.timing.outPoint.adding(delta))
+                        edit = .trimOut(layerID: layer.id, to: proposed)
                     }
                     try workspace.commitTimelineEdit(edit, compositionID: composition.id)
                     interactionError = nil
@@ -163,5 +220,28 @@ struct AETimelineLayerRow: View {
                     interactionError = error.localizedDescription
                 }
             }
+    }
+
+    private func setParent(_ parentID: VertexID?) {
+        workspace.setLayerParent(layerID: layer.id, parentLayerID: parentID)
+        interactionError = nil
+    }
+
+    private func setMatte(_ matte: ProjectTrackMatte?) {
+        do {
+            try workspace.phase9SetTrackMatte(layerID: layer.id, matte: matte)
+            interactionError = nil
+        } catch {
+            interactionError = error.localizedDescription
+        }
+    }
+
+    private func matteLabel(_ mode: ProjectTrackMatteMode) -> String {
+        switch mode {
+        case .alpha: "Alpha"
+        case .alphaInverted: "Alpha Inverted"
+        case .luma: "Luma"
+        case .lumaInverted: "Luma Inverted"
+        }
     }
 }
