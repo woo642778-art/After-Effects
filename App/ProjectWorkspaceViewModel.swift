@@ -727,7 +727,7 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         return RationalTime(value: numerator.partialValue, timescale: Int32(frameRate.value))
     }
 
-    private func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
+    func perform(_ payload: ProjectCommandPayload, mergeKey: String?) {
         let token = beginPublishedOperation(.edit)
         Task { [weak self] in
             guard let self else { return }
