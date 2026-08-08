@@ -59,6 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 Tools/phase9_tasks/task08_red.py
+          python3 Tools/phase9_tasks/task08_testfix.py
           xcodegen generate
           set +e
           xcodebuild test -project Vertex.xcodeproj -scheme Vertex -configuration Debug -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath "$PWD/DerivedDataTask8Red" CODE_SIGNING_ALLOWED=NO -only-testing:VertexAppTests/AIFrameEffectServiceTests > "$RUNNER_TEMP/task8-red.log" 2>&1
