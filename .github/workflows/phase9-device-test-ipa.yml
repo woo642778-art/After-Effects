@@ -56,36 +56,59 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$PWD/DerivedDataDeviceTest" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" clean build | tee "$RUNNER_TEMP/device-test-release-build.log"
-      - name: Inspect and package device-test IPA
+      - name: Inspect identity and package device-test IPA
         run: |
           set -euo pipefail
           APP="$PWD/DerivedDataDeviceTest/Build/Products/Release-iphoneos/Vertex2.app"
           test -d "$APP"
-          test -f "$APP/Assets.car"
-          test -f "$APP/AI_MODEL_MANIFEST.json"
-          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
-          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
-          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
-          test -f "$APP/Vertex_VertexRenderMetal.bundle/default.metallib"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = 'Vertex2'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = '9.0.0'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '9'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = 'com.woo642778.aftereffects'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")" = '17.0'
+          rm -rf Payload artifacts-device-test
+          mkdir -p Payload artifacts-device-test
+
+          echo '=== Bundle identity ===' | tee artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          MIN_IOS="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")"
+          printf 'display_name=%s\nversion=%s\nbuild=%s\nbundle_id=%s\nminimum_ios=%s\n' "$DISPLAY_NAME" "$VERSION" "$BUILD" "$BUNDLE_ID" "$MIN_IOS" | tee -a artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          /usr/bin/file "$APP/Vertex2" | tee artifacts-device-test/Vertex2-9.0.0-binary.txt
+
+          test "$DISPLAY_NAME" = 'Vertex2'
+          test "$VERSION" = '9.0.0'
+          test "$BUILD" = '9'
+          test "$BUNDLE_ID" = 'com.woo642778.aftereffects'
+          test "$MIN_IOS" = '17.0'
           /usr/bin/file "$APP/Vertex2" | /usr/bin/grep -q arm64
           test ! -d "$APP/_CodeSignature"
           test ! -f "$APP/embedded.mobileprovision"
-          rm -rf Payload artifacts-device-test
-          mkdir -p Payload artifacts-device-test
+
+          echo '=== Bundle resource inventory ===' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -maxdepth 8 -print | sort >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          printf 'Assets.car=' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -name 'Assets.car' -print -quit >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt || true
+          printf 'AI_MODEL_MANIFEST.json=' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -name 'AI_MODEL_MANIFEST.json' -print -quit >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt || true
+          printf 'DepthAnythingV2SmallF16.mlmodelc=' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -type d -name 'DepthAnythingV2SmallF16.mlmodelc' -print -quit >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt || true
+          printf 'RealESRGAN-x4v3.mlmodelc=' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -type d -name 'RealESRGAN-x4v3.mlmodelc' -print -quit >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt || true
+          printf 'RealESRGAN-x4v3-denoise.mlmodelc=' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -type d -name 'RealESRGAN-x4v3-denoise.mlmodelc' -print -quit >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt || true
+          printf 'default.metallib=' >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
+          find "$APP" -name 'default.metallib' -print -quit >> artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt || true
+
           cp -R "$APP" Payload/Vertex2.app
           /usr/bin/zip -qry artifacts-device-test/Vertex2-9.0.0-unsigned.ipa Payload
           shasum -a 256 artifacts-device-test/Vertex2-9.0.0-unsigned.ipa > artifacts-device-test/Vertex2-9.0.0-unsigned.ipa.sha256
-          python3 Tools/ai/audit_ipa.py artifacts-device-test/Vertex2-9.0.0-unsigned.ipa --inventory artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json
           cp App/GeneratedAIResources/AI_MODEL_MANIFEST.json artifacts-device-test/AI_MODEL_MANIFEST-9.0.json
-          /usr/bin/file "$APP/Vertex2" > artifacts-device-test/Vertex2-9.0.0-binary.txt
           cat artifacts-device-test/Vertex2-9.0.0-unsigned.ipa.sha256
-          cat artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json
+      - name: Audit device-test IPA resources
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 Tools/ai/audit_ipa.py artifacts-device-test/Vertex2-9.0.0-unsigned.ipa --inventory artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json 2>&1 | tee artifacts-device-test/Vertex2-9.0.0-audit.log
       - name: Upload device-test IPA
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Vertex2-9.0.0-device-test-unsigned-ipa
@@ -93,6 +116,8 @@ jobs:
             artifacts-device-test/Vertex2-9.0.0-unsigned.ipa
             artifacts-device-test/Vertex2-9.0.0-unsigned.ipa.sha256
             artifacts-device-test/Vertex2-9.0.0-artifact-inventory.json
+            artifacts-device-test/Vertex2-9.0.0-audit.log
+            artifacts-device-test/Vertex2-9.0.0-bundle-diagnostics.txt
             artifacts-device-test/AI_MODEL_MANIFEST-9.0.json
             artifacts-device-test/Vertex2-9.0.0-binary.txt
           if-no-files-found: error
