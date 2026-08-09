@@ -78,10 +78,10 @@ struct AutomationWorkspaceView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "photo.on.rectangle.angled").frame(width: 18)
                                 Text("Import Photos / Videos")
-                                Spacer()
                                 Text("File-backed")
                                     .font(.caption2)
                                     .foregroundStyle(AfterEffectsTheme.secondaryText)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                             }
                             .font(.caption)
                             .foregroundStyle(AfterEffectsTheme.primaryText)
