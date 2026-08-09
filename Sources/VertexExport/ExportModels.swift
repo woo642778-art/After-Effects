@@ -94,9 +94,6 @@ public enum ExportQualityPreset: String, Codable, Sendable, CaseIterable {
         case .master: bitsPerPixel = 0.22
         }
         let raw = pixelsPerSecond * bitsPerPixel
-        // 8K/60 master output naturally exceeds the old 160 Mbps ceiling.
-        // Keep a finite upper bound to avoid nonsensical AVFoundation settings while
-        // allowing high-resolution HEVC/H.264 jobs to scale with pixel throughput.
         return Int(min(max(raw.rounded(), 500_000), 800_000_000))
     }
 
@@ -113,6 +110,7 @@ public enum ExportQualityPreset: String, Codable, Sendable, CaseIterable {
 public enum ExportValidationError: Error, Sendable, Equatable {
     case invalidDimensions
     case invalidFrameRate
+    case invalidDuration
     case invalidOutputURL
     case codecRequired
     case codecNotAllowed(ExportVideoCodec, ExportFormat)
@@ -188,6 +186,51 @@ public struct ExportJob: Codable, Sendable, Equatable, Identifiable {
         let numerator = frameIndex.multipliedReportingOverflow(by: Int64(frameRate.timescale))
         guard !numerator.overflow else { throw ExportValidationError.invalidFrameRate }
         return RationalTime(value: numerator.partialValue, timescale: Int32(frameRate.value))
+    }
+
+    /// Number of output samples whose presentation times cover `duration`.
+    /// The computation is fully rational and rounds up, so fractional rates such as
+    /// 30000/1001 and 60000/1001 cannot lose the final partial frame through Double conversion.
+    public func frameCount(for duration: RationalTime) throws -> Int64 {
+        guard duration > .zero, frameRate > .zero else { throw ExportValidationError.invalidDuration }
+
+        var durationNumerator = duration.value.magnitude
+        var rateNumerator = frameRate.value.magnitude
+        var durationDenominator = UInt64(duration.timescale)
+        var rateDenominator = UInt64(frameRate.timescale)
+
+        var factor = Self.gcd(durationNumerator, rateDenominator)
+        durationNumerator /= factor
+        rateDenominator /= factor
+        factor = Self.gcd(rateNumerator, durationDenominator)
+        rateNumerator /= factor
+        durationDenominator /= factor
+
+        let numeratorProduct = durationNumerator.multipliedReportingOverflow(by: rateNumerator)
+        guard !numeratorProduct.overflow else { throw ExportValidationError.invalidDuration }
+        let denominatorProduct = durationDenominator.multipliedReportingOverflow(by: rateDenominator)
+        guard !denominatorProduct.overflow, denominatorProduct.partialValue > 0 else {
+            throw ExportValidationError.invalidDuration
+        }
+
+        let numerator = numeratorProduct.partialValue
+        let denominator = denominatorProduct.partialValue
+        let quotient = numerator / denominator
+        let remainder = numerator % denominator
+        let rounded = remainder == 0 ? quotient : quotient.addingReportingOverflow(1).partialValue
+        guard rounded > 0, rounded <= UInt64(Int64.max) else { throw ExportValidationError.invalidDuration }
+        return Int64(rounded)
+    }
+
+    private static func gcd(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
+        var a = lhs
+        var b = rhs
+        while b != 0 {
+            let remainder = a % b
+            a = b
+            b = remainder
+        }
+        return max(a, 1)
     }
 }
 
