@@ -1,3 +1,5 @@
+#if canImport(AVFoundation) && canImport(CoreGraphics) && canImport(CoreVideo) && canImport(ImageIO) && canImport(UniformTypeIdentifiers) && canImport(Vision)
+import AVFoundation
 import CoreGraphics
 import CoreVideo
 import Foundation
@@ -203,3 +205,4 @@ public struct AppleFrameInterpolator: Sendable {
         return output
     }
 }
+#endif
