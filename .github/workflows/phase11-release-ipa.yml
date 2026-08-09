@@ -1,6 +1,9 @@
 name: Vertex2 11 Release IPA
 
 on:
+  pull_request:
+    branches:
+      - agent/phase10-ipad-ae-3d
   push:
     branches:
       - agent/phase11-ae-time-engine-spec
@@ -17,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Select Xcode and install XcodeGen
         run: |
@@ -162,7 +165,7 @@ jobs:
             artifacts/Vertex2-11.0.0-unsigned.ipa \
             --json artifacts/Vertex2-11.0.0-audit.json | tee artifacts/Vertex2-11.0.0-audit.txt
           cp App/GeneratedAIResources/AI_MODEL_MANIFEST.json artifacts/AI_MODEL_MANIFEST-11.0.json
-          printf '%s\n' '${{ github.sha }}' > artifacts/commit-sha.txt
+          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
 
       - name: Upload Vertex2 11 IPA and evidence
         uses: actions/upload-artifact@v4
