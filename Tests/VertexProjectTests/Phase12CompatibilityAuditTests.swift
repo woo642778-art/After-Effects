@@ -14,8 +14,10 @@ func compatibilityAuditTotalsRemainTruthful() throws {
 
 @Test("Commercial plugin families are plans rather than fake native implementations")
 func commercialFamiliesRemainCleanRoomPlans() {
-    let cleanRoomFamilies: Set<EffectCompatibilityFamily> = [.continuum, .sapphire, .redGiantUniverse]
-    let summaries = EffectCompatibilityAudit.families.filter { cleanRoomFamilies.contains($0.family) }
+    let cleanRoomFamilies: [EffectCompatibilityFamily] = [.continuum, .sapphire, .redGiantUniverse]
+    let summaries = EffectCompatibilityAudit.families.filter { summary in
+        cleanRoomFamilies.contains(where: { $0.rawValue == summary.family.rawValue })
+    }
 
     #expect(summaries.count == cleanRoomFamilies.count)
     #expect(summaries.allSatisfy { $0.defaultStatus == .cleanRoomPlanned })
