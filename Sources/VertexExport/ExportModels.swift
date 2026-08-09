@@ -29,6 +29,55 @@ public enum ExportVideoCodec: String, Codable, Sendable, CaseIterable {
     case proRes4444
 }
 
+public struct ExportDimensions: Codable, Equatable, Sendable {
+    public var width: Int
+    public var height: Int
+
+    public init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
+}
+
+public enum ExportResolutionPreset: String, Codable, Sendable, CaseIterable {
+    case matchComposition
+    case hd720
+    case hd1080
+    case qhd1440
+    case uhd4K
+    case dci4K
+    case uhd5K
+    case uhd6K
+    case uhd8K
+    case dci8K
+    case custom
+
+    public var dimensions: ExportDimensions? {
+        switch self {
+        case .matchComposition, .custom:
+            nil
+        case .hd720:
+            ExportDimensions(width: 1280, height: 720)
+        case .hd1080:
+            ExportDimensions(width: 1920, height: 1080)
+        case .qhd1440:
+            ExportDimensions(width: 2560, height: 1440)
+        case .uhd4K:
+            ExportDimensions(width: 3840, height: 2160)
+        case .dci4K:
+            ExportDimensions(width: 4096, height: 2160)
+        case .uhd5K:
+            ExportDimensions(width: 5120, height: 2880)
+        case .uhd6K:
+            ExportDimensions(width: 6144, height: 3456)
+        case .uhd8K:
+            ExportDimensions(width: 7680, height: 4320)
+        case .dci8K:
+            ExportDimensions(width: 8192, height: 4320)
+        }
+    }
+}
+
 public enum ExportQualityPreset: String, Codable, Sendable, CaseIterable {
     case compact
     case balanced
@@ -45,7 +94,10 @@ public enum ExportQualityPreset: String, Codable, Sendable, CaseIterable {
         case .master: bitsPerPixel = 0.22
         }
         let raw = pixelsPerSecond * bitsPerPixel
-        return Int(min(max(raw.rounded(), 500_000), 160_000_000))
+        // 8K/60 master output naturally exceeds the old 160 Mbps ceiling.
+        // Keep a finite upper bound to avoid nonsensical AVFoundation settings while
+        // allowing high-resolution HEVC/H.264 jobs to scale with pixel throughput.
+        return Int(min(max(raw.rounded(), 500_000), 800_000_000))
     }
 
     public var jpegQuality: Double {
