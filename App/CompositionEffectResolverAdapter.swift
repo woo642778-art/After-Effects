@@ -10,6 +10,10 @@ struct CompositionEffectResolverAdapter: CompositionEffectResolver {
 
     func resolve(_ request: CompositionEffectRequest) async throws -> PortableImage {
         do {
+            if request.effect.type.isNativePixelEffect {
+                return try NativeFrameEffectProcessor().process(request)
+            }
+
             let (recipe, requestedTier) = try request.effect.aiRecipeAndTier()
             let identity = try environment.modelIdentity(for: recipe, qualityTier: requestedTier)
             let parameterDigest = try AIRecipeCodec.digest(recipe)
