@@ -1,4 +1,5 @@
 import Foundation
+import VertexCore
 
 public enum ExportFormat: String, Codable, Sendable, CaseIterable {
     case mov
@@ -76,25 +77,40 @@ public struct ExportJob: Codable, Sendable, Equatable, Identifiable {
     public var quality: ExportQualityPreset
     public var width: Int
     public var height: Int
-    public var fps: Double
+    public var frameRate: RationalTime
     public var outputURL: URL
     public var includeAlpha: Bool
+    public var includeAudio: Bool
 
-    public init(id: UUID = UUID(), format: ExportFormat, codec: ExportVideoCodec?, quality: ExportQualityPreset = .high, width: Int, height: Int, fps: Double, outputURL: URL, includeAlpha: Bool = false) {
+    public init(
+        id: UUID = UUID(),
+        format: ExportFormat,
+        codec: ExportVideoCodec?,
+        quality: ExportQualityPreset = .high,
+        width: Int,
+        height: Int,
+        frameRate: RationalTime,
+        outputURL: URL,
+        includeAlpha: Bool = false,
+        includeAudio: Bool = true
+    ) {
         self.id = id
         self.format = format
         self.codec = codec
         self.quality = quality
         self.width = width
         self.height = height
-        self.fps = fps
+        self.frameRate = frameRate
         self.outputURL = outputURL
         self.includeAlpha = includeAlpha
+        self.includeAudio = includeAudio
     }
+
+    public var fps: Double { frameRate.seconds }
 
     public func validated() throws -> Self {
         guard (1...8192).contains(width), (1...8192).contains(height) else { throw ExportValidationError.invalidDimensions }
-        guard fps.isFinite, fps > 0, fps <= 240 else { throw ExportValidationError.invalidFrameRate }
+        guard frameRate > .zero, fps.isFinite, fps > 0, fps <= 240 else { throw ExportValidationError.invalidFrameRate }
         guard outputURL.isFileURL else { throw ExportValidationError.invalidOutputURL }
         if format.isVideoContainer {
             guard let codec else { throw ExportValidationError.codecRequired }
@@ -112,6 +128,14 @@ public struct ExportJob: Codable, Sendable, Equatable, Identifiable {
             guard codec == .proRes4444 else { throw ExportValidationError.alphaRequiresProRes4444 }
         }
         return self
+    }
+
+    public func exactPresentationTime(frameIndex: Int64) throws -> RationalTime {
+        guard frameIndex >= 0 else { throw ExportValidationError.invalidFrameRate }
+        guard frameRate.value > 0, frameRate.value <= Int64(Int32.max) else { throw ExportValidationError.invalidFrameRate }
+        let numerator = frameIndex.multipliedReportingOverflow(by: Int64(frameRate.timescale))
+        guard !numerator.overflow else { throw ExportValidationError.invalidFrameRate }
+        return RationalTime(value: numerator.partialValue, timescale: Int32(frameRate.value))
     }
 }
 
