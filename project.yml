@@ -56,17 +56,15 @@ targets:
         product: Vertex3D
       - package: Vertex
         product: VertexRender3DMetal
-      - package: Vertex
-        product: VertexExport
-      - package: Vertex
+      - package: VertexExport
         product: VertexExportAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: Vertex2
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 11.0.0
-        CURRENT_PROJECT_VERSION: 11
+        MARKETING_VERSION: 12.0.0
+        CURRENT_PROJECT_VERSION: 12
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Vertex2
