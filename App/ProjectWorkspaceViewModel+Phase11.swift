@@ -37,4 +37,15 @@ extension ProjectWorkspaceViewModel {
             mergeKey: mergeKey
         )
     }
+
+    func selectMedia(_ mediaID: VertexID) {
+        guard let project else { return }
+        if let selectedLayerID = project.layerRegistry.first(where: { layer in
+            guard layer.compositionID == project.activeCompositionID,
+                  case .media(let candidate, _) = layer.source else { return false }
+            return candidate == mediaID
+        })?.id {
+            selectLayer(selectedLayerID)
+        }
+    }
 }
