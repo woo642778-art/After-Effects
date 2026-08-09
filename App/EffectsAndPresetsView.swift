@@ -14,6 +14,12 @@ struct VertexEffectCatalogEntry: Equatable, Identifiable, Sendable {
 
 enum VertexEffectCatalog {
     static let entries: [VertexEffectCatalogEntry] = [
+        .init(type: .gaussianBlur, name: "Gaussian Blur", category: "Blur & Sharpen", keywords: ["blur", "gaussian", "soften"], description: "True Gaussian blur processed through Core Image in the shared preview/export effect path."),
+        .init(type: .sharpen, name: "Sharpen", category: "Blur & Sharpen", keywords: ["sharpen", "sharpness", "detail"], description: "Luminance sharpening with keyframable sharpness."),
+        .init(type: .exposure, name: "Exposure", category: "Color Correction", keywords: ["exposure", "ev", "stops", "light"], description: "Exposure adjustment in photographic stops."),
+        .init(type: .colorControls, name: "Color Controls", category: "Color Correction", keywords: ["brightness", "contrast", "saturation", "color"], description: "Brightness, contrast, and saturation controls in one stackable effect."),
+        .init(type: .hueAdjust, name: "Hue Adjust", category: "Color Correction", keywords: ["hue", "color", "rotate", "angle"], description: "Rotate hue by a keyframable angle."),
+        .init(type: .invert, name: "Invert", category: "Channel", keywords: ["invert", "negative", "channel"], description: "Invert image channels using the native pixel processor."),
         .init(type: .depthMap, name: "Depth Map", category: "AI", keywords: ["depth", "depth anything", "z", "3d channel"], description: "Generate an editable depth representation from the selected media layer."),
         .init(type: .cutout, name: "Cutout", category: "AI", keywords: ["cutout", "mask", "foreground", "person", "remove background"], description: "Create a foreground alpha matte with on-device segmentation."),
         .init(type: .upscale, name: "Upscale", category: "AI", keywords: ["upscale", "super resolution", "resolution", "4x"], description: "Increase source detail and resolution with the bundled RealESRGAN model."),
@@ -23,24 +29,56 @@ enum VertexEffectCatalog {
     static func search(_ query: String) -> [VertexEffectCatalogEntry] {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return entries }
-        return entries.filter { entry in
-            entry.name.lowercased().contains(normalized)
-                || entry.category.lowercased().contains(normalized)
-                || entry.keywords.contains(where: { $0.lowercased().contains(normalized) })
+        return entries
+            .compactMap { entry -> (VertexEffectCatalogEntry, Int)? in
+                let fields = [entry.name, entry.category] + entry.keywords
+                let scores = fields.map { matchScore(query: normalized, candidate: $0.lowercased()) }
+                guard let score = scores.max(), score > 0 else { return nil }
+                return (entry, score)
+            }
+            .sorted {
+                if $0.1 == $1.1 { return $0.0.name < $1.0.name }
+                return $0.1 > $1.1
+            }
+            .map(\.0)
+    }
+
+    private static func matchScore(query: String, candidate: String) -> Int {
+        if candidate == query { return 1000 }
+        if candidate.hasPrefix(query) { return 800 - max(0, candidate.count - query.count) }
+        if candidate.contains(query) { return 600 - max(0, candidate.count - query.count) }
+
+        var queryIndex = query.startIndex
+        var matched = 0
+        var gapPenalty = 0
+        var previousMatch: String.Index?
+        for index in candidate.indices where queryIndex < query.endIndex {
+            if candidate[index] == query[queryIndex] {
+                matched += 1
+                if let previousMatch {
+                    gapPenalty += candidate.distance(from: candidate.index(after: previousMatch), to: index)
+                }
+                previousMatch = index
+                query.formIndex(after: &queryIndex)
+            }
         }
+        guard queryIndex == query.endIndex else { return 0 }
+        return 300 + matched * 10 - gapPenalty
     }
 }
 
 struct EffectsAndPresetsView: View {
     @EnvironmentObject private var workspace: ProjectWorkspaceViewModel
     @State private var query = ""
-    @State private var expandedCategories: Set<String> = ["AI"]
+    @State private var expandedCategories: Set<String> = ["AI", "Blur & Sharpen", "Color Correction", "Channel"]
     @State private var errorMessage: String?
+    @FocusState private var searchFocused: Bool
 
     private var filtered: [VertexEffectCatalogEntry] { VertexEffectCatalog.search(query) }
 
     var body: some View {
         VStack(spacing: 0) {
+            quickFXHeader
             searchField
             Divider().overlay(AfterEffectsTheme.border)
             ScrollView {
@@ -61,6 +99,27 @@ struct EffectsAndPresetsView: View {
         .background(AfterEffectsTheme.panel)
     }
 
+    private var quickFXHeader: some View {
+        HStack(spacing: 8) {
+            Button {
+                query = ""
+                searchFocused = true
+            } label: {
+                Label("Quick FX", systemImage: "bolt.fill")
+            }
+            .buttonStyle(.plain)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(AfterEffectsTheme.accent)
+            Spacer()
+            Text("Search → Apply")
+                .font(.system(size: 9))
+                .foregroundStyle(AfterEffectsTheme.tertiaryText)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 26)
+        .background(AfterEffectsTheme.elevatedPanel)
+    }
+
     private var searchField: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
@@ -70,6 +129,10 @@ struct EffectsAndPresetsView: View {
                 .textFieldStyle(.plain)
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.primaryText)
+                .focused($searchFocused)
+                .onSubmit {
+                    if let first = filtered.first { apply(first) }
+                }
             if !query.isEmpty {
                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain)
@@ -81,7 +144,10 @@ struct EffectsAndPresetsView: View {
         .background(AfterEffectsTheme.surface)
     }
 
-    private var categories: [String] { Array(Set(filtered.map(\.category))).sorted() }
+    private var categories: [String] {
+        var seen = Set<String>()
+        return filtered.compactMap { seen.insert($0.category).inserted ? $0.category : nil }
+    }
 
     private func categorySection(_ category: String) -> some View {
         let entries = filtered.filter { $0.category == category }
@@ -146,6 +212,8 @@ struct EffectsAndPresetsView: View {
             .insertLayerEffect(id: layer.id, effect: effect, index: layer.effects.count),
             mergeKey: nil
         )
+        query = ""
+        searchFocused = false
         errorMessage = nil
     }
 
@@ -155,6 +223,12 @@ struct EffectsAndPresetsView: View {
         case .cutout: "person.crop.rectangle"
         case .upscale: "arrow.up.left.and.arrow.down.right"
         case .restore: "wand.and.stars"
+        case .gaussianBlur: "drop.halffull"
+        case .sharpen: "sparkle.magnifyingglass"
+        case .exposure: "sun.max"
+        case .colorControls: "slider.horizontal.3"
+        case .hueAdjust: "paintpalette"
+        case .invert: "circle.lefthalf.filled"
         }
     }
 }
