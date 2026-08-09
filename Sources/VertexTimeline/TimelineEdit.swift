@@ -13,6 +13,7 @@ public enum TimelineEdit: Equatable, Sendable {
     case trimOut(layerID: VertexID, to: RationalTime)
     case split(layerID: VertexID, at: RationalTime)
     case ripple(layerID: VertexID, edge: TimelineEdge, to: RationalTime, affectedLayerIDs: [VertexID])
+    case rippleDelete(layerID: VertexID, affectedLayerIDs: [VertexID])
     case roll(leftLayerID: VertexID, rightLayerID: VertexID, boundary: RationalTime)
     case slip(layerID: VertexID, sourceDelta: RationalTime)
     case slide(layerID: VertexID, delta: RationalTime, previousLayerID: VertexID?, nextLayerID: VertexID?)
