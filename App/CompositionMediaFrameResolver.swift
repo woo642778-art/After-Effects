@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 import VertexComposition
 import VertexCore
@@ -61,7 +61,7 @@ actor CompositionMediaFrameResolver: CompositionInterpolatingFrameResolver {
                     return .frame(try await provider.frame(for: request, cancellationToken: MediaCancellationToken()).image)
                 }
                 let leftRequest = try VideoFrameRequest(time: leftTime, targetSize: targetSize, tolerance: .exact)
-                let rightRequest = try VideoFrameRequest(time: rightTime, targetSize: targetSize, tolerance: .nearestFrame)
+                let rightRequest = try VideoFrameRequest(time: rightTime, targetSize: targetSize, tolerance: .exact)
                 let left = try await provider.frame(for: leftRequest, cancellationToken: MediaCancellationToken()).image
                 let right = try await provider.frame(for: rightRequest, cancellationToken: MediaCancellationToken()).image
                 switch interpolation {
