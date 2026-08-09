@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/phase12-media-effects-automation
+  pull_request:
   workflow_dispatch:
 
 concurrency:
