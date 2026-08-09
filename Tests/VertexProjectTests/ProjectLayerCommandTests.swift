@@ -11,10 +11,9 @@ private struct LayerCommandFixture {
 }
 
 private func makeLayerCommandFixture() throws -> LayerCommandFixture {
-    var document = try ProjectDocument.makeNew(
-        id: VertexID(rawValue: "62000000-0000-0000-0000-000000000001"),
-        name: "Commands",
-        timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+    var document = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
     )
     let media = MediaReference.fixture(id: "62000000-0000-0000-0000-000000000010")
     document.mediaRegistry = [media]
@@ -36,6 +35,7 @@ private func makeLayerCommandFixture() throws -> LayerCommandFixture {
     )
     composition.layerIDs = [top.id, bottom.id]
     document.compositionRegistry = [composition]
+    document.activeCompositionID = composition.id
     document.layerRegistry = [top, bottom]
     document.selectedLayerID = top.id
     document.selectedMediaID = media.id
