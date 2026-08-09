@@ -1,0 +1,191 @@
+name: Vertex2 11 Release IPA
+
+on:
+  push:
+    branches:
+      - agent/phase11-ae-time-engine-spec
+  workflow_dispatch:
+
+concurrency:
+  group: vertex2-11-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-qualification:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -version
+          swift --version
+
+      - name: Verify Vertex2 11 release contract
+        run: |
+          set -euo pipefail
+          grep -q 'currentAppVersion = "11.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'MARKETING_VERSION: 11.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 11' project.yml
+          grep -q 'PRODUCT_NAME: Vertex2' project.yml
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
+          grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
+          if grep -q 'UISupportedInterfaceOrientations_iPhone' project.yml; then
+            echo 'iPhone orientation contract is still present'
+            exit 1
+          fi
+          python3 Tools/ai/audit_models.py
+          git diff --check
+
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+          test -f App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+          test -d App/GeneratedAIResources/AIModels/DepthAnythingV2SmallF16.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3-denoise.mlmodelc
+          test -s App/GeneratedAIResources/AIModelNotices/DEPTH_ANYTHING_V2_NOTICE.md
+          test -s App/GeneratedAIResources/AIModelNotices/REALESRGAN_NOTICE.md
+          test -s App/GeneratedAIResources/AIModelNotices/APACHE-2.0.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('App/GeneratedAIResources/AI_MODEL_MANIFEST.json').read_text())
+          models = manifest.get('models', [])
+          if len(models) != 3:
+              raise SystemExit(f'Expected 3 compiled AI models, found {len(models)}')
+          if any(int(model.get('compiledSizeBytes', 0)) <= 0 for model in models):
+              raise SystemExit('Compiled AI model manifest contains an empty model')
+          print('compiled AI bytes:', sum(int(model['compiledSizeBytes']) for model in models))
+          PY
+
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+
+      - name: Run Swift package tests including native export and pinned AI inference
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-11-swift-tests.log"
+
+      - name: Select and boot iPad Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              m = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not m:
+                  continue
+              version = (int(m.group(1)), int(m.group(2)))
+              for device in devices:
+                  name = device.get('name', '')
+                  if device.get('isAvailable') and name.startswith('iPad'):
+                      pro = 1 if 'Pro' in name else 0
+                      candidates.append((version, pro, name, device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPad Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][3])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Run iPad app tests
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataPhase11Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test 2>&1 | tee "$RUNNER_TEMP/vertex2-11-ipad-tests.log"
+
+      - name: Build unsigned iOS 17 arm64 Release app
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/DerivedDataPhase11Release" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-11-release-build.log"
+
+      - name: Package and audit unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedDataPhase11Release/Build/Products/Release-iphoneos/Vertex2.app"
+          test -d "$APP"
+          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
+          rm -rf Payload artifacts
+          mkdir -p Payload artifacts
+          cp -R "$APP" Payload/Vertex2.app
+          /usr/bin/zip -qry artifacts/Vertex2-11.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex2-11.0.0-unsigned.ipa | tee artifacts/Vertex2-11.0.0-unsigned.ipa.sha256
+          python3 Tools/release/audit_vertex2_11_ipa.py \
+            artifacts/Vertex2-11.0.0-unsigned.ipa \
+            --json artifacts/Vertex2-11.0.0-audit.json | tee artifacts/Vertex2-11.0.0-audit.txt
+          cp App/GeneratedAIResources/AI_MODEL_MANIFEST.json artifacts/AI_MODEL_MANIFEST-11.0.json
+          printf '%s\n' '${{ github.sha }}' > artifacts/commit-sha.txt
+
+      - name: Upload Vertex2 11 IPA and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-11.0.0-unsigned-ipa
+          path: |
+            artifacts/Vertex2-11.0.0-unsigned.ipa
+            artifacts/Vertex2-11.0.0-unsigned.ipa.sha256
+            artifacts/Vertex2-11.0.0-audit.json
+            artifacts/Vertex2-11.0.0-audit.txt
+            artifacts/AI_MODEL_MANIFEST-11.0.json
+            artifacts/commit-sha.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload qualification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-11.0.0-qualification-logs
+          path: |
+            ${{ runner.temp }}/vertex2-11-swift-tests.log
+            ${{ runner.temp }}/vertex2-11-ipad-tests.log
+            ${{ runner.temp }}/vertex2-11-release-build.log
+          if-no-files-found: warn
+          retention-days: 7
