@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import CoreGraphics
 import CoreMedia
 import CoreVideo
@@ -30,6 +30,22 @@ public enum AppleExportWriterError: Error, LocalizedError {
         case .imageDestinationFailed: "Could not create or finalize the image export destination."
         case .writerFailed(let message): message
         case .frameCountInvalid: "Export frame count must be positive."
+        }
+    }
+}
+
+private final class AVAssetWriterFinishHandle: @unchecked Sendable {
+    let writer: AVAssetWriter
+
+    init(_ writer: AVAssetWriter) {
+        self.writer = writer
+    }
+
+    func finish() async -> (completed: Bool, errorMessage: String?) {
+        await withCheckedContinuation { continuation in
+            writer.finishWriting { [self] in
+                continuation.resume(returning: (writer.status == .completed, writer.error?.localizedDescription))
+            }
         }
     }
 }
@@ -84,6 +100,7 @@ public actor AppleExportWriter {
     ) async throws -> URL {
         let fileType: AVFileType = job.format == .mp4 ? .mp4 : .mov
         let writer = try AVAssetWriter(outputURL: destination, fileType: fileType)
+        let finishHandle = AVAssetWriterFinishHandle(writer)
         let codec = try codecType(job.codec)
         var compression: [String: Any] = [:]
         if job.codec == .h264 || job.codec == .hevc {
@@ -140,14 +157,16 @@ public actor AppleExportWriter {
                 progress(ExportProgressSnapshot(completedFrames: index + 1, totalFrames: frameCount))
             }
             input.markAsFinished()
-            await writer.finishWriting()
-            guard writer.status == .completed else {
-                throw AppleExportWriterError.writerFailed(writer.error?.localizedDescription ?? "AVAssetWriter did not complete successfully.")
+            let outcome = await finishHandle.finish()
+            guard outcome.completed else {
+                throw AppleExportWriterError.writerFailed(outcome.errorMessage ?? "AVAssetWriter did not complete successfully.")
             }
             return destination
         } catch {
-            input.markAsFinished()
-            writer.cancelWriting()
+            if writer.status == .writing {
+                input.markAsFinished()
+                writer.cancelWriting()
+            }
             try? removeIfExists(destination)
             throw error
         }
