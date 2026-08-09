@@ -12,6 +12,7 @@ public enum MetalSceneRendererError: Error {
     case pipelineCreationFailed
 }
 
+@MainActor
 public final class MetalSceneRenderer: NSObject, MTKViewDelegate {
     private struct GPUVertex {
         var position: SIMD3<Float>
@@ -24,7 +25,7 @@ public final class MetalSceneRenderer: NSObject, MTKViewDelegate {
     }
 
     public var scene: Scene3DDocument {
-        didSet { view?.setNeedsDisplay() }
+        didSet { invalidateView() }
     }
 
     private weak var view: MTKView?
@@ -117,6 +118,14 @@ public final class MetalSceneRenderer: NSObject, MTKViewDelegate {
     }
 
     public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+
+    private func invalidateView() {
+        #if os(macOS)
+        view?.needsDisplay = true
+        #else
+        view?.setNeedsDisplay()
+        #endif
+    }
 
     private func activeCamera() -> (position: Vector3D, camera: Camera3D) {
         if let id = scene.activeCameraID,
