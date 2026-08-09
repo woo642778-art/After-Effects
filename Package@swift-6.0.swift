@@ -12,7 +12,9 @@ var products: [Product] = [
     .library(name: "VertexProjectPersistence", targets: ["VertexProjectPersistence"]),
     .library(name: "VertexComposition", targets: ["VertexComposition"]),
     .library(name: "VertexAI", targets: ["VertexAI"]),
-    .library(name: "VertexAICoreML", targets: ["VertexAICoreML"])
+    .library(name: "VertexAICoreML", targets: ["VertexAICoreML"]),
+    .library(name: "Vertex3D", targets: ["Vertex3D"]),
+    .library(name: "VertexRender3DMetal", targets: ["VertexRender3DMetal"])
 ]
 
 var targets: [Target] = [
@@ -31,7 +33,8 @@ var targets: [Target] = [
     .target(name: "VertexComposition", dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexRender"]),
     .target(name: "VertexAI", dependencies: ["VertexCore"]),
     .target(name: "VertexAICoreML", dependencies: ["VertexCore", "VertexAI"]),
-
+    .target(name: "Vertex3D"),
+    .target(name: "VertexRender3DMetal", dependencies: ["Vertex3D"]),
     .testTarget(name: "VertexCoreTests", dependencies: ["VertexCore"]),
     .testTarget(name: "VertexMediaTests", dependencies: ["VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexRenderTests", dependencies: ["VertexRender", "VertexMedia", "VertexCore"]),
@@ -47,7 +50,8 @@ var targets: [Target] = [
     ),
     .testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexAITests", dependencies: ["VertexAI", "VertexCore"]),
-    .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"])
+    .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"]),
+    .testTarget(name: "Vertex3DTests", dependencies: ["Vertex3D"])
 ]
 
 #if !os(Linux)
