@@ -82,3 +82,17 @@ func phase11EightKBitrate() {
     let bitrate = ExportQualityPreset.master.targetBitRate(width: 7680, height: 4320, fps: 60)
     #expect(bitrate > 160_000_000)
 }
+
+@Test("Phase 11 export frame count follows the output frame rate exactly")
+func phase11ExactOutputFrameCount() throws {
+    let job = ExportJob(
+        format: .mov,
+        codec: .hevc,
+        width: 3840,
+        height: 2160,
+        frameRate: RationalTime(value: 60_000, timescale: 1_001),
+        outputURL: URL(fileURLWithPath: "/tmp/fps-override.mov")
+    )
+    #expect(try job.frameCount(for: RationalTime(value: 10, timescale: 1)) == 600)
+    #expect(try job.frameCount(for: RationalTime(value: 1, timescale: 2)) == 30)
+}
