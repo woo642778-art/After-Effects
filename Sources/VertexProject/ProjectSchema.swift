@@ -230,7 +230,7 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 5
-    public static let currentAppVersion = "9.0.0"
+    public static let currentAppVersion = "11.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int
@@ -281,9 +281,32 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         name: String,
         timestamp: Date = Date()
     ) throws -> ProjectDocument {
+        try ProjectDocument(
+            projectID: id,
+            revision: 0,
+            metadata: ProjectMetadata(
+                name: name,
+                createdAt: timestamp,
+                modifiedAt: timestamp,
+                createdByAppVersion: currentAppVersion,
+                lastSavedByAppVersion: currentAppVersion
+            ),
+            settings: ProjectSettings(),
+            mediaRegistry: [],
+            compositionRegistry: [],
+            layerRegistry: [],
+            aiAssetRegistry: [],
+            activeCompositionID: nil,
+            selectedLayerID: nil,
+            selectedMediaID: nil
+        ).validated()
+    }
+
+    public static func makeFixture(timestamp: Date, media: [MediaReference]) throws -> ProjectDocument {
+        let projectID = VertexID(rawValue: "50000000-0000-0000-0000-000000000001")
         let compositionID = try DeterministicVertexID.derive(
             domain: "schema2.main-composition",
-            components: [id.rawValue]
+            components: [projectID.rawValue]
         )
         let composition = ProjectComposition(
             id: compositionID,
@@ -297,34 +320,24 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             layerIDs: []
         )
         return try ProjectDocument(
-            projectID: id,
+            projectID: projectID,
             revision: 0,
             metadata: ProjectMetadata(
-                name: name,
+                name: "Fixture",
                 createdAt: timestamp,
                 modifiedAt: timestamp,
                 createdByAppVersion: currentAppVersion,
                 lastSavedByAppVersion: currentAppVersion
             ),
             settings: ProjectSettings(),
-            mediaRegistry: [],
+            mediaRegistry: media,
             compositionRegistry: [composition],
             layerRegistry: [],
             aiAssetRegistry: [],
-            activeCompositionID: composition.id,
+            activeCompositionID: compositionID,
             selectedLayerID: nil,
             selectedMediaID: nil
         ).validated()
-    }
-
-    public static func makeFixture(timestamp: Date, media: [MediaReference]) throws -> ProjectDocument {
-        var document = try makeNew(
-            id: VertexID(rawValue: "50000000-0000-0000-0000-000000000001"),
-            name: "Fixture",
-            timestamp: timestamp
-        )
-        document.mediaRegistry = media
-        return try document.validated()
     }
 
     public func composition(id: VertexID) -> ProjectComposition? {
@@ -474,7 +487,6 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         }
         for reference in mediaRegistry { _ = try reference.validated() }
         guard Set(mediaRegistry.map(\.id)).count == mediaRegistry.count else { throw ProjectError.duplicateIdentity("media") }
-        guard !compositionRegistry.isEmpty else { throw ProjectError.invalidValue("A project must contain at least one composition.") }
         guard Set(compositionRegistry.map(\.id)).count == compositionRegistry.count else { throw ProjectError.duplicateIdentity("composition") }
         guard Set(layerRegistry.map(\.id)).count == layerRegistry.count else { throw ProjectError.duplicateIdentity("layer") }
         guard Set(aiAssetRegistry.map(\.id)).count == aiAssetRegistry.count else { throw ProjectError.duplicateIdentity("AI asset") }
