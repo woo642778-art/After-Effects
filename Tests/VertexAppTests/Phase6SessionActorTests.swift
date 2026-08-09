@@ -11,13 +11,30 @@ private func phase6ActorURL(_ name: String) -> URL {
         .appendingPathExtension("vertexproject")
 }
 
+private func phase6TestComposition(id: VertexID = VertexID(), name: String = "Main") -> ProjectComposition {
+    ProjectComposition(
+        id: id,
+        name: name,
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: RationalTime(value: 30, timescale: 1),
+        color: .rec709SDR(alphaMode: .straight),
+        backgroundColor: .transparent,
+        layerIDs: []
+    )
+}
+
 @Test("Composition and layer edits persist through actor save and reopen with empty history")
 func phase6ActorRoundTrip() async throws {
     let url = phase6ActorURL("RoundTrip")
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let actor = ProjectSessionActor()
-    let created = try await actor.create(name: "Phase 6", packageURL: url)
-    let compositionID = try #require(created.document.activeCompositionID)
+    _ = try await actor.create(name: "Phase 6", packageURL: url)
+    let composition = phase6TestComposition()
+    _ = try await actor.apply(.insertComposition(composition, ownedLayers: [], index: 0), mergeKey: nil)
+    let created = try await actor.setActiveComposition(composition.id)
+    let compositionID = composition.id
     let layer = ProjectLayer(
         id: VertexID(rawValue: "68000000-0000-0000-0000-000000000001"),
         compositionID: compositionID,
@@ -67,8 +84,11 @@ func phase6NavigationIsNotHistory() async throws {
     let url = phase6ActorURL("Navigation")
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let actor = ProjectSessionActor()
-    let created = try await actor.create(name: "Navigation", packageURL: url)
-    let firstID = try #require(created.document.activeCompositionID)
+    _ = try await actor.create(name: "Navigation", packageURL: url)
+    let first = phase6TestComposition(name: "First")
+    _ = try await actor.apply(.insertComposition(first, ownedLayers: [], index: 0), mergeKey: nil)
+    _ = try await actor.setActiveComposition(first.id)
+    let firstID = first.id
     let second = ProjectComposition(
         id: VertexID(rawValue: "68000000-0000-0000-0000-000000000010"),
         name: "Second",
