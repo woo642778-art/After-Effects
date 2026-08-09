@@ -26,9 +26,12 @@ func registryOrderIsStable() throws {
     #expect(try codec.encode(first) == codec.encode(second))
 }
 
-@Test("Non-finite schema 2 values are rejected")
+@Test("Non-finite composition values are rejected")
 func invalidFloatingPointIsRejected() throws {
-    var project = try ProjectDocument.makeNew(name: "Invalid")
+    var project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
+    )
     project.compositionRegistry[0].backgroundColor.red = .infinity
     #expect(throws: ProjectError.self) { try project.validated() }
 }
