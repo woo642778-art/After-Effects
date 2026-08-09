@@ -6,6 +6,19 @@ public enum ProjectEffectType: String, Codable, CaseIterable, Sendable {
     case cutout
     case upscale
     case restore
+    case gaussianBlur
+    case sharpen
+    case exposure
+    case colorControls
+    case hueAdjust
+    case invert
+
+    public var isNativePixelEffect: Bool {
+        switch self {
+        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert: true
+        case .depthMap, .cutout, .upscale, .restore: false
+        }
+    }
 }
 
 public enum ProjectEffectParameterValue: Codable, Equatable, Sendable {
@@ -78,6 +91,28 @@ public enum RestorationParameterID {
     public static let faceRestoration = "faceRestoration"
 }
 
+public enum GaussianBlurParameterID {
+    public static let radius = "radius"
+}
+
+public enum SharpenParameterID {
+    public static let sharpness = "sharpness"
+}
+
+public enum ExposureEffectParameterID {
+    public static let stops = "stops"
+}
+
+public enum ColorControlsParameterID {
+    public static let brightness = "brightness"
+    public static let contrast = "contrast"
+    public static let saturation = "saturation"
+}
+
+public enum HueAdjustParameterID {
+    public static let degrees = "degrees"
+}
+
 public struct ProjectEffect: Codable, Equatable, Sendable, Identifiable {
     public var id: VertexID
     public var type: ProjectEffectType
@@ -139,6 +174,30 @@ public struct ProjectEffect: Codable, Equatable, Sendable, Identifiable {
                 .init(id: RestorationParameterID.detailRecovery, value: .scalar(0.25)),
                 .init(id: RestorationParameterID.faceRestoration, value: .boolean(false))
             ])
+        case .gaussianBlur:
+            return Self(type: type, parameters: [
+                .init(id: GaussianBlurParameterID.radius, value: .scalar(10))
+            ])
+        case .sharpen:
+            return Self(type: type, parameters: [
+                .init(id: SharpenParameterID.sharpness, value: .scalar(0.4))
+            ])
+        case .exposure:
+            return Self(type: type, parameters: [
+                .init(id: ExposureEffectParameterID.stops, value: .scalar(0))
+            ])
+        case .colorControls:
+            return Self(type: type, parameters: [
+                .init(id: ColorControlsParameterID.brightness, value: .scalar(0)),
+                .init(id: ColorControlsParameterID.contrast, value: .scalar(1)),
+                .init(id: ColorControlsParameterID.saturation, value: .scalar(1))
+            ])
+        case .hueAdjust:
+            return Self(type: type, parameters: [
+                .init(id: HueAdjustParameterID.degrees, value: .scalar(0))
+            ])
+        case .invert:
+            return Self(type: type, parameters: [])
         }
     }
 
@@ -208,6 +267,22 @@ public struct ProjectEffect: Codable, Equatable, Sendable, Identifiable {
                 RestorationParameterID.detailRecovery: .scalar(0...1),
                 RestorationParameterID.faceRestoration: .boolean
             ]
+        case .gaussianBlur:
+            expected = [GaussianBlurParameterID.radius: .scalar(0...200)]
+        case .sharpen:
+            expected = [SharpenParameterID.sharpness: .scalar(0...2)]
+        case .exposure:
+            expected = [ExposureEffectParameterID.stops: .scalar(-10...10)]
+        case .colorControls:
+            expected = [
+                ColorControlsParameterID.brightness: .scalar(-1...1),
+                ColorControlsParameterID.contrast: .scalar(0...4),
+                ColorControlsParameterID.saturation: .scalar(0...2)
+            ]
+        case .hueAdjust:
+            expected = [HueAdjustParameterID.degrees: .scalar(-180...180)]
+        case .invert:
+            expected = [:]
         }
         guard Set(parameters.map(\.id)) == Set(expected.keys) else {
             let unknown = Set(parameters.map(\.id)).subtracting(expected.keys).sorted()
