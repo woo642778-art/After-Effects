@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import VertexProject
+import VertexRenderMetal
 
 enum VertexStartupService: String, Equatable, Sendable {
     case projectPersistence
@@ -15,6 +17,23 @@ enum VertexStartupPhase: Equatable, Sendable {
     case restoringSession
     case ready
     case fatal(String)
+}
+
+enum VertexStartupPreparationError: LocalizedError, Sendable {
+    case applicationSupportUnavailable
+    case effectRegistryEmpty
+    case invalidWorkspacePreset(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .applicationSupportUnavailable:
+            "Application Support is unavailable."
+        case .effectRegistryEmpty:
+            "The built-in effect registry is empty."
+        case .invalidWorkspacePreset(let raw):
+            "Saved workspace preset is invalid: \(raw)"
+        }
+    }
 }
 
 struct VertexStartupServices: Sendable {
@@ -36,6 +55,46 @@ struct VertexStartupServices: Sendable {
         self.prepareEffects = prepareEffects
         self.prepareAIModels = prepareAIModels
         self.restoreWorkspace = restoreWorkspace
+    }
+
+    static func live() -> VertexStartupServices {
+        VertexStartupServices(
+            prepareProjectPersistence: {
+                guard let applicationSupport = FileManager.default.urls(
+                    for: .applicationSupportDirectory,
+                    in: .userDomainMask
+                ).first else {
+                    throw VertexStartupPreparationError.applicationSupportUnavailable
+                }
+                let projects = applicationSupport
+                    .appendingPathComponent("After Effects", isDirectory: true)
+                    .appendingPathComponent("Projects", isDirectory: true)
+                try FileManager.default.createDirectory(
+                    at: projects,
+                    withIntermediateDirectories: true
+                )
+            },
+            prepareRenderer: {
+                _ = try MetalRenderBackend()
+            },
+            prepareEffects: {
+                guard !ProjectEffectType.allCases.isEmpty else {
+                    throw VertexStartupPreparationError.effectRegistryEmpty
+                }
+            },
+            prepareAIModels: {
+                _ = try BundledAIEnvironment.load()
+            },
+            restoreWorkspace: {
+                guard let raw = UserDefaults.standard.string(forKey: "vertex2.workspace.preset") else {
+                    return
+                }
+                let supported = Set(["standard", "minimal", "effects", "threeD", "export"])
+                guard supported.contains(raw) else {
+                    throw VertexStartupPreparationError.invalidWorkspacePreset(raw)
+                }
+            }
+        )
     }
 }
 
