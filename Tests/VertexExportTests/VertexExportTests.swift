@@ -55,3 +55,30 @@ func queueFIFO() async throws {
     await queue.cancel(a.id)
     #expect(await queue.nextQueued()?.id == b.id)
 }
+
+@Test("Phase 11 export resolution presets include UHD and DCI 8K")
+func phase11EightKPresets() {
+    #expect(ExportResolutionPreset.uhd8K.dimensions == ExportDimensions(width: 7680, height: 4320))
+    #expect(ExportResolutionPreset.dci8K.dimensions == ExportDimensions(width: 8192, height: 4320))
+    #expect(ExportResolutionPreset.uhd4K.dimensions == ExportDimensions(width: 3840, height: 2160))
+}
+
+@Test("Phase 11 export accepts arbitrary custom dimensions through the 8K render envelope")
+func phase11CustomResolutionValidation() throws {
+    let job = ExportJob(
+        format: .mov,
+        codec: .hevc,
+        quality: .master,
+        width: 7312,
+        height: 4096,
+        frameRate: RationalTime(value: 60_000, timescale: 1_001),
+        outputURL: URL(fileURLWithPath: "/tmp/custom-8k.mov")
+    )
+    _ = try job.validated()
+}
+
+@Test("Phase 11 8K bitrate scales above the old 160 Mbps ceiling")
+func phase11EightKBitrate() {
+    let bitrate = ExportQualityPreset.master.targetBitRate(width: 7680, height: 4320, fps: 60)
+    #expect(bitrate > 160_000_000)
+}
