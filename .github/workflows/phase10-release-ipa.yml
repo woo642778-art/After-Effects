@@ -1,0 +1,152 @@
+name: Vertex2 10 Release IPA
+
+on:
+  pull_request:
+    branches:
+      - agent/phase9-release-staging
+  workflow_dispatch:
+
+concurrency:
+  group: vertex2-10-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-qualification:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -version
+          swift --version
+
+      - name: Verify Vertex2 10 release contract
+        run: |
+          set -euo pipefail
+          grep -q 'MARKETING_VERSION: 10.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 10' project.yml
+          grep -q 'PRODUCT_NAME: Vertex2' project.yml
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
+          grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
+          grep -q 'number: 10' Sources/VertexCore/Milestone.swift
+          if grep -q 'UISupportedInterfaceOrientations_iPhone' project.yml; then
+            echo 'iPhone orientation contract is still present'
+            exit 1
+          fi
+          git diff --check
+
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+
+      - name: Run Swift package tests including native export
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-10-swift-tests.log"
+
+      - name: Select and boot iPad Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              m = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not m:
+                  continue
+              version = (int(m.group(1)), int(m.group(2)))
+              for device in devices:
+                  name = device.get('name', '')
+                  if device.get('isAvailable') and name.startswith('iPad'):
+                      pro = 1 if 'Pro' in name else 0
+                      candidates.append((version, pro, name, device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPad Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][3])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Run iPad app tests
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataPhase10Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test 2>&1 | tee "$RUNNER_TEMP/vertex2-10-ipad-tests.log"
+
+      - name: Build unsigned iOS 17 arm64 Release app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/DerivedDataPhase10Release" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-10-release-build.log"
+
+      - name: Package and audit unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedDataPhase10Release/Build/Products/Release-iphoneos/Vertex2.app"
+          test -d "$APP"
+          rm -rf Payload artifacts
+          mkdir -p Payload artifacts
+          cp -R "$APP" Payload/Vertex2.app
+          /usr/bin/zip -qry artifacts/Vertex2-10.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex2-10.0.0-unsigned.ipa | tee artifacts/Vertex2-10.0.0-unsigned.ipa.sha256
+          python3 Tools/release/audit_vertex2_ipa.py \
+            artifacts/Vertex2-10.0.0-unsigned.ipa \
+            --json artifacts/Vertex2-10.0.0-audit.json | tee artifacts/Vertex2-10.0.0-audit.txt
+          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
+
+      - name: Upload Vertex2 10 IPA and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-10.0.0-unsigned-ipa
+          path: |
+            artifacts/Vertex2-10.0.0-unsigned.ipa
+            artifacts/Vertex2-10.0.0-unsigned.ipa.sha256
+            artifacts/Vertex2-10.0.0-audit.json
+            artifacts/Vertex2-10.0.0-audit.txt
+            artifacts/commit-sha.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload qualification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-10.0.0-qualification-logs
+          path: |
+            ${{ runner.temp }}/vertex2-10-swift-tests.log
+            ${{ runner.temp }}/vertex2-10-ipad-tests.log
+            ${{ runner.temp }}/vertex2-10-release-build.log
+          if-no-files-found: warn
+          retention-days: 7
