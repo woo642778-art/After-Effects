@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Select Xcode and install XcodeGen
         run: |
@@ -76,7 +78,7 @@ jobs:
           cp -R "$APP" Payload/Vertex2.app
           /usr/bin/zip -qry artifacts/Vertex2-12.0.0-TEST-unsigned.ipa Payload
           shasum -a 256 artifacts/Vertex2-12.0.0-TEST-unsigned.ipa | tee artifacts/Vertex2-12.0.0-TEST-unsigned.ipa.sha256
-          printf '%s\n' '${{ github.sha }}' > artifacts/commit-sha.txt
+          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
 
       - name: Upload device test IPA
         uses: actions/upload-artifact@v4
