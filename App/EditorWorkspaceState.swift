@@ -31,8 +31,30 @@ final class EditorWorkspaceState: ObservableObject {
     @Published var pixelsPerSecond: Double = 120
     @Published var graphMode: GraphEditorMode? = nil
     @Published var compactPanel: CompactEditorPanel = .timeline
+    @Published var activeWorkspace: AEWorkspacePreset
+    @Published var leftDockTab: AELeftDockTab = .project
+    @Published var isLeftDrawerPresented = false
+    @Published var isRightDrawerPresented = false
 
     private(set) var activeCompositionID: VertexID?
+
+    init(userDefaults: UserDefaults = .standard) {
+        if let raw = userDefaults.string(forKey: "vertex2.workspace.preset"),
+           let preset = AEWorkspacePreset(rawValue: raw) {
+            activeWorkspace = preset
+        } else {
+            activeWorkspace = .standard
+        }
+    }
+
+    func setWorkspace(_ preset: AEWorkspacePreset, userDefaults: UserDefaults = .standard) {
+        activeWorkspace = preset
+        userDefaults.set(preset.rawValue, forKey: "vertex2.workspace.preset")
+        if preset == .minimal {
+            isLeftDrawerPresented = false
+            isRightDrawerPresented = false
+        }
+    }
 
     func synchronize(project: ProjectDocument?) {
         guard let project,
