@@ -37,7 +37,7 @@ func phase11CompositionSettingsRoundTrip() throws {
 
 @Test("Legacy composition JSON decodes Phase 11 settings with safe defaults")
 func legacyCompositionGetsPhase11Defaults() throws {
-    let legacy = #"{"backgroundColor":{"alpha":0,"blue":0,"green":0,"red":0},"color":{"alphaMode":"straight","colorSpace":{"named":"rec709"},"transferFunction":"sRGB"},"duration":{"timescale":1,"value":10},"frameRate":{"timescale":1,"value":30},"height":1080,"id":"b1000000-0000-0000-0000-000000000002","layerIDs":[],"markers":[],"name":"Legacy","width":1920}"#
+    let legacy = #"{"backgroundColor":{"alpha":0,"blue":0,"green":0,"red":0},"color":{"alphaMode":"straight","matrix":"bt709","primaries":"rec709","transferFunction":"rec709"},"duration":{"timescale":1,"value":10},"frameRate":{"timescale":1,"value":30},"height":1080,"id":"b1000000-0000-0000-0000-000000000002","layerIDs":[],"markers":[],"name":"Legacy","width":1920}"#
 
     let decoded = try JSONDecoder().decode(ProjectComposition.self, from: Data(legacy.utf8))
 
