@@ -79,7 +79,11 @@ func recentCommandIDsAreBounded() throws {
 
 @Test("Compatible composition dimension edits coalesce into one Undo transition")
 func sessionCoalescesContinuousEdits() throws {
-    var session = try ProjectEditingSession(document: .makeNew(name: "Coalesce"), coalescingInterval: 0.5)
+    let project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
+    )
+    var session = try ProjectEditingSession(document: project, coalescingInterval: 0.5)
     _ = try session.apply(
         request(
             session: session,
