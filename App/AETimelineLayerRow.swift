@@ -369,7 +369,7 @@ struct AETimelineLayerRow: View {
     private func setParent(_ parentID: VertexID?) { workspace.setLayerParent(layerID: layer.id, parentLayerID: parentID); interactionError = nil }
     private func setMatte(_ matte: ProjectTrackMatte?) { do { try workspace.phase9SetTrackMatte(layerID: layer.id, matte: matte); interactionError = nil } catch { interactionError = error.localizedDescription } }
     private func matteLabel(_ mode: ProjectTrackMatteMode) -> String { switch mode { case .alpha: "Alpha"; case .alphaInverted: "Alpha Inverted"; case .luma: "Luma"; case .lumaInverted: "Luma Inverted" } }
-    private func effectName(_ type: ProjectEffectType) -> String { switch type { case .depthMap: "Depth Map"; case .cutout: "Cutout"; case .upscale: "Upscale"; case .restore: "Restore" } }
+    private func effectName(_ type: ProjectEffectType) -> String { type.displayName }
     private var layerLabelColor: Color { switch index % 8 { case 0: .blue; case 1: .purple; case 2: .green; case 3: .orange; case 4: .pink; case 5: .cyan; case 6: .yellow; default: .indigo } }
     private func toggle(_ set: inout Set<VertexID>) { if set.remove(layer.id) == nil { set.insert(layer.id) } }
 }

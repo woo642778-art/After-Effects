@@ -24,7 +24,6 @@ protocol AIEffectBakeProcessing: Sendable {
     ) async throws -> AIEffectBakeProcessedOutput
 }
 
-
 protocol AIEffectBakeOutputValidating: Sendable {
     func validate(sourceURL: URL, outputURL: URL) async throws
 }
@@ -53,6 +52,9 @@ struct LiveAIEffectBakeOutputValidator: AIEffectBakeOutputValidating {
 
 struct LiveAIEffectBakeProcessor: AIEffectBakeProcessing {
     func process(sourceURL: URL, effect: ProjectEffect, outputRoot: URL, onProgress: @escaping @Sendable (Double) -> Void) async throws -> AIEffectBakeProcessedOutput {
+        guard !effect.type.isNativePixelEffect else {
+            throw ProjectError.invalidOperation("Native live effects do not use the AI bake pipeline.")
+        }
         let environment = try BundledAIEnvironment.load()
         let (recipe, requestedTier) = try effect.aiRecipeAndTier()
         let model = try environment.modelIdentity(for: recipe, qualityTier: requestedTier)
@@ -106,6 +108,9 @@ final class AIEffectBakeCoordinator {
               let sourceIndex = composition.layerIDs.firstIndex(of: layer.id) else {
             throw ProjectError.invalidOperation("Bake requires a selected media layer and effect.")
         }
+        guard !effect.type.isNativePixelEffect else {
+            throw ProjectError.invalidOperation("Native live effects are already evaluated by the shared preview/export renderer and do not require AI bake.")
+        }
         let sourceURL = try resolve(reference: sourceReference, packageURL: packageURL)
         let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent("Vertex2", isDirectory: true)
@@ -131,6 +136,8 @@ final class AIEffectBakeCoordinator {
         case .cutout: suffix = "Cutout"; kind = .matte
         case .upscale: suffix = "Upscale"; kind = .derivedVideo
         case .restore: suffix = "Restore"; kind = .derivedVideo
+        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert:
+            throw ProjectError.invalidOperation("Native live effects cannot enter the AI bake registration path.")
         }
         let filename = "\(layer.name)-\(suffix).mov"
         let draftMedia = MediaReference(

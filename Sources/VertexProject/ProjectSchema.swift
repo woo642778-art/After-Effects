@@ -230,7 +230,7 @@ public struct ProjectCompositionPlaceholder: Codable, Equatable, Sendable, Ident
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 5
-    public static let currentAppVersion = "11.0.0"
+    public static let currentAppVersion = "12.0.0"
 
     public var schemaVersion: Int
     public var minimumReaderVersion: Int

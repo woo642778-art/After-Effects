@@ -5,6 +5,7 @@ import VertexProject
 
 enum VertexWorkspaceMode: String, CaseIterable, Identifiable {
     case composition = "Composition"
+    case automation = "Tools"
     case threeD = "3D"
     case export = "Export"
     var id: String { rawValue }
@@ -12,6 +13,7 @@ enum VertexWorkspaceMode: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .composition: "rectangle.on.rectangle"
+        case .automation: "command"
         case .threeD: "cube"
         case .export: "square.and.arrow.up"
         }
@@ -34,6 +36,8 @@ struct VertexEditorWorkspaceView: View {
                     switch workspaceMode {
                     case .composition:
                         IPadEditorWorkspaceView(editorState: editorState, preview: preview)
+                    case .automation:
+                        AutomationWorkspaceView(editorState: editorState)
                     case .threeD:
                         ThreeDWorkspaceView()
                     case .export:

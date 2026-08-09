@@ -32,8 +32,20 @@ private actor FakeBakeProcessor: AIEffectBakeProcessing {
 
 private func coordinatorFixture() throws -> (ProjectDocument, ProjectLayer, ProjectEffect, URL, AIEffectBakeProcessedOutput) {
     var project = try ProjectDocument.makeNew(name: "Bake Coordinator")
-    let compID = try #require(project.activeCompositionID)
-    var comp = try #require(project.composition(id: compID))
+    let compID = VertexID()
+    var comp = ProjectComposition(
+        id: compID,
+        name: "Main",
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: RationalTime(value: 30, timescale: 1),
+        color: project.settings.color,
+        backgroundColor: .transparent,
+        layerIDs: []
+    )
+    project.compositionRegistry = [comp]
+    project.activeCompositionID = compID
     let source = MediaReference(
         id: VertexID(), displayName: "source.mov", originalFilename: "source.mov", fileSize: 3,
         modificationDate: Date(), contentFingerprint: AIDigest.sha256(Data([1,2,3])),

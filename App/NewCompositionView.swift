@@ -64,6 +64,7 @@ enum NewCompositionPreset: String, CaseIterable, Identifiable, Sendable {
     case uhd4K23976
     case uhd4K2997
     case uhd4K5994
+    case uhd8K5994
     case vertical108030
     case square108030
     case custom
@@ -78,6 +79,7 @@ enum NewCompositionPreset: String, CaseIterable, Identifiable, Sendable {
         case .uhd4K23976: "UHD 4K 23.976"
         case .uhd4K2997: "UHD 4K 29.97"
         case .uhd4K5994: "UHD 4K 59.94"
+        case .uhd8K5994: "UHD 8K 59.94"
         case .vertical108030: "Vertical 1080 × 1920 30"
         case .square108030: "Square 1080 × 1080 30"
         case .custom: "Custom"
@@ -88,6 +90,7 @@ enum NewCompositionPreset: String, CaseIterable, Identifiable, Sendable {
 enum NewCompositionDraftError: LocalizedError, Equatable {
     case invalidName
     case invalidDimensions
+    case invalidPixelAspectRatio
     case invalidFrameRate
     case invalidDuration
     case invalidStartTime
@@ -98,6 +101,7 @@ enum NewCompositionDraftError: LocalizedError, Equatable {
         switch self {
         case .invalidName: "Composition name cannot be empty."
         case .invalidDimensions: "Width and height must be between 1 and 8192 pixels."
+        case .invalidPixelAspectRatio: "Pixel aspect ratio must be a positive finite value between 0.1 and 10."
         case .invalidFrameRate: "Frame rate must be between 1 and 240 fps."
         case .invalidDuration: "Duration must be a positive finite value."
         case .invalidStartTime: "Start time must be finite."
@@ -113,6 +117,7 @@ struct NewCompositionDraft: Equatable, Sendable {
     var width = 1920
     var height = 1080
     var lockAspectRatio = true
+    var pixelAspectRatio = 1.0
     var frameRateChoice: CompositionFrameRateChoice = .fps2997
     var customFrameRateText = "30"
     var durationSeconds = 10.0
@@ -126,21 +131,23 @@ struct NewCompositionDraft: Equatable, Sendable {
         self.preset = preset
         switch preset {
         case .hdtv10802997:
-            width = 1920; height = 1080; frameRateChoice = .fps2997
+            width = 1920; height = 1080; frameRateChoice = .fps2997; pixelAspectRatio = 1
         case .hdtv108025:
-            width = 1920; height = 1080; frameRateChoice = .fps25
+            width = 1920; height = 1080; frameRateChoice = .fps25; pixelAspectRatio = 1
         case .hdtv108024:
-            width = 1920; height = 1080; frameRateChoice = .fps24
+            width = 1920; height = 1080; frameRateChoice = .fps24; pixelAspectRatio = 1
         case .uhd4K23976:
-            width = 3840; height = 2160; frameRateChoice = .fps23976
+            width = 3840; height = 2160; frameRateChoice = .fps23976; pixelAspectRatio = 1
         case .uhd4K2997:
-            width = 3840; height = 2160; frameRateChoice = .fps2997
+            width = 3840; height = 2160; frameRateChoice = .fps2997; pixelAspectRatio = 1
         case .uhd4K5994:
-            width = 3840; height = 2160; frameRateChoice = .fps5994
+            width = 3840; height = 2160; frameRateChoice = .fps5994; pixelAspectRatio = 1
+        case .uhd8K5994:
+            width = 7680; height = 4320; frameRateChoice = .fps5994; pixelAspectRatio = 1
         case .vertical108030:
-            width = 1080; height = 1920; frameRateChoice = .fps30
+            width = 1080; height = 1920; frameRateChoice = .fps30; pixelAspectRatio = 1
         case .square108030:
-            width = 1080; height = 1080; frameRateChoice = .fps30
+            width = 1080; height = 1080; frameRateChoice = .fps30; pixelAspectRatio = 1
         case .custom:
             break
         }
@@ -154,6 +161,9 @@ struct NewCompositionDraft: Equatable, Sendable {
         guard !trimmedName.isEmpty else { throw NewCompositionDraftError.invalidName }
         guard (1...8192).contains(width), (1...8192).contains(height) else {
             throw NewCompositionDraftError.invalidDimensions
+        }
+        guard pixelAspectRatio.isFinite, (0.1...10).contains(pixelAspectRatio) else {
+            throw NewCompositionDraftError.invalidPixelAspectRatio
         }
         guard durationSeconds.isFinite, durationSeconds > 0 else {
             throw NewCompositionDraftError.invalidDuration
@@ -186,7 +196,7 @@ struct NewCompositionDraft: Equatable, Sendable {
             backgroundColor: backgroundColor,
             layerIDs: [],
             displayStartTime: startTime,
-            pixelAspectRatio: 1,
+            pixelAspectRatio: pixelAspectRatio,
             previewResolution: previewResolution,
             bpm: bpm,
             motionBlurShutterAngle: motionBlurShutterAngle,
@@ -318,8 +328,8 @@ struct NewCompositionView: View {
                 .font(.caption)
 
             settingRow("Pixel Aspect Ratio") {
-                Text("Square Pixels (1.0)")
-                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                TextField("1.0", value: $draft.pixelAspectRatio, format: .number.precision(.fractionLength(1...4)))
+                    .textFieldStyle(.roundedBorder)
             }
 
             settingRow("Frame Rate") {
@@ -390,7 +400,7 @@ struct NewCompositionView: View {
                 Text("Classic 2D")
                     .foregroundStyle(AfterEffectsTheme.primaryText)
             }
-            Text("Vertex2 11.0 keeps the canonical timeline renderer in the verified 2D composition pipeline. The dedicated 3D Scene workspace remains separate until later 3D timeline integration is release-qualified.")
+            Text("Vertex2 12.0 keeps the canonical timeline renderer in the verified 2D composition pipeline. The dedicated 3D Scene workspace remains separate until later 3D timeline integration is release-qualified.")
                 .font(.caption)
                 .foregroundStyle(AfterEffectsTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)

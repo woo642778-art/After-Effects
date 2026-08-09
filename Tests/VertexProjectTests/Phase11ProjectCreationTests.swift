@@ -1,8 +1,8 @@
 import Testing
 @testable import VertexProject
 
-@Test("Vertex2 11 new projects start empty until the user creates a composition")
-func phase11NewProjectStartsEmpty() throws {
+@Test("Vertex2 12 new projects start empty until the user creates a composition")
+func phase12NewProjectStartsEmpty() throws {
     let project = try ProjectDocument.makeNew(name: "Untitled Project")
 
     #expect(project.compositionRegistry.isEmpty)
@@ -10,11 +10,11 @@ func phase11NewProjectStartsEmpty() throws {
     #expect(project.layerRegistry.isEmpty)
 }
 
-@Test("Vertex2 11 project metadata is written by the 11.0 app contract")
-func phase11ProjectAppVersion() throws {
+@Test("Vertex2 12 project metadata is written by the 12.0 app contract")
+func phase12ProjectAppVersion() throws {
     let project = try ProjectDocument.makeNew(name: "Version Check")
 
-    #expect(ProjectDocument.currentAppVersion == "11.0.0")
-    #expect(project.metadata.createdByAppVersion == "11.0.0")
-    #expect(project.metadata.lastSavedByAppVersion == "11.0.0")
+    #expect(ProjectDocument.currentAppVersion == "12.0.0")
+    #expect(project.metadata.createdByAppVersion == "12.0.0")
+    #expect(project.metadata.lastSavedByAppVersion == "12.0.0")
 }

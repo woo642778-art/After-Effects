@@ -5,11 +5,20 @@ import VertexProject
 
 private func workspaceFixture() throws -> ProjectDocument {
     var project = try ProjectDocument.makeNew(name: "Workspace")
-    guard let firstID = project.activeCompositionID,
-          let firstIndex = project.compositionRegistry.firstIndex(where: { $0.id == firstID }) else {
-        throw ProjectError.invalidOperation("Fixture has no active composition")
-    }
-    let firstComposition = project.compositionRegistry[firstIndex]
+    let firstID = VertexID()
+    let firstComposition = ProjectComposition(
+        id: firstID,
+        name: "First",
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: RationalTime(value: 30, timescale: 1),
+        color: project.settings.color,
+        backgroundColor: .transparent,
+        layerIDs: []
+    )
+    project.compositionRegistry = [firstComposition]
+    project.activeCompositionID = firstID
     let timing = try LayerTiming(
         startTime: .zero,
         inPoint: .zero,
@@ -35,7 +44,7 @@ private func workspaceFixture() throws -> ProjectDocument {
         layerIDs: []
     )
     project.layerRegistry.append(firstLayer)
-    project.compositionRegistry[firstIndex].layerIDs = [firstLayer.id]
+    project.compositionRegistry[0].layerIDs = [firstLayer.id]
     project.compositionRegistry.append(second)
     project.selectedLayerID = firstLayer.id
     return try project.validated()

@@ -23,6 +23,52 @@ struct AETimelineInteractionModel {
         .split(layerID: layerID, at: playhead)
     }
 
+    static func trimInEdit(layerID: VertexID, playhead: RationalTime) -> TimelineEdit {
+        .trimIn(layerID: layerID, to: playhead)
+    }
+
+    static func trimOutEdit(layerID: VertexID, playhead: RationalTime) -> TimelineEdit {
+        .trimOut(layerID: layerID, to: playhead)
+    }
+
+    static func rippleDeleteEdit(
+        layer: ProjectLayer,
+        orderedLayers: [ProjectLayer]
+    ) -> TimelineEdit {
+        let affected = orderedLayers
+            .filter { $0.id != layer.id && $0.timing.inPoint >= layer.timing.outPoint }
+            .map(\.id)
+        return .rippleDelete(layerID: layer.id, affectedLayerIDs: affected)
+    }
+
+    static func adjacentFrame(
+        from time: RationalTime,
+        delta: Int64,
+        composition: ProjectComposition
+    ) throws -> RationalTime {
+        guard composition.frameRate.value > 0,
+              composition.frameRate.value <= Int64(Int32.max),
+              composition.frameRate.timescale > 0 else {
+            throw AETimelineInteractionError.invalidFrameRate
+        }
+        let frameDuration = RationalTime(
+            value: Int64(composition.frameRate.timescale),
+            timescale: Int32(composition.frameRate.value)
+        )
+        let scaled = frameDuration.value.multipliedReportingOverflow(by: delta)
+        guard !scaled.overflow else { throw AETimelineInteractionError.overflow }
+        let offset = RationalTime(value: scaled.partialValue, timescale: frameDuration.timescale)
+        let candidate: RationalTime
+        do {
+            candidate = try time.adding(offset)
+        } catch {
+            throw AETimelineInteractionError.overflow
+        }
+        if candidate < .zero { return .zero }
+        if candidate > composition.duration { return composition.duration }
+        return candidate
+    }
+
     static func snappedTime(
         proposed: RationalTime,
         candidates: [TimelineSnapCandidate],
@@ -120,8 +166,38 @@ struct AETimelineView: View {
             Divider().frame(height: 18).overlay(AfterEffectsTheme.border)
 
             Button { splitSelectedLayer() } label: { Image(systemName: "scissors") }
-                .disabled(editorState.selectedLayerIDs.isEmpty)
+                .disabled(selectedLayerID == nil)
                 .help("Split Layer at Current Time")
+
+            Button { duplicateSelectedLayer() } label: { Image(systemName: "plus.square.on.square") }
+                .disabled(selectedLayerID == nil)
+                .help("Duplicate Layer")
+
+            Button { trimSelectedLayerIn() } label: { Image(systemName: "arrow.right.to.line.compact") }
+                .disabled(selectedLayerID == nil)
+                .help("Trim In to Current Time")
+
+            Button { trimSelectedLayerOut() } label: { Image(systemName: "arrow.left.to.line.compact") }
+                .disabled(selectedLayerID == nil)
+                .help("Trim Out to Current Time")
+
+            Button { rippleDeleteSelectedLayer() } label: { Image(systemName: "trash") }
+                .disabled(selectedLayerID == nil)
+                .help("Ripple Delete Layer")
+
+            Divider().frame(height: 18).overlay(AfterEffectsTheme.border)
+
+            Button { stepFrame(-1) } label: { Image(systemName: "backward.frame") }
+                .disabled(workspace.activeComposition == nil)
+                .help("Previous Frame")
+
+            Button { stepFrame(1) } label: { Image(systemName: "forward.frame") }
+                .disabled(workspace.activeComposition == nil)
+                .help("Next Frame")
+
+            Button { addCompositionMarker() } label: { Image(systemName: "bookmark.fill") }
+                .disabled(workspace.activeComposition == nil)
+                .help("Add Composition Marker at Current Time")
 
             Button { editorState.snappingEnabled.toggle() } label: {
                 Image(systemName: editorState.snappingEnabled ? "magnet.fill" : "magnet")
@@ -153,6 +229,10 @@ struct AETimelineView: View {
         .background(AfterEffectsTheme.elevatedPanel)
     }
 
+    private var selectedLayerID: VertexID? {
+        editorState.selectedLayerIDs.sorted(by: { $0.rawValue < $1.rawValue }).first
+    }
+
     private func timelineHeader(_ composition: ProjectComposition) -> some View {
         HStack(spacing: 0) {
             layerColumnHeader
@@ -182,9 +262,9 @@ struct AETimelineView: View {
     }
 
     private func ruler(_ composition: ProjectComposition) -> some View {
-        GeometryReader { proxy in
+        GeometryReader { _ in
             ZStack(alignment: .topLeading) {
-                Canvas { context, size in
+                Canvas { context, _ in
                     let majorSeconds = majorTickSeconds()
                     let minorSeconds = max(1.0 / max(composition.frameRate.seconds, 1), majorSeconds / 5)
                     var t = 0.0
@@ -288,13 +368,66 @@ struct AETimelineView: View {
     }
 
     private func splitSelectedLayer() {
+        guard let composition = workspace.activeComposition, let id = selectedLayerID else { return }
+        commit(AETimelineInteractionModel.splitEdit(layerID: id, playhead: editorState.playhead), composition: composition)
+    }
+
+    private func duplicateSelectedLayer() {
+        guard let id = selectedLayerID else { return }
+        workspace.selectLayer(id)
+        workspace.duplicateSelectedLayer()
+        interactionError = nil
+    }
+
+    private func trimSelectedLayerIn() {
+        guard let composition = workspace.activeComposition, let id = selectedLayerID else { return }
+        commit(AETimelineInteractionModel.trimInEdit(layerID: id, playhead: editorState.playhead), composition: composition)
+    }
+
+    private func trimSelectedLayerOut() {
+        guard let composition = workspace.activeComposition, let id = selectedLayerID else { return }
+        commit(AETimelineInteractionModel.trimOutEdit(layerID: id, playhead: editorState.playhead), composition: composition)
+    }
+
+    private func rippleDeleteSelectedLayer() {
         guard let composition = workspace.activeComposition,
-              let id = editorState.selectedLayerIDs.sorted(by: { $0.rawValue < $1.rawValue }).first else { return }
+              let id = selectedLayerID,
+              let layer = workspace.orderedLayers.first(where: { $0.id == id }) else { return }
+        commit(
+            AETimelineInteractionModel.rippleDeleteEdit(layer: layer, orderedLayers: workspace.orderedLayers),
+            composition: composition
+        )
+    }
+
+    private func stepFrame(_ delta: Int64) {
+        guard let composition = workspace.activeComposition else { return }
         do {
-            try workspace.commitTimelineEdit(
-                AETimelineInteractionModel.splitEdit(layerID: id, playhead: editorState.playhead),
-                compositionID: composition.id
+            let time = try AETimelineInteractionModel.adjacentFrame(
+                from: editorState.playhead,
+                delta: delta,
+                composition: composition
             )
+            editorState.setPlayhead(time, composition: composition)
+            interactionError = nil
+        } catch {
+            interactionError = error.localizedDescription
+        }
+    }
+
+    private func addCompositionMarker() {
+        guard let composition = workspace.activeComposition,
+              editorState.playhead >= .zero,
+              editorState.playhead < composition.duration else { return }
+        var markers = composition.markers
+        let markerNumber = markers.count + 1
+        markers.append(ProjectMarker(time: editorState.playhead, name: "Marker \(markerNumber)"))
+        workspace.setCompositionMarkers(markers)
+        interactionError = nil
+    }
+
+    private func commit(_ edit: TimelineEdit, composition: ProjectComposition) {
+        do {
+            try workspace.commitTimelineEdit(edit, compositionID: composition.id)
             interactionError = nil
         } catch {
             interactionError = error.localizedDescription

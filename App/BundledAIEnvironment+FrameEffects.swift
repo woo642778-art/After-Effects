@@ -10,6 +10,9 @@ import VertexProject
 
 extension ProjectEffect {
     func aiRecipeAndTier() throws -> (AITaskRecipe, AIQualityTier) {
+        guard !type.isNativePixelEffect else {
+            throw AIError.invalidRecipe("Native pixel effects do not use the AI inference backend.")
+        }
         func scalar(_ id: String) throws -> Double {
             guard case .scalar(let value)? = parameter(id: id)?.value else { throw AIError.invalidRecipe("Missing scalar parameter \(id).") }
             return value
@@ -32,6 +35,8 @@ extension ProjectEffect {
         case .cutout: qualityText = try text(CutoutParameterID.quality)
         case .upscale: qualityText = try text(UpscaleParameterID.quality)
         case .restore: qualityText = try text(RestorationParameterID.quality)
+        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert:
+            throw AIError.invalidRecipe("Native pixel effects do not use the AI inference backend.")
         }
         let tier: AIQualityTier = qualityText == "preview" ? .preview : (qualityText == "quality" ? .maxQuality : .balanced)
         switch type {
@@ -64,6 +69,8 @@ extension ProjectEffect {
                 detailRecovery: Float(try scalar(RestorationParameterID.detailRecovery)),
                 faceRestoration: try boolean(RestorationParameterID.faceRestoration)
             )), tier)
+        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert:
+            throw AIError.invalidRecipe("Native pixel effects do not use the AI inference backend.")
         }
     }
 }
