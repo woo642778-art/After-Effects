@@ -1,0 +1,1 @@
+Consolidated bundle 1 CI trigger after adaptive workspace implementation.
