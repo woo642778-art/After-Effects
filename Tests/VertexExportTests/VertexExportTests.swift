@@ -96,3 +96,32 @@ func phase11ExactOutputFrameCount() throws {
     #expect(try job.frameCount(for: RationalTime(value: 10, timescale: 1)) == 600)
     #expect(try job.frameCount(for: RationalTime(value: 1, timescale: 2)) == 30)
 }
+
+@Test("Phase 11 export output settings resolve presets and exact frame-rate overrides")
+func phase11OutputSettingsResolution() throws {
+    let fixed = ExportOutputSettings(
+        resolution: .uhd8K,
+        customDimensions: ExportDimensions(width: 1111, height: 777),
+        frameRate: .fps5994,
+        customFrameRate: nil
+    )
+    let fixedResolved = try fixed.resolved(
+        compositionDimensions: ExportDimensions(width: 1920, height: 1080),
+        compositionFrameRate: RationalTime(value: 24, timescale: 1)
+    )
+    #expect(fixedResolved.dimensions == ExportDimensions(width: 7680, height: 4320))
+    #expect(fixedResolved.frameRate == RationalTime(value: 60_000, timescale: 1_001))
+
+    let custom = ExportOutputSettings(
+        resolution: .custom,
+        customDimensions: ExportDimensions(width: 7312, height: 4096),
+        frameRate: .custom,
+        customFrameRate: RationalTime(value: 120, timescale: 1)
+    )
+    let customResolved = try custom.resolved(
+        compositionDimensions: ExportDimensions(width: 1920, height: 1080),
+        compositionFrameRate: RationalTime(value: 30, timescale: 1)
+    )
+    #expect(customResolved.dimensions == ExportDimensions(width: 7312, height: 4096))
+    #expect(customResolved.frameRate == RationalTime(value: 120, timescale: 1))
+}
