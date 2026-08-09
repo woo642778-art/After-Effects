@@ -96,10 +96,10 @@ func presentationGateConsumesOnce() {
     #expect(gate.hasPresented)
 }
 
-@Test("Phase 9 is the active architecture milestone")
-func phaseNineIsActive() {
-    #expect(MilestoneCatalog.current.number == 9)
-    #expect(MilestoneCatalog.current.title == "AE Workspace and Live AI Effects")
+@Test("Phase 10 is the active architecture milestone")
+func phaseTenIsActive() {
+    #expect(MilestoneCatalog.current.number == 10)
+    #expect(MilestoneCatalog.current.title == "iPad AE Workspace and 3D")
     #expect(MilestoneCatalog.current.status == .implemented)
 }
 
