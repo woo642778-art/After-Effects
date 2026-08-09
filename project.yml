@@ -52,6 +52,10 @@ targets:
         product: VertexAICoreML
       - package: Vertex
         product: VertexAIAVFoundation
+      - package: Vertex
+        product: Vertex3D
+      - package: Vertex
+        product: VertexRender3DMetal
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
@@ -106,6 +110,10 @@ targets:
         product: VertexAICoreML
       - package: Vertex
         product: VertexAIAVFoundation
+      - package: Vertex
+        product: Vertex3D
+      - package: Vertex
+        product: VertexRender3DMetal
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests
