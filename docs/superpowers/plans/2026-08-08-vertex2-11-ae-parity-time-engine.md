@@ -2,385 +2,489 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build Vertex2 11.0 as an iPad-only professional compositor whose launch/home/project/composition/workspace/timeline/graph workflow closely matches current After Effects while adding a real shared Time & Animation Engine that drives both preview and export.
+**Goal:** Ship Vertex2 11.0.0 as an iPad-only professional compositor whose startup, Home, project/composition lifecycle, workspace, Timeline, Graph Editor, effects workflow, and auxiliary panels closely follow current After Effects semantics, while upgrading the existing exact-time animation foundation into a production Time & Animation Engine that drives preview and export identically.
 
-**Architecture:** Keep the verified 10.0 project/render/AI/3D/export foundations, extend the canonical project schema and `VertexTimeline` engine rather than creating parallel animation stores, and replace the temporary 10.0 workspace shell with a dockable AE-parity workspace bound to authoritative project commands. Native media retiming, optical flow, and pitch-preserve live behind protocol boundaries so portable timing logic remains testable on Linux/macOS Swift while Apple-native implementations are exercised in iPad/macOS CI.
+**Architecture:** Preserve the verified 10.0 project, persistence, animation-channel, timeline-editing, composition-compiler, Metal render, AI, 3D, and export foundations. Extend the existing `ProjectAnimationChannel` model rather than introducing a second keyframe store; keep advanced timing math deterministic over `RationalTime`; keep native frame interpolation and audio time-stretch behind Apple-platform adapters; and replace the temporary 10.0 panel shell with a semantic dock/tab/split workspace whose controls dispatch canonical project commands.
 
-**Tech Stack:** Swift 6, SwiftUI, UIKit document/file APIs, Swift Package Manager, XcodeGen, Metal/MetalKit, AVFoundation, Accelerate/vDSP where appropriate, Vision/Core Image or Metal motion-estimation backend as validated, Core ML for inherited AI effects, exact `RationalTime`, GitHub Actions.
+**Tech Stack:** Swift 6, SwiftUI, UIKit document/file APIs, Swift Package Manager, XcodeGen, Metal/MetalKit, AVFoundation, Vision + Metal for optical-flow synthesis, AVAudioEngine/AVAudioUnitTimePitch/AVAudioUnitVarispeed for audio retiming, Core ML for inherited AI effects, exact `RationalTime`, GitHub Actions.
 
 ## Global Constraints
 
 - Target product: Vertex2 11.0.0 build 11.
 - Platform: iPad-only, iPadOS 17+, landscape left/right, device family `[2]`.
 - Bundle ID remains `com.woo642778.aftereffects`.
-- The user-provided first `Vertex. STUDIO` image is the sole source of truth for AppIcon and Vertex Studio launch/home branding.
-- Do not copy Adobe logos, Ae icons, splash artwork, or proprietary brand assets. Reproduce workflow/information architecture only with Vertex branding.
-- Team Project is omitted in 11.0. Do not show a fake disabled Team Project control.
-- No fake feature controls. A visible editing control must be wired to canonical project data and/or an explicit unsupported/error state.
-- Preview and export must share animation/time-remap evaluation semantics.
-- Authoritative timeline time remains exact `RationalTime`; floating-point seconds are adapter/presentation values only.
-- Preserve 10.0 AI model integrity, 3D, persistence, Metal render, and export regression coverage.
-- PR remains Draft until all final release gates and independent IPA audit pass.
+- The user-provided first `Vertex. STUDIO` image is the sole AppIcon source. Approved source metadata: 2000×2000 RGBA PNG, 452,806 bytes, SHA-256 `4f0dc1287a50e5c69e1882f6540820de7e4681531e75c40fa45b02af8fec6a8a`.
+- Do not copy Adobe logos, Ae icons, Adobe splash artwork, or proprietary brand assets. Reproduce workflow/information architecture with Vertex branding.
+- Team Project is omitted in 11.0. No fake disabled Team Project control.
+- Libraries/cloud collaboration is omitted until real infrastructure exists.
+- No fake feature controls. Visible editing controls must mutate/read canonical project state or clearly represent an error/unsupported state.
+- Authoritative time remains `RationalTime`; floating seconds are presentation/adaptor values only.
+- Preview and export must continue through the same `CompositionGraphCompiler` and the same animation/time-remap semantics.
+- Preserve 10.0 AI model integrity, 3D, persistence, composition, Metal, export, iPad-only, and unsigned-release regression checks.
+- Preserve the existing Telegram promotion feature; it may be rescheduled so it does not interrupt the startup state machine, but it must not be silently deleted.
+- PR remains Draft until final release gates and independent IPA audit pass.
+
+## Existing Foundation To Reuse, Not Rebuild
+
+- `Sources/VertexProject/ProjectAnimation.swift` already owns `ProjectAnimatableValue`, `ProjectKeyframe`, `ProjectAnimationChannel`, exact Linear/Hold/Cubic-Bezier evaluation, mask/effect property addresses, and validation.
+- `Tests/VertexProjectTests/ProjectAnimationTests.swift` already covers exact scalar interpolation, Hold, Bezier, validation, and animated mask paths.
+- `Sources/VertexTimeline/TimelineEngine.swift` already implements move, trim, split, ripple, roll, slip, slide, marker shifting, and animation-channel partitioning.
+- `App/AETimelineView.swift` and `App/AETimelineLayerRow.swift` already use exact-time interaction and basic layer controls; 11.0 replaces the simplified visual model while retaining working edit semantics.
+- `App/GraphEditorView.swift` already edits canonical `ProjectAnimationChannel` data and has Value/Speed mode foundations.
+- `Sources/VertexComposition/LayerAnimationEvaluator.swift` and `EffectAnimationEvaluator.swift` already evaluate canonical animation data inside the renderer path.
+- `Sources/VertexComposition/CompositionGraphCompiler.swift` already calls those evaluators, so 11.0 must extend this path instead of adding a preview-only evaluator.
+- `App/CompositionPreviewController.swift` and `App/CompositionExportController.swift` already share the compiler + Metal renderer pattern.
+- `App/ProjectSessionActor.swift`, `ProjectWorkspaceViewModel.swift`, and `Sources/VertexProjectPersistence/VertexProjectPackageStore.swift` already provide atomic persistence, autosave/pending recovery, Undo/Redo, and project-open verification.
 
 ---
 
-## File Structure Map
-
-### Canonical project/time model
-- Modify `Sources/VertexProject/ProjectSchema.swift`: app version 11.0 metadata, schema migration fields, typed animatable channels, source-time remap, composition BPM/settings.
-- Create `Sources/VertexProject/ProjectAnimation.swift`: `ProjectAnimatableValue`, `ProjectAnimationChannel`, `ProjectKeyframe`, temporal/spatial interpolation metadata.
-- Create `Sources/VertexProject/ProjectTimeRemap.swift`: persisted source-time mapping/interpolation options.
-- Modify project migration/persistence files under `Sources/VertexProjectPersistence/`: deterministic migration from legacy animation data and safe 10.x reopen.
-
-### Portable timeline/animation engine
-- Create `Sources/VertexTimeline/AnimationEvaluator.swift`: deterministic property evaluation at `RationalTime`.
-- Create `Sources/VertexTimeline/GraphEditorModel.swift`: value/speed graph conversion and handle edits over the same keyframes.
-- Create `Sources/VertexTimeline/TimeRemapEvaluator.swift`: source-time resolution, freeze/reverse/stretch/ramp/nested mapping.
-- Create `Sources/VertexTimeline/BPMGrid.swift`: beat/subdivision/marker snapping.
-- Create `Sources/VertexTimeline/GestureKeyframeReducer.swift`: timestamp normalization, smoothing, simplification, Bezier fit.
-- Extend existing timeline command files in `Sources/VertexTimeline/` to mutate canonical channels with Undo-safe grouped commands.
-
-### Native retiming/audio
-- Create `Sources/VertexMediaAVFoundation/FrameInterpolation.swift`: Frame Mix + optical-flow protocol/backend.
-- Create `Sources/VertexMediaAVFoundation/AudioTimeStretch.swift`: pitch-preserve/non-preserve retiming contract.
-- Modify media frame resolver and composition compilation path so source-time mapping is resolved before frame fetch.
-- Modify `Sources/VertexExportAVFoundation/AppleExportWriter.swift` only where required to accept synchronized audio/video output without duplicating timing logic.
-
-### App lifecycle/workspace/UI
-- Create `App/VertexStartupCoordinator.swift` and `App/VertexStartupView.swift`: explicit startup state machine and real subsystem progress.
-- Create `App/VertexHomeView.swift` and `App/RecentProjectsStore.swift`: Home/New/Open/Recent lifecycle.
-- Create `App/NewCompositionView.swift`: real composition settings dialog.
-- Create `App/AEWorkspaceModel.swift`: dock/tab/stack/split workspace graph and persistence.
-- Replace/reshape `App/AEWorkspaceLayout.swift`, `App/AEWorkspaceChrome.swift`, `App/IPadEditorWorkspaceView.swift`, and `App/VertexEditorWorkspaceView.swift` around the workspace model.
-- Replace simplified `AETimelineView`/layer-row implementation and update `GraphEditorView`, `EffectControlsView`, Effects & Presets surfaces.
-- Create auxiliary panels: `App/AEPreviewPanel.swift`, `App/AEInfoPanel.swift`, `App/AEAudioPanel.swift`, `App/AEAlignPanel.swift`, `App/AECharacterPanel.swift`, `App/AEParagraphPanel.swift`.
-- Modify `App/EditorWorkspaceState.swift` so presentation state references canonical selection/playhead/workspace state rather than shadow copies of project values.
-
-### Branding/release
-- Store the supplied source artwork at `App/Branding/VertexStudioIconSource.png` through the GitHub blob/tree path, preserving the exact user-provided bytes.
-- Modify `Tools/generate_app_assets.sh` so AppIcon and launch/home derived assets are generated from that source.
-- Update `project.yml`, `Sources/VertexCore/Milestone.swift`, release/audit tooling, and Phase 11 GitHub Actions workflows.
-
----
-
-### Task 1: 11.0 foundation, branding, startup, Home, and project/composition lifecycle
+### Task 1: Phase 11 product foundation, exact Vertex Studio branding, startup/Home, and AE-like project/composition lifecycle
 
 **Files:**
+- Modify: `App/VertexApp.swift`
+- Modify: `App/AppStartupState.swift`
+- Modify: `App/Vertex2SplashView.swift`
+- Modify: `App/RootView.swift`
+- Modify: `App/VertexEditorWorkspaceView.swift`
+- Modify: `App/ProjectWorkspaceView.swift`
+- Modify: `App/ProjectWorkspaceViewModel.swift`
+- Modify: `App/ProjectSessionActor.swift`
 - Create: `App/VertexStartupCoordinator.swift`
-- Create: `App/VertexStartupView.swift`
 - Create: `App/VertexHomeView.swift`
 - Create: `App/RecentProjectsStore.swift`
 - Create: `App/NewCompositionView.swift`
-- Modify: `App/VertexEditorWorkspaceView.swift`
-- Modify: project workspace/view-model files that currently synthesize the default composition
-- Modify: `project.yml`
+- Modify: `App/Resources/AppIconSource.base64`
 - Modify: `Tools/generate_app_assets.sh`
+- Modify: `Sources/VertexProject/ProjectSchema.swift`
+- Modify: `Sources/VertexProject/ProjectComposition.swift`
+- Modify: `project.yml`
 - Test: `Tests/VertexAppTests/StartupHomeLifecycleTests.swift`
-- Test: `Tests/VertexProjectTests/ProjectCreationTests.swift`
+- Test: `Tests/VertexAppTests/NewCompositionInteractionTests.swift`
+- Modify: `Tests/VertexProjectTests/ProjectSchemaTests.swift`
 
 **Interfaces:**
-- Produces `VertexStartupPhase`, `VertexStartupCoordinator`, `RecentProjectRecord`, and a real empty-project/new-composition lifecycle used by all later UI tasks.
-- `VertexStartupCoordinator.start()` must terminate in `.ready`, `.recoverableFailure(VertexStartupIssue)`, or `.fatalFailure(VertexStartupIssue)`; no open-ended boolean loading flag is authoritative.
-
-- [ ] **Step 1: Write failing lifecycle tests.**
 
 ```swift
-@Test func newProjectStartsWithoutSyntheticComposition() throws {
-    let project = try ProjectDocument.makeNew(name: "Untitled")
-    #expect(project.compositions.isEmpty)
+enum VertexStartupService: String, Sendable {
+    case projectPersistence
+    case renderer
+    case effects
+    case aiModels
+    case workspace
+}
+
+enum VertexStartupPhase: Equatable, Sendable {
+    case coldStart
+    case loading(VertexStartupService)
+    case restoringSession
+    case ready
+    case fatal(String)
+}
+
+struct VertexStartupServices: Sendable {
+    var prepareProjectPersistence: @Sendable () async throws -> Void
+    var prepareRenderer: @Sendable () async throws -> Void
+    var prepareEffects: @Sendable () async throws -> Void
+    var prepareAIModels: @Sendable () async throws -> Void
+    var restoreWorkspace: @Sendable () async throws -> Void
+}
+```
+
+`VertexStartupCoordinator.start()` must always reach `.ready` or `.fatal`. Optional failures are accumulated as warnings and cannot leave the app in a permanent loading state.
+
+- [ ] **Step 1: Write failing startup/project tests before changing behavior.**
+
+```swift
+@Test func newProjectStartsEmpty() throws {
+    let project = try ProjectDocument.makeNew(name: "Untitled Project")
+    #expect(project.compositionRegistry.isEmpty)
     #expect(project.activeCompositionID == nil)
 }
 
-@Test @MainActor func optionalAIStartupFailureStillReachesHome() async {
-    let coordinator = VertexStartupCoordinator(services: .fixture(aiResult: .failure(.modelUnavailable)))
+@Test @MainActor func optionalAIStartupFailureDoesNotBlockReady() async {
+    let services = VertexStartupServices.fixture(aiFailure: TestFailure())
+    let coordinator = VertexStartupCoordinator(services: services)
     await coordinator.start()
     #expect(coordinator.phase == .ready)
-    #expect(coordinator.issues.contains(.modelUnavailable))
+    #expect(coordinator.warnings.count == 1)
 }
 ```
 
-- [ ] **Step 2: Run focused tests and confirm they fail for the current automatic-composition/bootstrap behavior.**
+- [ ] **Step 2: Run focused tests and verify the empty-project test fails because `ProjectDocument.makeNew` currently creates `Main Composition`.**
 
-Run: `swift test --filter ProjectCreationTests` and the iPad app-test target for `StartupHomeLifecycleTests`.
+Run: `swift test --filter ProjectSchemaTests`
 
-- [ ] **Step 3: Implement the explicit startup state machine and Home flow.**
+- [ ] **Step 3: Implement an explicit real startup coordinator.**
 
 ```swift
-enum VertexStartupPhase: Equatable {
-    case coldStart
-    case loadingServices(VertexStartupService)
-    case restoringSession
-    case ready
-    case recoverableFailure(VertexStartupIssue)
-    case fatalFailure(VertexStartupIssue)
-}
-
 @MainActor
 final class VertexStartupCoordinator: ObservableObject {
     @Published private(set) var phase: VertexStartupPhase = .coldStart
-    @Published private(set) var issues: [VertexStartupIssue] = []
-    func start() async { /* ordered, timeout-aware subsystem initialization */ }
+    @Published private(set) var warnings: [String] = []
+    private let services: VertexStartupServices
+
+    init(services: VertexStartupServices) { self.services = services }
+
+    func start() async {
+        do {
+            phase = .loading(.projectPersistence)
+            try await services.prepareProjectPersistence()
+            phase = .loading(.renderer)
+            try await services.prepareRenderer()
+            phase = .loading(.effects)
+            try await services.prepareEffects()
+        } catch {
+            phase = .fatal(error.localizedDescription)
+            return
+        }
+
+        phase = .loading(.aiModels)
+        do { try await services.prepareAIModels() }
+        catch { warnings.append(error.localizedDescription) }
+
+        phase = .restoringSession
+        do { try await services.restoreWorkspace() }
+        catch { warnings.append(error.localizedDescription) }
+
+        phase = .ready
+    }
 }
 ```
 
-Home must show only Home/New Project/Open Project/Recent Projects. New Project creates an empty writable project. New Composition commits real composition dimensions, FPS, duration, start time, background, supported motion blur/renderer settings.
+Wire `VertexApp`/`Vertex2SplashView` to real service phases instead of an 850 ms decorative delay. The splash should follow AE-like professional startup pacing while showing only Vertex Studio identity and real subsystem status.
 
-- [ ] **Step 4: Integrate the exact supplied Vertex Studio artwork.**
+- [ ] **Step 4: Replace direct editor bootstrap with Home → New/Open Project → empty project → New Composition.**
 
-Use the uploaded `/mnt/data/KakaoTalk_Photo_2026-08-08-19-36-00.png` bytes as `App/Branding/VertexStudioIconSource.png`, generate the AppIcon set from that source, and use a screen-layout adaptation rather than stretching the icon as a splash image. Remove temporary Ae-shaped/placeholder icon identity from generated assets.
+Change `ProjectDocument.makeNew` to create zero compositions and nil active selection. Update `ProjectSessionActor.create`, `ProjectWorkspaceViewModel.createProject`, and validation to accept an empty new project. Existing older projects containing a default composition remain valid.
 
-- [ ] **Step 5: Update product version/build and project metadata contract.**
+- [ ] **Step 5: Implement `VertexHomeView` and `RecentProjectsStore`.**
 
-Set `MARKETING_VERSION: 11.0.0`, `CURRENT_PROJECT_VERSION: 11`, and correct `ProjectDocument.currentAppVersion` after inspecting migration tests. Do not bump schema merely for marketing version unless new persisted animation fields require it.
+Persist recent records containing stable project ID, display name, local package URL/bookmark, last-opened date, and thumbnail path when available. Missing entries expose `Project Not Found` and removable recent records rather than blocking launch.
 
-- [ ] **Step 6: Run lifecycle/app-icon tests and commit.**
+- [ ] **Step 6: Implement AE-like New Composition as real persisted composition settings.**
 
-Expected: no automatic composition, real Home flow, optional startup failures do not deadlock, exact icon source is included, iPad identity remains unchanged except version/build.
+Extend `ProjectComposition` with backward-decoding defaults for:
 
-Commit: `feat: add Vertex2 11 startup home and project lifecycle`
+```swift
+public var displayStartTime: RationalTime
+public var bpm: Double?
+public var motionBlurShutterAngle: Double
+public var motionBlurShutterPhase: Double
+public var rendererMode: ProjectCompositionRendererMode
+```
+
+`NewCompositionView` edits Name, preset, width/height, pixel aspect when supported, frame rate, resolution metadata, start time/frame, duration, background, supported motion-blur settings, and renderer choice. Creating the composition dispatches a real `.insertComposition` command through `ProjectWorkspaceViewModel`.
+
+- [ ] **Step 7: Replace the current icon source with the exact approved attachment bytes.**
+
+Decode `App/Resources/AppIconSource.base64` in the asset generator and assert SHA-256 equals `4f0dc1287a50e5c69e1882f6540820de7e4681531e75c40fa45b02af8fec6a8a` before resizing. Change the temporary decoded source extension to `.png`. Generated AppIcon images and `LaunchLogo` derive only from that verified source.
+
+- [ ] **Step 8: Update versioning without hiding schema changes.**
+
+Set `MARKETING_VERSION: 11.0.0`, `CURRENT_PROJECT_VERSION: 11`, `ProjectDocument.currentAppVersion = "11.0.0"`. Bump `currentSchemaVersion` only once the persisted Task 2/4 fields are finalized, then add backward decode/migration tests before changing the reader floor.
+
+- [ ] **Step 9: Run lifecycle, project, asset-generation, and iPad app tests; commit.**
+
+Commit: `feat: add Vertex2 11 startup home project lifecycle and branding`
 
 ---
 
-### Task 2: Unified canonical Animation Core and safe schema migration
+### Task 2: Extend the existing animation channels into the full advanced Animation Core
 
 **Files:**
-- Create: `Sources/VertexProject/ProjectAnimation.swift`
-- Create: `Sources/VertexProject/ProjectTimeRemap.swift`
-- Modify: `Sources/VertexProject/ProjectSchema.swift`
-- Modify: `Sources/VertexProjectPersistence/*Migration*.swift` or existing migration coordinator
-- Create: `Sources/VertexTimeline/AnimationEvaluator.swift`
-- Test: `Tests/VertexProjectTests/AnimationSchemaTests.swift`
-- Test: `Tests/VertexProjectPersistenceTests/Phase11AnimationMigrationTests.swift`
-- Test: `Tests/VertexTimelineTests/AnimationEvaluatorTests.swift`
+- Modify: `Sources/VertexProject/ProjectAnimation.swift`
+- Modify: `Sources/VertexProject/ProjectLayer.swift`
+- Modify: `Sources/VertexComposition/LayerAnimationEvaluator.swift`
+- Modify: `Sources/VertexComposition/EffectAnimationEvaluator.swift`
+- Modify: `Sources/VertexTimeline/TimelineEngine.swift`
+- Create: `Sources/VertexTimeline/AnimationEditEngine.swift`
+- Create: `Sources/VertexTimeline/GraphCurveMath.swift`
+- Modify: `App/ProjectWorkspaceViewModel.swift`
+- Modify: `Tests/VertexProjectTests/ProjectAnimationTests.swift`
+- Create: `Tests/VertexTimelineTests/AnimationEditEngineTests.swift`
+- Create: `Tests/VertexTimelineTests/GraphCurveMathTests.swift`
+- Create: `Tests/VertexCompositionTests/AdvancedAnimationEvaluationTests.swift`
 
 **Interfaces:**
 
+Do not redefine `ProjectAnimatableValue`, `ProjectKeyframe`, or `ProjectAnimationChannel`. Extend them compatibly.
+
 ```swift
-public enum ProjectAnimatableValue: Codable, Equatable, Sendable {
-    case scalar(Double)
-    case vector2(ProjectVector2)
-    case vector3(ProjectVector3)
-    case color(ProjectColor)
+public enum ProjectSpatialInterpolationMode: String, Codable, Sendable {
+    case linear
+    case bezier
+    case autoBezier
+    case continuousBezier
 }
 
-public struct ProjectKeyframe: Codable, Equatable, Sendable, Identifiable {
-    public var id: VertexID
-    public var time: RationalTime
-    public var value: ProjectAnimatableValue
-    public var temporal: ProjectTemporalInterpolation
-    public var spatial: ProjectSpatialInterpolation?
+public struct ProjectSpatialTangent: Codable, Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public var z: Double?
 }
 
-public struct ProjectAnimationChannel: Codable, Equatable, Sendable, Identifiable {
-    public var id: VertexID
-    public var propertyPath: String
-    public var staticValue: ProjectAnimatableValue
-    public var keyframes: [ProjectKeyframe]
-}
-
-public struct AnimationEvaluator: Sendable {
-    public func value(of channel: ProjectAnimationChannel, at time: RationalTime) throws -> ProjectAnimatableValue
+public struct ProjectKeyframeVelocity: Codable, Equatable, Sendable {
+    public var valuePerSecond: Double
+    public var influence: Double       // 0...100
 }
 ```
 
-- [ ] **Step 1: Write failing tests for exact-time Linear/Hold/Bezier, velocity/influence, spatial tangents, and deterministic ordering.**
+Add backward-compatible optional fields to `ProjectKeyframe`: incoming/outgoing velocity, spatial incoming/outgoing tangent, spatial mode, and roving flag. Existing projects decode these as nil/defaults.
+
+- [ ] **Step 1: Add failing tests for advanced temporal semantics before modifying the model.**
+
+Cover Easy Ease, Ease In, Ease Out, explicit influence/velocity, Auto/Continuous Bezier metadata, roving-key validity, exact boundaries, and 23.976/29.97/59.94 frame-rate cases.
+
+- [ ] **Step 2: Extend the existing canonical types and decoding defaults.**
+
+Keep existing `.hold`, `.linear`, `.cubicBezier` encoding stable. Easy Ease commands map to cubic Bezier + velocity/influence metadata rather than creating a second animation type.
+
+- [ ] **Step 3: Implement `AnimationEditEngine` as immutable canonical channel transformations.**
 
 ```swift
-@Test func holdUsesPreviousKeyframeUntilExactBoundary() throws {
-    let channel = Fixtures.holdScalar(from: 0, to: 100, start: .zero, end: RationalTime(value: 24, timescale: 24))
-    #expect(try AnimationEvaluator().value(of: channel, at: RationalTime(value: 23, timescale: 24)) == .scalar(0))
-    #expect(try AnimationEvaluator().value(of: channel, at: RationalTime(value: 24, timescale: 24)) == .scalar(100))
+public struct AnimationEditEngine: Sendable {
+    public func addKeyframe(_ keyframe: ProjectKeyframe, to channel: ProjectAnimationChannel) throws -> ProjectAnimationChannel
+    public func removeKeyframes(ids: Set<VertexID>, from channel: ProjectAnimationChannel) throws -> ProjectAnimationChannel
+    public func moveKeyframes(ids: Set<VertexID>, by delta: RationalTime, in channel: ProjectAnimationChannel) throws -> ProjectAnimationChannel
+    public func scaleKeyframeTimes(ids: Set<VertexID>, anchor: RationalTime, factor: Double, in channel: ProjectAnimationChannel) throws -> ProjectAnimationChannel
+    public func applyEase(_ ease: ProjectKeyframeEaseCommand, keyframeIDs: Set<VertexID>, in channel: ProjectAnimationChannel) throws -> ProjectAnimationChannel
 }
 ```
 
-- [ ] **Step 2: Verify failures, then implement typed persisted channels and interpolation metadata without creating UI-owned keyframe storage.**
+All outputs call canonical validation and keep keyframes strictly ordered. Grouped UI edits become one `ProjectCommandPayload` so Undo/Redo is atomic.
 
-- [ ] **Step 3: Implement deterministic evaluator with exact interval lookup.**
+- [ ] **Step 4: Implement graph/speed math over the same channel evaluator.**
 
-Bezier solving must clamp malformed influence values, handle equal-time duplicates deterministically according to validation policy, and return the exact keyframe value at exact boundaries.
+`GraphCurveMath.value(...)` samples `channel.evaluatedValue(at:)`; `speed(...)` evaluates deterministic derivatives using exact neighboring times and the same Bezier control metadata. Graph Editor never owns independent curve points.
 
-- [ ] **Step 4: Migrate legacy animation channels into the new representation.**
+- [ ] **Step 5: Extend property coverage.**
 
-Migration must decode a copy, validate, write transactionally, and preserve the original package if migration fails. Add old-project fixtures and round-trip tests.
+Add canonical property addresses/values needed by 11.0 for combined 2D position/anchor/scale, 3D vector properties where the existing camera/light model exposes them, color-capable effect parameters, and supported audio/time properties. Define conflict validation so a combined Position channel and separated X/Y Position channels cannot both be active simultaneously.
 
-- [ ] **Step 5: Wire transform/effect/mask/text/3D/audio-compatible numeric properties through property paths and add registration adapters.**
+- [ ] **Step 6: Extend `LayerAnimationEvaluator` and `EffectAnimationEvaluator` instead of adding another render evaluator.**
 
-Do not rewrite every renderer subsystem. Resolve the animated property into the existing canonical layer/effect structures before graph compilation.
+The render path remains `ProjectAnimationChannel.evaluatedValue` → layer/effect state → `CompositionGraphCompiler`, which preserves preview/export parity.
 
-- [ ] **Step 6: Run all project/timeline/persistence tests and commit.**
+- [ ] **Step 7: Extend `TimelineEngine` and `ProjectWorkspaceViewModel` with canonical keyframe commands.**
 
-Commit: `feat: add unified exact-time animation core`
+Moving/splitting a layer must continue moving/partitioning its animation channels. New keyframe edits reuse the same session command/Undo stack.
+
+- [ ] **Step 8: Run Project/Timeline/Composition tests; commit.**
+
+Commit: `feat: extend canonical animation engine with AE keyframe semantics`
 
 ---
 
-### Task 3: AE-parity Timeline, Graph Editor, dockable workspace, effects, and auxiliary panels
+### Task 3: Replace the temporary 10.0 shell with AE-parity dockable workspace, Timeline, Graph Editor, Effects, and auxiliary panels
 
 **Files:**
 - Create: `App/AEWorkspaceModel.swift`
 - Modify: `App/AEWorkspaceLayout.swift`
 - Modify: `App/AEWorkspaceChrome.swift`
 - Modify: `App/IPadEditorWorkspaceView.swift`
+- Modify: `App/VertexEditorWorkspaceView.swift`
 - Modify: `App/EditorWorkspaceState.swift`
-- Modify: existing `App/AETimelineView.swift`, `App/AETimelineLayerRow.swift`, `App/GraphEditorView.swift`, `App/EffectControlsView.swift`
-- Create: auxiliary panel files listed in the File Structure Map
+- Modify: `App/ProjectWorkspaceView.swift`
+- Modify: `App/AETimelineView.swift`
+- Modify: `App/AETimelineLayerRow.swift`
+- Modify: `App/GraphEditorView.swift`
+- Modify: `App/EffectControlsView.swift`
+- Create: `App/EffectsAndPresetsView.swift`
+- Create: `App/AEPreviewPanel.swift`
+- Create: `App/AEInfoPanel.swift`
+- Create: `App/AEAudioPanel.swift`
+- Create: `App/AEAlignPanel.swift`
+- Create: `App/AECharacterPanel.swift`
+- Create: `App/AEParagraphPanel.swift`
 - Test: `Tests/VertexAppTests/AEWorkspaceDockingTests.swift`
 - Test: `Tests/VertexAppTests/AETimelineInteractionTests.swift`
+- Modify: `Tests/VertexAppTests/AEWorkspaceLayoutTests.swift`
 - Modify: `Tests/VertexAppTests/GraphEditorInteractionTests.swift`
 
 **Interfaces:**
 
 ```swift
-struct AEWorkspaceDocument: Codable, Equatable {
-    var root: AEWorkspaceNode
-    var activePanelIDs: [AEPanelID]
+enum AEPanelID: String, Codable, CaseIterable, Sendable {
+    case project, effectsAndPresets, composition, effectControls
+    case timeline, graphEditor, preview, info, audio, align, character, paragraph
 }
 
-enum AEWorkspaceNode: Codable, Equatable {
+indirect enum AEWorkspaceNode: Codable, Equatable, Sendable {
     case panel(AEPanelID)
     case tabs(selected: AEPanelID, panels: [AEPanelID])
-    case split(axis: Axis, fraction: Double, first: Box, second: Box)
+    case split(axis: AEWorkspaceAxis, fraction: Double, first: AEWorkspaceNode, second: AEWorkspaceNode)
+}
+
+struct AEWorkspaceDocument: Codable, Equatable, Sendable {
+    var root: AEWorkspaceNode
+    var floatingOrOverlayPanels: [AEPanelID]
 }
 ```
 
-The Graph Editor consumes and mutates `ProjectAnimationChannel`; it does not own copied graph points.
+- [ ] **Step 1: Write failing layout/persistence tests for tab/split/dock/reset and narrow Stage Manager widths.**
 
-- [ ] **Step 1: Write failing workspace/timeline interaction tests for dock/tab/split persistence, Stage Manager collapse, layer-property disclosure, stopwatch, add/delete/move/copy keyframes, switches/modes, parent/link, track matte, work area, markers, and Undo grouping.**
+A supported narrow layout must tab/collapse lower-priority panels rather than turn `Open / Import / Export` labels vertical.
 
-- [ ] **Step 2: Replace fixed fractional workspace layout with a persisted workspace graph.**
+- [ ] **Step 2: Replace fraction-only `AEWorkspaceLayoutPolicy` with a semantic workspace graph.**
 
-Keep safe width constraints, but represent panel arrangement as semantic nodes so reset/save/reopen works and narrow windows tab/collapse panels rather than vertical text wrapping.
+Keep deterministic minimum sizes, save/reset workspace, restore after relaunch, and preserve top-level Composition/3D/Export modes. 3D and Export remain real 10.0 workspaces, not discarded during the UI rebuild.
 
-- [ ] **Step 3: Replace the simplified timeline with a two-region AE-like timeline.**
+- [ ] **Step 3: Rebuild Project and Effects & Presets panels.**
 
-Left side: layer number/label, AV, solo, lock, shy, 3D, motion blur, supported adjustment/mode/matte/parent columns and property tree. Right side: exact time ruler, CTI, work area, layer bars, in/out handles, markers, keyframes, snapping.
+`ProjectWorkspaceView` becomes an AE-like project tree/search/import surface instead of a persistence diagnostics card. Persistence actions move to menus/commands. `EffectsAndPresetsView` uses an actual registry of currently implemented effects; `AIWorkspaceView()` no longer occupies the whole Effects panel. Depth Map, Cutout, Upscale, and Restore appear under AI.
 
-Every edit must dispatch a project/timeline command. No `@State` copy may be the authoritative value.
+- [ ] **Step 4: Rebuild Effect Controls around Transform + ordered effects.**
 
-- [ ] **Step 4: Rebuild Graph Editor over canonical channels.**
+Remove AI-only copy such as “Add an AI effect”. Transform/effect parameter changes mutate project data. Stopwatch/keyframe controls call Task 2 channel commands. Effect drag/drop/double-click applies a real `ProjectEffect` to the selected eligible layer.
 
-```swift
-struct GraphEditorModel {
-    func valueGraph(channel: ProjectAnimationChannel, visibleRange: ClosedRange<RationalTime>) throws -> [GraphSample]
-    func speedGraph(channel: ProjectAnimationChannel, visibleRange: ClosedRange<RationalTime>) throws -> [GraphSample]
-    func setTemporalHandle(keyframeID: VertexID, incoming: ProjectTemporalHandle?, outgoing: ProjectTemporalHandle?) throws -> ProjectAnimationChannel
-}
-```
+- [ ] **Step 5: Replace the Timeline slider presentation with an AE-like two-region Timeline.**
 
-Add Value Graph/Speed Graph switching, multi-property display, velocity/influence handles, interpolation commands, zoom/pan, and exact keyframe selection shared with Timeline.
+Reuse `AETimelineInteractionModel` and `TimelineEngine`. Left region contains layer number/label, AV, Solo, Lock, Shy, 3D, Motion Blur, supported Adjustment, Modes, Track Matte, Parent & Link, and disclosure tree. Right region contains exact ruler, CTI, work area, bars, in/out handles, markers, keyframes, snapping, and Graph Editor toggle. Remove phase-specific helper naming such as `phase9SetLayerEnabled` from the UI path.
 
-- [ ] **Step 5: Correct Effects & Presets and Effect Controls.**
+- [ ] **Step 6: Upgrade `GraphEditorView` in place.**
 
-Remove `AIWorkspaceView()` as the entire Effects panel. Build a registry-backed searchable hierarchy containing only actual effects. AI is one category. Apply via drag/drop or explicit action, persist the effect stack, show parameters in Effect Controls, and route animatable effect parameters through Task 2 channels.
+Keep canonical `ProjectAnimationChannel` inputs. Add Value/Speed Graph, multiple selected properties, pan/zoom, Bezier handle editing, velocity/influence readouts, Easy Ease commands, roving state, and shared Timeline keyframe selection.
 
-- [ ] **Step 6: Add real Preview, Info, Audio, Align, Character, and Paragraph panels.**
+- [ ] **Step 7: Add real auxiliary panels.**
 
-Each panel must mutate/read real editor/project state. Do not add Libraries or cloud placeholders.
+Preview controls playback/step/loop/audio preview. Info exposes pointer/pixel/item metadata. Audio shows supported levels/properties. Align performs actual layer alignment/distribution commands. Character/Paragraph edit actual text-layer properties only where text layers are supported; otherwise the panels are hidden rather than fake.
 
-- [ ] **Step 7: Run iPad UI tests at wide/medium/narrow Stage Manager sizes, then commit.**
+- [ ] **Step 8: Run wide/medium/narrow iPad Simulator tests; commit.**
 
-Commit: `feat: rebuild AE workspace timeline graph and panels`
+Commit: `feat: rebuild Vertex2 workspace timeline graph and panels for AE parity`
 
 ---
 
-### Task 4: Professional time remap, frame interpolation, gesture recording, BPM, and audio pitch preserve
+### Task 4: Professional source-time remapping, Frame Mix, optical flow, gesture recording, BPM, and pitch-preserved audio
 
 **Files:**
+- Create: `Sources/VertexProject/ProjectTimeRemap.swift`
+- Modify: `Sources/VertexProject/ProjectLayer.swift`
+- Modify: `Sources/VertexProject/ProjectComposition.swift`
 - Create: `Sources/VertexTimeline/TimeRemapEvaluator.swift`
 - Create: `Sources/VertexTimeline/BPMGrid.swift`
 - Create: `Sources/VertexTimeline/GestureKeyframeReducer.swift`
+- Modify: `Sources/VertexComposition/CompositionTypes.swift`
+- Modify: `Sources/VertexComposition/CompositionGraphCompiler.swift`
+- Modify: `App/CompositionMediaFrameResolver.swift`
 - Create: `Sources/VertexMediaAVFoundation/FrameInterpolation.swift`
 - Create: `Sources/VertexMediaAVFoundation/AudioTimeStretch.swift`
-- Modify: media frame resolver/composition resolver files
 - Test: `Tests/VertexTimelineTests/TimeRemapEvaluatorTests.swift`
 - Test: `Tests/VertexTimelineTests/BPMGridTests.swift`
 - Test: `Tests/VertexTimelineTests/GestureKeyframeReducerTests.swift`
 - Test: `Tests/VertexMediaAVFoundationTests/FrameInterpolationTests.swift`
 - Test: `Tests/VertexMediaAVFoundationTests/AudioTimeStretchTests.swift`
+- Modify: `Tests/VertexCompositionTests/CompositionGraphCompilerTests.swift`
 
 **Interfaces:**
 
 ```swift
+public enum ProjectFrameInterpolationMode: String, Codable, Sendable {
+    case nearest
+    case frameMix
+    case opticalFlow
+}
+
+public struct ProjectTimeRemap: Codable, Equatable, Sendable {
+    public var keyframes: [ProjectTimeRemapKeyframe]
+    public var interpolationMode: ProjectFrameInterpolationMode
+    public var preserveAudioPitch: Bool
+}
+
 public struct TimeRemapEvaluator: Sendable {
     public func sourceTime(mapping: ProjectTimeRemap, compositionTime: RationalTime) throws -> RationalTime
 }
+```
 
-public enum FrameInterpolationMode: Codable, Sendable { case nearest, frameMix, opticalFlow }
+`ProjectLayer` receives optional `timeRemap` and backward-decodes it as nil.
 
-public protocol FrameInterpolator: Sendable {
-    func frame(at sourceTime: RationalTime, request: FrameInterpolationRequest) async throws -> ResolvedVideoFrame
-}
+- [ ] **Step 1: Write failing exact-time tests for stretch, Reverse, Freeze, variable ramp, nested mapping, and long-duration 23.976/29.97/59.94 cases.**
 
-public protocol AudioTimeStretcher: Sendable {
-    func render(_ request: AudioTimeStretchRequest) async throws -> AudioTimeStretchResult
+- [ ] **Step 2: Implement `ProjectTimeRemap` and `TimeRemapEvaluator`.**
+
+Reverse/Freeze/Time Stretch utilities create or edit the same source-time map; they are not playback-only flags. Exact keyframe times remain `RationalTime`; source-time evaluation returns deterministic `RationalTime` with explicit rounding policy at media-frame resolution.
+
+- [ ] **Step 3: Change `CompositionGraphCompiler` source-time calculation to use the map.**
+
+Current media/nested source time is `compositionTime - startTime + sourceStartTime + sourceOffset`. When `layer.timeRemap` exists, pass the local layer time through `TimeRemapEvaluator`; otherwise preserve the current formula exactly. Apply the same rule to nested compositions and track-matte source layers.
+
+- [ ] **Step 4: Extend `CompositionTypes` frame-resolution request with interpolation mode.**
+
+```swift
+public struct CompositionFrameRequest: Sendable {
+    public var mediaID: VertexID
+    public var exactSourceTime: RationalTime
+    public var targetSize: VertexSize
+    public var interpolationMode: ProjectFrameInterpolationMode
 }
 ```
 
-- [ ] **Step 1: Write failing exact-time tests for stretch, reverse, freeze, animated source-time ramps, nested mapping, 23.976/29.97/59.94 rates, and long-duration drift.**
+Update `CompositionFrameResolver` and cache keys accordingly so preview/export resolve the same interpolation policy.
 
-- [ ] **Step 2: Implement `ProjectTimeRemap` and portable `TimeRemapEvaluator` using `RationalTime` only.**
+- [ ] **Step 5: Implement real Frame Mix and optical-flow interpolation in `FrameInterpolation.swift`.**
 
-Reverse and Freeze should be utilities that construct/edit the same source-time channel, not separate playback-only hacks.
+Frame Mix decodes bracketing frames and blends at the deterministic fractional source position. Optical Flow decodes the same bracketing frames, generates a Vision optical-flow field, and performs bidirectional Metal warping/blending into the intermediate frame. Define `FrameInterpolationError.motionEstimationFailed`; only an explicitly selected fallback may downgrade to Frame Mix. Silent corrupted output is forbidden.
 
-- [ ] **Step 3: Add Frame Mix and a real optical-flow backend with explicit failure policy.**
+- [ ] **Step 6: Implement pitch-preserved and varispeed audio retiming.**
 
-Define a typed error such as `FrameInterpolationError.motionEstimationFailed`. If optical flow fails, either use an explicitly configured fallback (`frameMix`) or surface the error; never silently produce a corrupted intermediate frame.
+Use `AVAudioUnitTimePitch` for preserve-pitch time stretch and `AVAudioUnitVarispeed` for pitch-following playback. `AudioTimeStretchRequest` is derived from the same `ProjectTimeRemap` used for video. Tests compare output duration/timestamps against the mapped video duration.
 
-- [ ] **Step 4: Add pitch-preserve/non-preserve audio time stretch and synchronization tests.**
+- [ ] **Step 7: Implement BPM grid and gesture recording.**
 
-Use a single source-time mapping to derive both video presentation and audio stretch schedule. Verify sample/end timestamps remain within the exact frame/audio tolerance declared by tests.
+`BPMGrid` produces exact beat/subdivision `RationalTime`s for snapping/marker generation. `GestureKeyframeReducer` receives timestamped touch/Pencil Position/Rotation/Scale samples, removes noise with deterministic smoothing, simplifies using an explicit tolerance, fits spatial tangents, and returns ordinary `ProjectKeyframe`s. A one-second smooth gesture must not create unbounded keyframes.
 
-- [ ] **Step 5: Add BPM grid/subdivision snapping and gesture recording reduction.**
+- [ ] **Step 8: Expose Time Remap, frame interpolation, pitch preserve, BPM, and recording in Timeline/Graph/Viewer; run tests; commit.**
 
-Gesture samples become ordinary canonical Position/Rotation/Scale keyframes after smoothing/simplification; test that a smooth one-second gesture does not produce an unbounded keyframe count.
-
-- [ ] **Step 6: Expose the functionality in Timeline/Graph/Viewer controls and commit.**
-
-Commit: `feat: add professional retiming optical flow and motion recording`
+Commit: `feat: add professional retiming optical flow audio and motion recording`
 
 ---
 
-### Task 5: Preview/export parity, recovery semantics, and end-to-end integration
+### Task 5: End-to-end Preview/Export parity, audio export, recovery states, and bug regression
 
 **Files:**
-- Modify: composition graph compiler/evaluation adapter under `Sources/VertexComposition/`
+- Modify: `Sources/VertexComposition/CompositionGraphCompiler.swift`
+- Modify: `Sources/VertexComposition/LayerAnimationEvaluator.swift`
+- Modify: `Sources/VertexComposition/EffectAnimationEvaluator.swift`
+- Modify: `App/CompositionPreviewController.swift`
 - Modify: `App/CompositionExportController.swift`
+- Modify: `Sources/VertexExport/ExportModels.swift`
 - Modify: `Sources/VertexExportAVFoundation/AppleExportWriter.swift`
-- Create/modify: project autosave/recovery coordinator in App/Project persistence layer
+- Modify: `App/ProjectSessionActor.swift`
+- Modify: `App/ProjectWorkspaceViewModel.swift`
+- Modify: `App/ProjectWorkspaceView.swift`
+- Modify: `Sources/VertexProjectPersistence/VertexProjectPackageStore.swift`
 - Test: `Tests/VertexCompositionTests/AnimatedCompositionParityTests.swift`
 - Test: `Tests/VertexExportAVFoundationTests/AnimatedExportParityTests.swift`
 - Test: `Tests/VertexAppTests/ProjectRecoveryTests.swift`
+- Modify: `Tests/VertexExportAVFoundationTests/AppleExportWriterTests.swift`
 
-**Interfaces:**
+- [ ] **Step 1: Add parity fixtures before integration.**
 
-```swift
-struct ResolvedProjectStateEvaluator {
-    func resolve(project: ProjectDocument, compositionID: VertexID, at time: RationalTime) throws -> ResolvedCompositionState
-}
-```
+Build one deterministic project containing eased Position, animated opacity/effect parameter, masks, nested composition, Time Remap, Frame Mix/Optical Flow mode, and audio retiming. Assert interactive-preview and export-purpose compiler graphs resolve the same canonical state at the same `RationalTime`.
 
-Both preview and export invoke the same resolver before `CompositionGraphCompiler` consumes the state.
+- [ ] **Step 2: Keep all advanced animation inside the existing compiler/evaluator path.**
 
-- [ ] **Step 1: Write failing parity tests where eased Position, animated effect parameter, Time Remap, reverse/freeze, and nested composition produce known frame signatures in both preview-purpose and export-purpose compilation.**
+Do not create a preview-only animation evaluator. `CompositionPreviewController` and `CompositionExportController` continue to construct `CompositionRenderRequest`; `CompositionGraphCompiler` evaluates all Task 2/4 semantics.
 
-- [ ] **Step 2: Insert one shared resolved-state evaluation stage into preview and export.**
+- [ ] **Step 3: Replace `includeAudio: false` only after a real audio source provider exists.**
 
-Do not create a second export animation evaluator. Existing AI effect resolver and Metal render path remain downstream.
+Extend `ExportJob`/`AppleExportWriter` with an optional synchronized audio provider. MOV/MP4 jobs with requested audio must mux rendered video frames and retimed PCM/compressed audio on the same exact schedule. If audio cannot be resolved, fail with a typed error rather than silently emitting a video-only file.
 
-- [ ] **Step 3: Add synchronized audio export for retimed media.**
+- [ ] **Step 4: Upgrade project-open/recovery UI around existing atomic persistence.**
 
-The 10.0 hardcoded `includeAudio: false` is removed only after a real audio source path exists. If audio cannot be resolved for a job, return a typed error instead of producing falsely advertised audio.
+Keep `VertexProjectPackageStore` pending-snapshot safety. `ProjectWorkspaceViewModel` exposes explicit `opening → validating → migrating → resolvingMedia → ready/failed` presentation states, and recovery UI maps to existing Apply Pending/Discard Pending plus Open Original when appropriate. No generic infinite `running` state may survive after an operation Task terminates.
 
-- [ ] **Step 4: Implement autosave/recovery snapshots and explicit project-open terminal states.**
+- [ ] **Step 5: Add regression tests for reported 10.0 UI failures.**
 
-Recovery options are Recover Project/Open Original/Discard Recovery when a valid snapshot exists. Corrupt recovery data must not prevent opening the original project.
+Cover narrow panel text wrapping, simplified Timeline slider removal, Effects panel AI takeover removal, Home flow, saved keyframes after reopen, grouped Undo/Redo, Graph curve vs evaluated motion, Time Remap one-frame boundaries, missing media, corrupt recent project, optional AI-model failure, and launch termination.
 
-- [ ] **Step 5: Run complete package + iPad simulator regression and commit.**
+- [ ] **Step 6: Run full Swift package + iPad Simulator + native media regression; commit.**
 
-Commit: `feat: unify animated preview export and recovery`
+Commit: `feat: unify Vertex2 11 preview export audio and recovery`
 
 ---
 
-### Task 6: Phase 11 milestone, CI qualification, independent IPA audit, and final artifact
+### Task 6: Phase 11 milestone, CI qualification, strict IPA audit, and final artifact
 
 **Files:**
 - Modify: `Sources/VertexCore/Milestone.swift`
@@ -391,28 +495,29 @@ Commit: `feat: unify animated preview export and recovery`
 - Modify: `Tools/release/audit_vertex2_ipa.py`
 - Modify: `project.yml`
 
-**Interfaces:**
-- Final artifact must be exactly `Vertex2-11.0.0-unsigned.ipa` and must pass strict independent audit before completion is claimed.
+**Final artifact:** `Vertex2-11.0.0-unsigned.ipa`
 
-- [ ] **Step 1: Update Milestone 11 and architecture tests to describe only functionality proven by the implementation.**
+- [ ] **Step 1: Update Milestone 11 only with functionality proven by Tasks 1-5.**
+
+Do not claim 12-28 roadmap features. Keep inherited source-adoption/license provenance.
 
 - [ ] **Step 2: Add Phase 11 CI gates.**
 
-Required sequence: `git diff --check`; portable Swift tests; inherited pinned AI download/hash/compile/inference audit; native animation/media/optical-flow/audio tests; XcodeGen; iPad Simulator app tests; unsigned iOS 17 arm64 Release build; bundle identity/orientation/device-family/icon/model/Metal inspection; IPA package; independent IPA audit; SHA-256.
+Required order: `git diff --check`; portable Swift tests; pinned AI fetch/hash/license audit; real compiled-model inference; native animation/media/optical-flow/audio tests; XcodeGen; iPad Simulator app tests; unsigned iOS 17 arm64 Release build; bundle inspection; app-icon source hash/generated-resource inspection; strict IPA audit; SHA-256.
 
-- [ ] **Step 3: Harden `audit_vertex2_ipa.py` for 11.0.**
+- [ ] **Step 3: Harden `audit_vertex2_ipa.py`.**
 
-Verify marketing/build version, iPad family, landscape orientations, arm64 thin binary, unsigned state, Metal library, exact compiled AI models/notices, non-empty Vertex Studio icon resources, and reject stale 10.0/placeholder branding evidence.
+Verify `Vertex2`, `com.woo642778.aftereffects`, `11.0.0 (11)`, iPad `[2]`, landscape left/right, iPadOS 17 minimum, thin arm64, unsigned state, no `_CodeSignature`, no `embedded.mobileprovision`, Metal library, exact three compiled AI models/notices, non-empty AppIcon resources, and release evidence that decoded icon source SHA-256 is `4f0dc1287a50e5c69e1882f6540820de7e4681531e75c40fa45b02af8fec6a8a`.
 
-- [ ] **Step 4: Run CI on the final candidate and inspect the first actual failure rather than guessing.**
+- [ ] **Step 4: Run the final candidate workflows and debug only from actual failing logs.**
 
-For every failure: retrieve job steps/logs, make the smallest evidence-based fix, rerun, and repeat until all required workflows are green on the same commit.
+For every failure: fetch job steps/logs, identify the first real failing assertion/compiler/runtime error, make the smallest evidence-based fix, rerun, and repeat until all required workflows are green on the same commit.
 
-- [ ] **Step 5: Download and independently inspect the final artifact.**
+- [ ] **Step 5: Download and independently unpack the final Actions artifact.**
 
-Unzip the Actions artifact locally, calculate SHA-256 of the IPA, unpack `Payload/Vertex2.app`, inspect `Info.plist`, executable architecture/signing, icon/resources, AI models/notices, and ensure no `_CodeSignature` or `embedded.mobileprovision` exists.
+Calculate SHA-256 of the IPA; inspect `Payload/Vertex2.app/Info.plist`, executable architecture/signing, generated AppIcon/LaunchLogo, AI model directories/notices/manifest, Metal library, and absence of signing payloads.
 
-- [ ] **Step 6: Update Draft PR #18 with verified commit/run/artifact IDs, SHA-256, size, feature truth table, and known limitations.**
+- [ ] **Step 6: Update Draft PR #18 with final verified commit, workflow run IDs, artifact ID, IPA size/SHA-256, feature truth table, and explicit known limitations.**
 
 Keep PR Draft and unmerged unless the user explicitly approves integration.
 
@@ -420,13 +525,11 @@ Commit: `ci: qualify Vertex2 11 release`
 
 ---
 
-## Plan Self-Review Checklist
+## Self-Review
 
-- Spec coverage: Startup/Home/project lifecycle, New Composition, app icon, workspace/panels, AE Timeline, Graph Editor, unified animation core, gesture recording, Time Remap, Frame Mix/Optical Flow, Pitch Preserve, BPM, preview/export parity, recovery, migrations, tests, and IPA qualification are mapped to Tasks 1-6.
-- No future 12-28 roadmap subsystem is represented as a completed 11.0 feature.
-- No Team Project or Libraries/cloud placeholder is planned.
-- Canonical animation ownership is in `VertexProject`; evaluation/editing logic is in `VertexTimeline`; Graph/Timeline/UI do not own duplicate animation data.
-- Exact `RationalTime` remains authoritative end-to-end.
-- Native optical flow/audio are isolated behind testable protocol boundaries.
-- The supplied Vertex Studio source image is explicitly preserved as the icon source of truth.
-- Every major task ends in focused tests and a commit; final completion requires same-commit green CI plus independent IPA inspection.
+- **Spec coverage:** Tasks 1-6 cover startup/loading, Home/New/Open Project, empty new project, New Composition, exact user icon, workspace/panels, AE Timeline, Graph Editor, effects workflow, auxiliary panels, advanced canonical animation, Time Remap, Frame Mix, optical flow, pitch preserve, BPM, gesture recording, preview/export parity, recovery, migration compatibility, CI, IPA audit, and final artifact.
+- **Existing-code check:** The plan extends `ProjectAnimation.swift`, `TimelineEngine.swift`, `GraphEditorView.swift`, `LayerAnimationEvaluator.swift`, and `CompositionGraphCompiler.swift`; it does not create duplicate stores/evaluators for functionality already present.
+- **Placeholder scan:** No `TBD`, `TODO`, wildcard file paths, or empty implementation comments remain.
+- **Type consistency:** `ProjectAnimationChannel` remains the canonical keyframe store; `ProjectTimeRemap` is a separate exact source-time mapping attached to `ProjectLayer`; Graph Editor and Timeline mutate canonical channels through `AnimationEditEngine` and project commands.
+- **Truthfulness:** Unsupported future Color/Expression/Tracking/Paint/Particle/advanced 3D roadmap features are not represented as completed 11.0 functionality.
+- **Release safety:** Completion requires all final workflows green on one commit plus independent IPA unpack/audit and SHA verification.
