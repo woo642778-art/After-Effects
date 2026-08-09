@@ -46,3 +46,30 @@ import VertexProject
         )
     }
 }
+
+@Test func phase11CompositionSupportsUHD8K5994Preset() {
+    var draft = NewCompositionDraft()
+    draft.apply(.uhd8K5994)
+
+    #expect(draft.width == 7680)
+    #expect(draft.height == 4320)
+    #expect(draft.frameRateChoice == .fps5994)
+}
+
+@Test func phase11CompositionSupportsDCI8KCustomAndPixelAspect() throws {
+    var draft = NewCompositionDraft()
+    draft.preset = .custom
+    draft.width = 8192
+    draft.height = 4320
+    draft.frameRateChoice = .fps60
+    draft.pixelAspectRatio = 1.5
+
+    let composition = try draft.makeComposition(
+        color: .rec709SDR(alphaMode: .straight),
+        backgroundColor: .transparent
+    )
+
+    #expect(composition.width == 8192)
+    #expect(composition.height == 4320)
+    #expect(composition.pixelAspectRatio == 1.5)
+}
