@@ -25,13 +25,13 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Verify Phase 11 product metadata and AI lock
+      - name: Verify Vertex2 12 product metadata and AI lock
         run: |
           set -euo pipefail
           grep -q 'currentSchemaVersion = 5' Sources/VertexProject/ProjectSchema.swift
-          grep -q 'currentAppVersion = "11.0.0"' Sources/VertexProject/ProjectSchema.swift
-          grep -q 'MARKETING_VERSION: 11.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 11' project.yml
+          grep -q 'MARKETING_VERSION: 12.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 12' project.yml
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
           python3 Tools/ai/audit_models.py
           python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
