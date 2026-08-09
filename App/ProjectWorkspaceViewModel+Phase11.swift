@@ -1,3 +1,4 @@
+import VertexCore
 import VertexProject
 
 extension ProjectWorkspaceViewModel {
@@ -13,6 +14,27 @@ extension ProjectWorkspaceViewModel {
                 index: project.compositionRegistry.count
             ),
             mergeKey: nil
+        )
+    }
+
+    func setAnimationChannels(
+        layerID: VertexID,
+        channels: [ProjectAnimationChannel],
+        mergeKey: String? = nil
+    ) throws {
+        guard let layer = project?.layer(id: layerID) else {
+            throw ProjectError.invalidOperation("Animation edit references a missing layer.")
+        }
+        _ = try channels.validatedAnimationChannels(for: layer.masks, effects: layer.effects)
+        guard channels != layer.animationChannels else { return }
+        perform(
+            .setLayerMotionState(
+                id: layerID,
+                animationChannels: channels,
+                masks: layer.masks,
+                trackMatte: layer.trackMatte
+            ),
+            mergeKey: mergeKey
         )
     }
 }
