@@ -17,6 +17,7 @@ public struct TimelineEngine: Sendable {
         let layerByID = Dictionary(uniqueKeysWithValues: project.layers(in: compositionID).map { ($0.id, $0) })
         var updates: [VertexID: ProjectLayer] = [:]
         var inserted: [ProjectLayer] = []
+        var removed: [VertexID] = []
         var order = composition.layerIDs
 
         func sourceLayer(_ id: VertexID) throws -> ProjectLayer {
@@ -124,6 +125,30 @@ public struct TimelineEngine: Sendable {
                 try store(layer)
             }
 
+        case .rippleDelete(let layerID, let affectedLayerIDs):
+            let target = try sourceLayer(layerID)
+            guard Set(affectedLayerIDs).count == affectedLayerIDs.count,
+                  !affectedLayerIDs.contains(layerID) else {
+                throw ProjectError.invalidOperation("Ripple-delete scope must contain unique IDs and exclude the deleted layer.")
+            }
+            guard !layerByID.values.contains(where: { $0.id != layerID && $0.parentLayerID == layerID }) else {
+                throw ProjectError.invalidOperation("Ripple delete cannot remove a layer that is still used as a parent. Re-parent its children first.")
+            }
+            guard !layerByID.values.contains(where: { $0.id != layerID && $0.trackMatte?.sourceLayerID == layerID }) else {
+                throw ProjectError.invalidOperation("Ripple delete cannot remove a layer that is still used as a track matte. Reassign the matte first.")
+            }
+            let duration = try subtract(target.timing.outPoint, target.timing.inPoint)
+            let negativeDuration = RationalTime(value: -duration.value, timescale: duration.timescale)
+            for id in affectedLayerIDs {
+                let candidate = try current(id)
+                guard candidate.timing.inPoint >= target.timing.outPoint else {
+                    throw ProjectError.invalidOperation("Ripple-delete affected layers must begin at or after the deleted layer's out point.")
+                }
+                try store(try shiftedLayer(candidate, by: negativeDuration, composition: composition))
+            }
+            order.removeAll { $0 == layerID }
+            removed = [layerID]
+
         case .roll(let leftLayerID, let rightLayerID, let boundary):
             guard leftLayerID != rightLayerID else {
                 throw ProjectError.invalidOperation("Roll requires two different layers.")
@@ -191,7 +216,7 @@ public struct TimelineEngine: Sendable {
         return TimelineEditResult(
             updatedLayers: orderedUpdates,
             insertedLayers: inserted,
-            removedLayerIDs: [],
+            removedLayerIDs: removed,
             resultingLayerOrder: order
         )
     }
