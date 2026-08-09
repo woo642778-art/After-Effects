@@ -46,7 +46,11 @@ public struct TimeRemapEvaluator: Sendable {
             throw ProjectError.invalidOperation("Time-remap segment has zero duration.")
         }
 
-        let sign: Int64 = ((lhs.value < 0) != (rhs.value < 0) != (divisor.value < 0)) ? -1 : 1
+        let negativeCount = [lhs.value < 0, rhs.value < 0, divisor.value < 0]
+            .reduce(into: 0) { count, isNegative in
+                if isNegative { count += 1 }
+            }
+        let sign: Int64 = negativeCount.isMultiple(of: 2) ? 1 : -1
         var numerators: [UInt64] = [lhs.value.magnitude, rhs.value.magnitude, UInt64(divisor.timescale)]
         var denominators: [UInt64] = [UInt64(lhs.timescale), UInt64(rhs.timescale), divisor.value.magnitude]
 
