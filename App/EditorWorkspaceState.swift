@@ -26,6 +26,10 @@ final class EditorWorkspaceState: ObservableObject {
     @Published var playhead: RationalTime = .zero
     @Published var selectedLayerIDs: Set<VertexID> = []
     @Published var selectedKeyframeIDs: Set<VertexID> = []
+    @Published var expandedLayerIDs: Set<VertexID> = []
+    @Published var expandedTransformLayerIDs: Set<VertexID> = []
+    @Published var expandedEffectsLayerIDs: Set<VertexID> = []
+    @Published var expandedMasksLayerIDs: Set<VertexID> = []
     @Published var activeTool: TimelineTool = .selection
     @Published var snappingEnabled = true
     @Published var pixelsPerSecond: Double = 120
@@ -64,6 +68,10 @@ final class EditorWorkspaceState: ObservableObject {
             playhead = .zero
             selectedLayerIDs.removeAll()
             selectedKeyframeIDs.removeAll()
+            expandedLayerIDs.removeAll()
+            expandedTransformLayerIDs.removeAll()
+            expandedEffectsLayerIDs.removeAll()
+            expandedMasksLayerIDs.removeAll()
             return
         }
 
@@ -71,6 +79,11 @@ final class EditorWorkspaceState: ObservableObject {
         activeCompositionID = compositionID
         let validLayerIDs = Set(composition.layerIDs)
         selectedLayerIDs.formIntersection(validLayerIDs)
+        expandedLayerIDs.formIntersection(validLayerIDs)
+        expandedTransformLayerIDs.formIntersection(validLayerIDs)
+        expandedEffectsLayerIDs.formIntersection(validLayerIDs)
+        expandedMasksLayerIDs.formIntersection(validLayerIDs)
+
         if selectedLayerIDs.isEmpty,
            let selected = project.selectedLayerID,
            validLayerIDs.contains(selected) {
@@ -127,6 +140,22 @@ final class EditorWorkspaceState: ObservableObject {
             selectedLayerIDs = [id]
         }
         selectedKeyframeIDs.removeAll()
+    }
+
+    func toggleLayerDisclosure(_ id: VertexID) {
+        if expandedLayerIDs.remove(id) == nil { expandedLayerIDs.insert(id) }
+    }
+
+    func toggleTransformDisclosure(_ id: VertexID) {
+        if expandedTransformLayerIDs.remove(id) == nil { expandedTransformLayerIDs.insert(id) }
+    }
+
+    func selectKeyframe(_ id: VertexID, additive: Bool = false) {
+        if additive {
+            if selectedKeyframeIDs.remove(id) == nil { selectedKeyframeIDs.insert(id) }
+        } else {
+            selectedKeyframeIDs = [id]
+        }
     }
 
     private func clampPlayhead(to composition: ProjectComposition) {
