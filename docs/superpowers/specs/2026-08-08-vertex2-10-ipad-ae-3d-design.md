@@ -28,7 +28,7 @@ The UI becomes an iPad-native interpretation of an After Effects desktop workspa
 
 The interface must remain usable across supported iPad sizes, including smaller landscape iPads, 11-inch and 13-inch iPad Pro class screens, Stage Manager windows, Split View sizes that remain supported by the OS, and external displays. No important panel may rely on a single fixed pixel width.
 
-The implementation must preserve the existing project/render architecture where possible. New UI may reorganize access to existing functionality, but must not fork a second project model, timeline model, or render engine.
+The implementation must preserve the existing project/render architecture where possible. New UI may reorganize access to existing functionality, but must not fork a second project model, timeline model, animation engine, or export render semantic path.
 
 ## 3. iPad-only platform conversion
 
@@ -59,13 +59,13 @@ Workspace presets:
 - Minimal: Composition + Timeline with side panels collapsed;
 - Effects: larger Effect Controls and Effects & Presets panels;
 - 3D: scene/asset hierarchy, Composition/3D viewport, Properties/Material inspector, Timeline;
-- Export: render settings, queue/history, output preview and diagnostics.
+- Export: render settings, output preview, job status/history and diagnostics.
 
 User split positions are persisted as normalized proportions with hard minimum/maximum constraints instead of absolute screen pixels. A workspace can be restored safely on a different iPad size.
 
 ### Width adaptation
 
-The layout should use three behavioral bands rather than device-name checks.
+The layout uses behavioral width bands rather than device-name checks.
 
 Wide band, approximately 1180 pt and wider:
 
@@ -129,11 +129,28 @@ Default roles:
 
 No core 3D operation may require Apple Pencil. Pencil improves precision but is not mandatory.
 
-## 7. 3D scope for 10.0.0
+## 7. Architecture boundaries
+
+10.0.0 adds 3D without turning the app target into a monolith.
+
+Expected module boundaries are:
+
+- `VertexScene3D`: portable scene graph, math, mesh topology, materials, cameras, lights, primitives, validation and deterministic mesh operations;
+- `VertexSceneIO`: portable glTF/GLB decoding and normalized import contracts;
+- `VertexSceneIOApple`: Apple-platform USDZ/Model I/O bridge and texture decoding where platform APIs are required;
+- `VertexRender3D`: backend-neutral render descriptions that connect scene evaluation to the existing render graph;
+- `VertexRenderMetal`: Metal execution for mesh/depth/material/light/shadow passes, extending rather than bypassing the existing GPU path;
+- `VertexProject`: canonical schema, 3D assets/layers/material references and migration;
+- app workspace views: layout, scene viewport, inspectors, selection and commands only, with no duplicated creative model hidden in SwiftUI state;
+- export service: AVFoundation/file-output orchestration that consumes the same evaluated composition/render path used by preview.
+
+Exact package target names may be adjusted during implementation only if the dependency boundaries remain equivalent and tests stay isolated.
+
+## 8. 3D scope for 10.0.0
 
 10.0.0 deliberately pulls forward the useful core of the previous later 3D roadmap. The release combines AE-style 2.5D compositing with imported 3D models and a constrained mesh-editing toolset.
 
-### 7.1 2.5D and transform model
+### 8.1 2.5D and transform model
 
 Layer transforms gain a 3D-capable representation with:
 
@@ -149,7 +166,7 @@ Layer transforms gain a 3D-capable representation with:
 
 The project schema is incremented for these additions. Existing 9.x projects must migrate without changing their rendered 2D result.
 
-### 7.2 3D asset registry
+### 8.2 3D asset registry
 
 The project gains a 3D asset representation separate from ordinary video/image media where necessary. A 3D asset records stable identity, source/provenance information, imported mesh structure, materials, texture references and validation metadata.
 
@@ -161,9 +178,9 @@ Supported import targets for 10.0.0:
 
 The importer must reject malformed or unsupported constructs with explicit diagnostics rather than silently producing broken geometry.
 
-The glTF/GLB path should implement a tested, documented subset sufficient for static meshes, node transforms, PBR metallic-roughness materials and referenced textures. USDZ may use platform-supported Model I/O/Quick Look compatible infrastructure where appropriate, but render data is normalized into Vertex-owned scene structures.
+The glTF/GLB path implements a tested documented subset sufficient for static meshes, node transforms, PBR metallic-roughness materials and referenced textures. USDZ may use platform-supported Model I/O infrastructure where appropriate, but render data is normalized into Vertex-owned scene structures.
 
-### 7.3 Scene and layer integration
+### 8.3 Scene and layer integration
 
 3D objects exist in the same composition/timeline system as 2D layers. Camera and light sources already present in the project model become active rendered participants instead of model-only placeholders.
 
@@ -178,7 +195,7 @@ The scene supports:
 - visibility, lock and solo state;
 - keyframed object, camera and light properties.
 
-## 8. 3D workspace UI
+## 9. 3D workspace UI
 
 The 3D workspace keeps the same overall AE panel grammar so users do not enter a separate application.
 
@@ -215,7 +232,7 @@ Bottom:
 
 3D workspace state such as view camera, shading mode and selection is session/UI state and must not accidentally modify render output unless explicitly represented in project data.
 
-## 9. Mesh editing scope
+## 10. Mesh editing scope
 
 10.0.0 supports basic editing useful for motion graphics, not Blender-class full modeling.
 
@@ -232,9 +249,9 @@ Required editing operations:
 - basic subdivide;
 - merge compatible selected vertices;
 - primitive creation: plane, cube and sphere;
-- 3D text geometry only if a deterministic platform-independent mesh generation path can be completed without destabilizing the release; otherwise 3D text is represented as an explicitly tracked follow-up within the 10.x line and not falsely marked complete.
+- 3D text creation with deterministic text-to-mesh geometry suitable for extrusion and scene rendering.
 
-The underlying editable topology must use stable element identity suitable for Undo/Redo and deterministic tests. A half-edge or equivalent adjacency-aware representation is preferred over ad-hoc triangle mutation.
+The underlying editable topology uses stable element identity suitable for Undo/Redo and deterministic tests. A half-edge or equivalent adjacency-aware representation is preferred over ad-hoc triangle mutation.
 
 Out of scope for 10.0.0:
 
@@ -247,7 +264,7 @@ Out of scope for 10.0.0:
 - advanced procedural modifiers;
 - Blender-style node materials.
 
-## 10. Materials and rendering
+## 11. Materials and rendering
 
 The first real 3D renderer remains Metal-based and integrates with the existing Vertex render architecture instead of creating an unrelated renderer.
 
@@ -275,9 +292,9 @@ Minimum lighting/render behavior:
 - correct ordering between opaque 3D surfaces, 2.5D layers and supported transparent content;
 - deterministic preview/export semantics.
 
-The renderer should prefer predictable mobile behavior over physically exhaustive features. Unsupported imported material extensions must be reported.
+The renderer prefers predictable mobile behavior over physically exhaustive features. Unsupported imported material extensions must be reported.
 
-## 11. Export workspace
+## 12. Export workspace
 
 10.0.0 includes a functional Export workspace. It is not only a mock settings page.
 
@@ -301,15 +318,15 @@ The initial release may support one active render job at a time. The later roadm
 
 Export must use the same composition evaluation and 3D renderer semantics as preview. A separate simplified export renderer is forbidden.
 
-## 12. Workspace state and persistence
+## 13. Workspace state and persistence
 
 Workspace layout preferences are UI preferences, not canonical creative project state. Panel proportions, collapsed tabs and selected workspace preset are persisted separately from `.vertexproject` contents so opening a project on another iPad does not mutate document revision.
 
 Creative 3D scene data, object transforms, materials, meshes, camera/light settings and animation are canonical project data and participate in deterministic save/migration/recovery.
 
-## 13. Undo/Redo and commands
+## 14. Undo/Redo and commands
 
-Every creative editing operation introduced in 10.0.0 must flow through deterministic project commands compatible with session Undo/Redo.
+Every creative editing operation introduced in 10.0.0 flows through deterministic project commands compatible with session Undo/Redo.
 
 This includes:
 
@@ -320,13 +337,14 @@ This includes:
 - camera/light edits;
 - mesh vertex moves;
 - extrude/inset/bevel/subdivide/merge/delete operations;
-- primitive creation.
+- primitive creation;
+- 3D text creation and geometry edits.
 
 Pure viewport navigation, workspace resize and panel tab state are not creative Undo operations.
 
-## 14. Error handling
+## 15. Error handling
 
-Failures must be surfaced at the workspace that caused them and must not corrupt project state.
+Failures are surfaced at the workspace that caused them and must not corrupt project state.
 
 Examples:
 
@@ -337,7 +355,7 @@ Examples:
 - export failure: partial output is cleaned up or clearly marked incomplete;
 - migration failure: original package remains recoverable and no destructive save occurs.
 
-## 15. Roadmap renumbering
+## 16. Roadmap renumbering
 
 The public roadmap becomes a 29-phase program, phases 0 through 28.
 
@@ -367,9 +385,9 @@ The new sequence from 10 onward is:
 
 Versions 23-25 retain the intent of the old 3D phases but become advanced/hardening releases because the usable core is deliberately pulled forward into 10.0.0. They may add larger-scene performance, more import/material coverage, advanced geometry/modifiers, rendering quality, render passes and other capabilities without duplicating the 10.0.0 acceptance criteria.
 
-Canonical roadmap documents and README version tables must be updated consistently during implementation. Any file name that encodes the obsolete phase count should be migrated or replaced with a compatibility redirect note so future contributors do not see contradictory numbering.
+Canonical roadmap documents and README version tables must be updated consistently during implementation. Any file name that encodes the obsolete phase count is migrated or replaced with a compatibility redirect note so future contributors do not see contradictory numbering.
 
-## 16. Test strategy
+## 17. Test strategy
 
 ### Portable/model tests
 
@@ -384,6 +402,7 @@ Canonical roadmap documents and README version tables must be updated consistent
 - glTF/GLB fixture parsing;
 - USDZ import normalization fixture where supported;
 - material validation;
+- deterministic 3D text geometry;
 - project command Undo/Redo for 3D edits.
 
 ### Render tests
@@ -395,6 +414,7 @@ Canonical roadmap documents and README version tables must be updated consistent
 - shadow fixture;
 - transparent/opaque ordering for the supported subset;
 - camera DOF fixture at bounded quality;
+- 3D text rendering;
 - preview/export parity.
 
 ### UI/app tests
@@ -432,7 +452,7 @@ There is no iPhone app-test gate for 10.0.0 because the product is iPad-only.
 - IPA creation and independent audit;
 - SHA-256 generation and re-verification.
 
-## 17. Implementation decomposition
+## 18. Implementation decomposition
 
 10.0.0 is implemented as isolated milestones so the branch never relies on a giant visual-only rewrite.
 
@@ -440,33 +460,35 @@ There is no iPhone app-test gate for 10.0.0 because the product is iPad-only.
 2. Adaptive workspace layout model and panel persistence.
 3. AE-style Standard/Minimal/Effects workspace UI using existing editing behavior.
 4. Project schema migration for 3D transforms/assets/scenes.
-5. 3D math, hierarchy and camera/light runtime.
+5. `VertexScene3D` math, hierarchy, topology, camera/light and material foundations.
 6. Metal depth/mesh/material renderer integrated with composition preview/export.
 7. GLB/glTF/USDZ import normalization.
 8. 3D workspace, viewport navigation and gizmos.
-9. Mesh topology and primitive creation.
+9. Mesh topology, primitive creation and deterministic 3D text geometry.
 10. Vertex/edge/face editing plus extrude/inset/bevel/subdivide/merge/delete.
 11. Material/camera/light inspectors and animation-channel integration.
 12. Functional Export workspace and single-job output path.
 13. Adaptive iPad UI test matrix and 3D/render regression hardening.
 14. 10.0.0 release gate, IPA audit and SHA-256 evidence.
 
-Each milestone must leave compilation/tests green for the code it touches. UI controls are not considered implemented until their backing command/render/export behavior exists.
+Each milestone leaves compilation/tests green for the code it touches. UI controls are not considered implemented until their backing command/render/export behavior exists.
 
-## 18. Acceptance criteria
+## 19. Acceptance criteria
 
 Vertex2 10.0.0 is complete only when all of the following are true:
 
 - the shipping target is iPad-only and landscape-only;
-- the workspace adapts across supported iPad window sizes without the clipping shown in the 9.0 iPhone test;
+- the workspace adapts across supported iPad window sizes without the clipping shown in the 9.0 phone test;
 - the Standard workspace materially matches the supplied AE-style layout concept in information architecture;
 - panel splitters and workspace presets function;
 - existing project/timeline/effect behavior remains operational;
 - 2D projects migrate without visual semantic change;
+- GLB, glTF and USDZ validated fixtures import into canonical editable 3D scene data;
 - 3D object import produces editable/rendered scene objects;
 - cameras and lights affect the actual rendered result;
 - 2.5D layers and 3D meshes coexist in one composition;
 - required basic mesh editing operations mutate real topology and participate in Undo/Redo;
+- 3D text produces real renderable geometry;
 - 3D transforms and relevant properties can be keyframed through the existing animation architecture;
 - Export produces a real playable output file for at least one validated delivery codec;
 - preview and export share render semantics;
