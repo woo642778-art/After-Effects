@@ -34,7 +34,10 @@ struct ProjectTimelineSchemaTests {
     }
 
     @Test func parentCycleIsRejected() throws {
-        var document = try ProjectDocument.makeNew(name: "Parent cycle")
+        var document = try ProjectDocument.makeFixture(
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            media: []
+        )
         let composition = try #require(document.compositionRegistry.first)
         let timing = LayerTiming(startTime: .zero, inPoint: .zero, outPoint: RationalTime(value: 5, timescale: 1))
         let aID = VertexID(rawValue: "91000000-0000-0000-0000-000000000001")
