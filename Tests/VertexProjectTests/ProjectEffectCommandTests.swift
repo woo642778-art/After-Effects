@@ -5,8 +5,16 @@ import VertexCore
 
 private func effectCommandFixture() throws -> ProjectDocument {
     var document = try ProjectDocument.makeNew(name: "Effect Commands")
-    let compositionID = try #require(document.activeCompositionID)
-    var composition = try #require(document.composition(id: compositionID))
+    var composition = ProjectComposition(
+        id: VertexID(rawValue: "95100000-0000-0000-0000-000000000100"),
+        name: "Main Composition",
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: document.settings.frameRate,
+        color: document.settings.color
+    )
+    let compositionID = composition.id
     let media = MediaReference.fixture(id: "95100000-0000-0000-0000-000000000001", name: "clip.mov")
     let layer = ProjectLayer(
         id: VertexID(rawValue: "95100000-0000-0000-0000-000000000010"),
@@ -18,6 +26,7 @@ private func effectCommandFixture() throws -> ProjectDocument {
     composition.layerIDs = [layer.id]
     document.mediaRegistry = [media]
     document.compositionRegistry = [composition]
+    document.activeCompositionID = compositionID
     document.layerRegistry = [layer]
     document.selectedLayerID = layer.id
     return try document.validated()
