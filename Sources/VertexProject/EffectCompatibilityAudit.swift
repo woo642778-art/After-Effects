@@ -21,7 +21,7 @@ public enum EffectCompatibilityFamily: String, Codable, CaseIterable, Sendable {
 }
 
 public struct EffectCompatibilityFamilySummary: Codable, Equatable, Sendable, Identifiable {
-    public var id: EffectCompatibilityFamily { family }
+    public var id: String { family.rawValue }
     public let family: EffectCompatibilityFamily
     public let indexedEntryCount: Int
     public let defaultStatus: EffectCompatibilityStatus
@@ -38,7 +38,7 @@ public struct EffectCompatibilityFamilySummary: Codable, Equatable, Sendable, Id
 }
 
 public struct VertexImplementedEffectSummary: Codable, Equatable, Sendable, Identifiable {
-    public var id: ProjectEffectType { type }
+    public var id: String { type.rawValue }
     public let type: ProjectEffectType
     public let status: EffectCompatibilityStatus
     public let displayName: String
@@ -87,7 +87,9 @@ public enum EffectCompatibilityAudit {
         guard families.reduce(0, { $0 + $1.indexedEntryCount }) == indexedEntryCount else {
             throw ProjectError.invalidValue("Compatibility family totals must equal the indexed catalog total.")
         }
-        guard Set(implementedEffects.map(\.type)) == Set(ProjectEffectType.allCases) else {
+        let mappedTypes = Set(implementedEffects.map { $0.type.rawValue })
+        let declaredTypes = Set(ProjectEffectType.allCases.map { $0.rawValue })
+        guard mappedTypes.count == implementedEffects.count, mappedTypes == declaredTypes else {
             throw ProjectError.invalidValue("Every implemented ProjectEffectType must have exactly one compatibility status.")
         }
         guard implementedEffects.filter({ $0.status == .nativeImplemented }).allSatisfy({ $0.type.isNativePixelEffect }) else {
