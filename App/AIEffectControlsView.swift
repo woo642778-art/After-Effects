@@ -42,9 +42,9 @@ struct AIEffectControlsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 parameterControls
                 HStack {
-                    Text(state.label)
+                    Text(effect.type.isNativePixelEffect ? "Live · shared preview/export processor" : state.label)
                         .font(.caption2.monospaced())
-                        .foregroundStyle(state.usesSourcePixels ? .orange : AfterEffectsTheme.secondaryText)
+                        .foregroundStyle(effect.type.isNativePixelEffect ? AfterEffectsTheme.secondaryText : (state.usesSourcePixels ? .orange : AfterEffectsTheme.secondaryText))
                     Spacer()
                     Button(index == 0 ? "Top" : "↑") { move(to: max(0, index - 1)) }
                         .disabled(index == 0)
@@ -54,27 +54,29 @@ struct AIEffectControlsView: View {
                 }
                 .buttonStyle(.bordered)
 
-                HStack {
-                    Button {
-                        startBake()
-                    } label: {
-                        if case .computing = state {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Label("Extract / Bake to Layer", systemImage: "square.stack.3d.up")
+                if !effect.type.isNativePixelEffect {
+                    HStack {
+                        Button {
+                            startBake()
+                        } label: {
+                            if case .computing = state {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Extract / Bake to Layer", systemImage: "square.stack.3d.up")
+                            }
                         }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AfterEffectsTheme.accent)
-                    .disabled(!effect.enabled || bakeTask != nil)
+                        .buttonStyle(.borderedProminent)
+                        .tint(AfterEffectsTheme.accent)
+                        .disabled(!effect.enabled || bakeTask != nil)
 
-                    if bakeTask != nil {
-                        Button("Cancel", role: .cancel) {
-                            bakeTask?.cancel()
-                            bakeTask = nil
-                            state = .ready
+                        if bakeTask != nil {
+                            Button("Cancel", role: .cancel) {
+                                bakeTask?.cancel()
+                                bakeTask = nil
+                                state = .ready
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.bordered)
                     }
                 }
             }
@@ -86,7 +88,7 @@ struct AIEffectControlsView: View {
                     set: { setEnabled($0) }
                 ))
                 .labelsHidden()
-                Text(title)
+                Text(effect.type.displayName)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text("fx")
@@ -120,7 +122,7 @@ struct AIEffectControlsView: View {
                     )
                     Text(String(format: "%.2f", value))
                         .font(.caption2.monospacedDigit())
-                        .frame(width: 38)
+                        .frame(width: 44)
                 case .integer(let value):
                     Stepper("\(value)", value: Binding(
                         get: { value },
@@ -141,18 +143,18 @@ struct AIEffectControlsView: View {
         }
     }
 
-    private var title: String {
-        switch effect.type {
-        case .depthMap: "Depth Map"
-        case .cutout: "Cutout"
-        case .upscale: "Upscale"
-        case .restore: "Restore"
-        }
-    }
-
     private func scalarRange(_ id: String) -> ClosedRange<Double> {
-        if id == UpscaleParameterID.scale { return 1...4 }
-        return 0...1
+        switch id {
+        case UpscaleParameterID.scale: 1...4
+        case GaussianBlurParameterID.radius: 0...200
+        case SharpenParameterID.sharpness: 0...2
+        case ExposureEffectParameterID.stops: -10...10
+        case ColorControlsParameterID.brightness: -1...1
+        case ColorControlsParameterID.contrast: 0...4
+        case ColorControlsParameterID.saturation: 0...2
+        case HueAdjustParameterID.degrees: -180...180
+        default: 0...1
+        }
     }
 
     private func textOptions(_ id: String, current: String) -> [String] {
@@ -181,7 +183,7 @@ struct AIEffectControlsView: View {
     private func setParameter(_ id: String, _ value: ProjectEffectParameterValue) {
         do {
             try workspace.setEffectParameter(layerID: layer.id, effectID: effect.id, parameterID: id, value: value)
-            state = .stale
+            state = effect.type.isNativePixelEffect ? .ready : .stale
             errorMessage = nil
         } catch {
             state = .failed(error.localizedDescription)
@@ -204,6 +206,7 @@ struct AIEffectControlsView: View {
     }
 
     private func startBake() {
+        guard !effect.type.isNativePixelEffect else { return }
         state = .computing
         let task = Task { @MainActor in
             do {
