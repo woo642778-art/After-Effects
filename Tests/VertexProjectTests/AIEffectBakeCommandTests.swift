@@ -5,8 +5,16 @@ import VertexCore
 
 private func bakeProject() throws -> (ProjectDocument, ProjectLayer, MediaReference) {
     var project = try ProjectDocument.makeNew(name: "Bake")
-    let compositionID = try #require(project.activeCompositionID)
-    var composition = try #require(project.composition(id: compositionID))
+    var composition = ProjectComposition(
+        id: VertexID(rawValue: "97000000-0000-0000-0000-000000000100"),
+        name: "Main Composition",
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: project.settings.frameRate,
+        color: project.settings.color
+    )
+    let compositionID = composition.id
     let sourceMedia = MediaReference.fixture(id: "97000000-0000-0000-0000-000000000001", name: "source.mov")
     let sourceLayer = ProjectLayer(
         id: VertexID(rawValue: "97000000-0000-0000-0000-000000000010"),
@@ -19,6 +27,7 @@ private func bakeProject() throws -> (ProjectDocument, ProjectLayer, MediaRefere
     project.mediaRegistry = [sourceMedia]
     project.layerRegistry = [sourceLayer]
     project.compositionRegistry = [composition]
+    project.activeCompositionID = compositionID
     project.selectedLayerID = sourceLayer.id
     return (try project.validated(), sourceLayer, sourceMedia)
 }

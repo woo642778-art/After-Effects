@@ -1,0 +1,7 @@
+format=base64-png-chunks-v1
+parts=11
+source_bytes=452806
+base64_bytes=603744
+width=2000
+height=2000
+sha256=4f0dc1287a50e5c69e1882f6540820de7e4681531e75c40fa45b02af8fec6a8a

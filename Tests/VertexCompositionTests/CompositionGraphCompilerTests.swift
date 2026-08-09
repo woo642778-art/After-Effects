@@ -44,15 +44,13 @@ private struct CompositionFixture {
 }
 
 private func makeCompositionFixture(sameMedia: Bool = true) throws -> CompositionFixture {
-    var project = try ProjectDocument.makeNew(
-        id: VertexID(rawValue: "65000000-0000-0000-0000-000000000001"),
-        name: "Compiler",
-        timestamp: Date(timeIntervalSince1970: 1_700_000_000)
-    )
     let media = MediaReference.fixture(id: "65000000-0000-0000-0000-000000000010")
     let secondMedia = MediaReference.fixture(id: "65000000-0000-0000-0000-000000000011", name: "second.mov")
-    project.mediaRegistry = sameMedia ? [media] : [media, secondMedia]
-    var composition = project.compositionRegistry[0]
+    var project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: sameMedia ? [media] : [media, secondMedia]
+    )
+    var composition = try #require(project.compositionRegistry.first)
     composition.width = 16
     composition.height = 16
     let timing = LayerTiming(startTime: .zero, inPoint: .zero, outPoint: composition.duration)

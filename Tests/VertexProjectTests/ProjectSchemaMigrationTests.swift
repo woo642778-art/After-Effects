@@ -53,7 +53,7 @@ func schema1MigratesToCurrentSchema() throws {
     #expect(first == second)
     #expect(first.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(first.minimumReaderVersion == ProjectDocument.currentSchemaVersion)
-    #expect(first.metadata.lastSavedByAppVersion == ProjectDocument.currentAppVersion)
+    #expect(first.metadata.lastSavedByAppVersion == "9.0.0")
     #expect(first.revision == 7)
     #expect(first.compositionRegistry.count == 1)
     #expect(first.layerRegistry.count == 1)

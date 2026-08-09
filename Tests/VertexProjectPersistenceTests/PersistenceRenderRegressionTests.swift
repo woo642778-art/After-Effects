@@ -35,16 +35,23 @@ func savedSchema2RenderGraphIsStableAcrossReopen() async throws {
     defer { try? FileManager.default.removeItem(at: root) }
 
     let projectID = VertexID(rawValue: "6a000000-0000-0000-0000-000000000001")
+    let compositionID = VertexID(rawValue: "6a000000-0000-0000-0000-000000000004")
     let mediaID = VertexID(rawValue: "6a000000-0000-0000-0000-000000000002")
     let layerID = VertexID(rawValue: "6a000000-0000-0000-0000-000000000003")
     let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
 
     var document = try ProjectDocument.makeNew(id: projectID, name: "Render Regression", timestamp: timestamp)
-    let compositionID = try #require(document.activeCompositionID)
-    var composition = try #require(document.composition(id: compositionID))
-    composition.width = 32
-    composition.height = 18
-    composition.duration = RationalTime(value: 2, timescale: 1)
+    var composition = ProjectComposition(
+        id: compositionID,
+        name: "Main Composition",
+        width: 32,
+        height: 18,
+        duration: RationalTime(value: 2, timescale: 1),
+        frameRate: document.settings.frameRate,
+        color: document.settings.color
+    )
+    document.compositionRegistry = [composition]
+    document.activeCompositionID = compositionID
     let media = MediaReference.fixture(id: mediaID.rawValue, name: "fixture.mov")
     let layer = ProjectLayer(
         id: layerID,

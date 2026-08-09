@@ -26,14 +26,13 @@ private func makeLayerSession(
     historyLimit: Int = 200,
     recentCommandLimit: Int = 512
 ) throws -> ProjectEditingSession {
-    let projectID = VertexID(rawValue: "50000000-0000-0000-0000-000000000001")
     let mediaID = VertexID(rawValue: "50000000-0000-0000-0000-000000000002")
     let layerID = VertexID(rawValue: "50000000-0000-0000-0000-000000000003")
-    var document = try ProjectDocument.makeNew(
-        id: projectID,
-        name: name,
-        timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+    var document = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
     )
+    document.metadata.name = name
     let media = MediaReference.fixture(id: mediaID.rawValue)
     document.mediaRegistry = [media]
     let compositionID = try #require(document.activeCompositionID)
@@ -161,7 +160,12 @@ func sliderCommandsCoalesce() throws {
 
 @Test("A new command clears Redo history")
 func newCommandClearsRedo() throws {
-    var session = try ProjectEditingSession(document: .makeNew(name: "Redo"))
+    var document = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
+    )
+    document.metadata.name = "Redo"
+    var session = try ProjectEditingSession(document: try document.validated())
     _ = try session.apply(request(
         for: session,
         id: "50000000-0000-0000-0000-000000000028",

@@ -41,7 +41,6 @@ struct IPadEditorWorkspaceView: View {
                         if editorState.isRightDrawerPresented { editorState.isLeftDrawerPresented = false }
                     }
                 )
-
                 workspaceBody(metrics: metrics, size: CGSize(width: proxy.size.width, height: contentHeight))
             }
             .background(AfterEffectsTheme.background)
@@ -55,34 +54,23 @@ struct IPadEditorWorkspaceView: View {
                     if metrics.showsLeftDock {
                         leftDock(usesTabs: metrics.leftDockUsesTabs)
                             .frame(width: metrics.leftDockWidth)
-
-                        verticalSplitHandle
-                            .gesture(leftResizeGesture(totalWidth: size.width))
+                        verticalSplitHandle.gesture(leftResizeGesture(totalWidth: size.width))
                     }
 
-                    compositionPanel
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    compositionPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     if metrics.showsRightDock {
-                        verticalSplitHandle
-                            .gesture(rightResizeGesture(totalWidth: size.width))
-
-                        rightInspector
-                            .frame(width: metrics.rightDockWidth)
+                        verticalSplitHandle.gesture(rightResizeGesture(totalWidth: size.width))
+                        rightInspector.frame(width: metrics.rightDockWidth)
                     }
                 }
                 .frame(maxHeight: .infinity)
 
-                horizontalSplitHandle
-                    .gesture(timelineResizeGesture(totalHeight: size.height))
-
-                timelinePanel
-                    .frame(height: metrics.timelineHeight)
+                horizontalSplitHandle.gesture(timelineResizeGesture(totalHeight: size.height))
+                timelinePanel.frame(height: metrics.timelineHeight)
             }
 
-            if metrics.widthBand == .narrow {
-                narrowDrawerLayer(size: size)
-            }
+            if metrics.widthBand == .narrow { narrowDrawerLayer(size: size) }
         }
     }
 
@@ -92,9 +80,7 @@ struct IPadEditorWorkspaceView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     ForEach(AELeftDockTab.allCases) { tab in
-                        Button {
-                            editorState.leftDockTab = tab
-                        } label: {
+                        Button { editorState.leftDockTab = tab } label: {
                             Text(tab.title)
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(editorState.leftDockTab == tab ? AfterEffectsTheme.primaryText : AfterEffectsTheme.secondaryText)
@@ -109,29 +95,19 @@ struct IPadEditorWorkspaceView: View {
 
                 switch editorState.leftDockTab {
                 case .project:
-                    AEPanel(title: "Project", systemImage: "folder") {
-                        AEProjectPanelContent()
-                    }
+                    AEPanel(title: "Project", systemImage: "folder") { AEProjectPanelContent() }
                 case .effects:
-                    AEPanel(title: "Effects & Presets", systemImage: "sparkles") {
-                        AEEffectsPanelContent()
-                    }
+                    AEPanel(title: "Effects & Presets", systemImage: "sparkles") { AEEffectsPanelContent() }
                 }
             }
         } else {
             GeometryReader { proxy in
                 VStack(spacing: 0) {
-                    AEPanel(title: "Project", systemImage: "folder") {
-                        AEProjectPanelContent()
-                    }
-                    .frame(height: max(180, proxy.size.height * 0.52))
-
+                    AEPanel(title: "Project", systemImage: "folder") { AEProjectPanelContent() }
+                        .frame(height: max(180, proxy.size.height * 0.52))
                     horizontalDivider
-
-                    AEPanel(title: "Effects & Presets", systemImage: "sparkles") {
-                        AEEffectsPanelContent()
-                    }
-                    .frame(maxHeight: .infinity)
+                    AEPanel(title: "Effects & Presets", systemImage: "sparkles") { AEEffectsPanelContent() }
+                        .frame(maxHeight: .infinity)
                 }
             }
         }
@@ -139,14 +115,13 @@ struct IPadEditorWorkspaceView: View {
 
     private var compositionPanel: some View {
         AEPanel(title: "Composition", systemImage: "rectangle.on.rectangle") {
-            EditorPreviewSurface(preview: preview, editorState: editorState)
-                .padding(6)
+            EditorPreviewSurface(preview: preview, editorState: editorState).padding(4)
         }
     }
 
     private var rightInspector: some View {
-        AEPanel(title: "Effect Controls", systemImage: "slider.horizontal.3") {
-            AEEffectControlsPanelContent()
+        AEPanel(title: "Panels", systemImage: "sidebar.right") {
+            AERightPanelStack(editorState: editorState)
         }
     }
 
@@ -155,10 +130,7 @@ struct IPadEditorWorkspaceView: View {
             if editorState.graphMode == nil {
                 AETimelineView(editorState: editorState)
             } else {
-                ScrollView {
-                    GraphEditorView(editorState: editorState)
-                        .padding(7)
-                }
+                GraphEditorView(editorState: editorState)
             }
         }
     }
@@ -196,30 +168,18 @@ struct IPadEditorWorkspaceView: View {
     }
 
     private var verticalSplitHandle: some View {
-        Rectangle()
-            .fill(AfterEffectsTheme.border)
-            .frame(width: 7)
-            .overlay {
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-            }
+        Rectangle().fill(AfterEffectsTheme.border).frame(width: 7)
+            .overlay { Rectangle().fill(Color.clear).contentShape(Rectangle()) }
             .accessibilityLabel("Resize panel")
     }
 
     private var horizontalSplitHandle: some View {
-        Rectangle()
-            .fill(AfterEffectsTheme.border)
-            .frame(height: 7)
+        Rectangle().fill(AfterEffectsTheme.border).frame(height: 7)
             .contentShape(Rectangle())
             .accessibilityLabel("Resize timeline")
     }
 
-    private var horizontalDivider: some View {
-        Rectangle()
-            .fill(AfterEffectsTheme.border)
-            .frame(height: 1)
-    }
+    private var horizontalDivider: some View { Rectangle().fill(AfterEffectsTheme.border).frame(height: 1) }
 
     private func leftResizeGesture(totalWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
@@ -253,7 +213,5 @@ struct IPadEditorWorkspaceView: View {
 }
 
 private extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
-        min(max(self, range.lowerBound), range.upperBound)
-    }
+    func clamped(to range: ClosedRange<Self>) -> Self { min(max(self, range.lowerBound), range.upperBound) }
 }

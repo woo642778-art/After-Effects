@@ -125,24 +125,36 @@ public struct LayerTiming: Codable, Equatable, Sendable {
     public var inPoint: RationalTime
     public var outPoint: RationalTime
     public var sourceOffset: RationalTime
+    public var timeRemap: ProjectTimeRemap?
+    public var frameInterpolation: ProjectFrameInterpolationMode
+    public var preserveAudioPitch: Bool
 
     private enum CodingKeys: String, CodingKey {
         case startTime
         case inPoint
         case outPoint
         case sourceOffset
+        case timeRemap
+        case frameInterpolation
+        case preserveAudioPitch
     }
 
     public init(
         startTime: RationalTime,
         inPoint: RationalTime,
         outPoint: RationalTime,
-        sourceOffset: RationalTime = .zero
+        sourceOffset: RationalTime = .zero,
+        timeRemap: ProjectTimeRemap? = nil,
+        frameInterpolation: ProjectFrameInterpolationMode = .nearest,
+        preserveAudioPitch: Bool = true
     ) {
         self.startTime = startTime
         self.inPoint = inPoint
         self.outPoint = outPoint
         self.sourceOffset = sourceOffset
+        self.timeRemap = timeRemap
+        self.frameInterpolation = frameInterpolation
+        self.preserveAudioPitch = preserveAudioPitch
     }
 
     public init(from decoder: Decoder) throws {
@@ -151,6 +163,9 @@ public struct LayerTiming: Codable, Equatable, Sendable {
         inPoint = try container.decode(RationalTime.self, forKey: .inPoint)
         outPoint = try container.decode(RationalTime.self, forKey: .outPoint)
         sourceOffset = try container.decodeIfPresent(RationalTime.self, forKey: .sourceOffset) ?? .zero
+        timeRemap = try container.decodeIfPresent(ProjectTimeRemap.self, forKey: .timeRemap)
+        frameInterpolation = try container.decodeIfPresent(ProjectFrameInterpolationMode.self, forKey: .frameInterpolation) ?? .nearest
+        preserveAudioPitch = try container.decodeIfPresent(Bool.self, forKey: .preserveAudioPitch) ?? true
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -159,6 +174,9 @@ public struct LayerTiming: Codable, Equatable, Sendable {
         try container.encode(inPoint, forKey: .inPoint)
         try container.encode(outPoint, forKey: .outPoint)
         try container.encode(sourceOffset, forKey: .sourceOffset)
+        try container.encodeIfPresent(timeRemap, forKey: .timeRemap)
+        if frameInterpolation != .nearest { try container.encode(frameInterpolation, forKey: .frameInterpolation) }
+        if !preserveAudioPitch { try container.encode(false, forKey: .preserveAudioPitch) }
     }
 
     public func validated(for composition: ProjectComposition) throws -> Self {
@@ -167,6 +185,12 @@ public struct LayerTiming: Codable, Equatable, Sendable {
         }
         guard sourceOffset >= .zero else {
             throw ProjectError.invalidValue("Layer source offset must be nonnegative.")
+        }
+        if let timeRemap {
+            _ = try timeRemap.validated()
+            guard timeRemap.keyframes.allSatisfy({ $0.compositionTime <= composition.duration }) else {
+                throw ProjectError.invalidValue("Time-remap keyframes must remain inside the composition duration.")
+            }
         }
         return self
     }

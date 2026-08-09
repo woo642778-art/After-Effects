@@ -27,7 +27,7 @@ var targets: [Target] = [
     .target(name: "VertexProject", dependencies: ["VertexCore", "VertexMedia", "VertexRender"]),
     .target(name: "VertexTimeline", dependencies: ["VertexCore", "VertexProject"]),
     .target(name: "VertexProjectPersistence", dependencies: ["VertexCore", "VertexMedia", "VertexProject"]),
-    .target(name: "VertexComposition", dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexRender"]),
+    .target(name: "VertexComposition", dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexTimeline", "VertexRender"]),
     .target(name: "VertexAI", dependencies: ["VertexCore"]),
     .target(name: "VertexAICoreML", dependencies: ["VertexCore", "VertexAI"]),
     .target(name: "Vertex3D"),

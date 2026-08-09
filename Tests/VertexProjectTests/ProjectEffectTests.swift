@@ -3,10 +3,25 @@ import Testing
 import VertexCore
 @testable import VertexProject
 
+private func projectWithEffectTestComposition(name: String) throws -> (ProjectDocument, ProjectComposition) {
+    var document = try ProjectDocument.makeNew(name: name)
+    let composition = ProjectComposition(
+        id: VertexID(rawValue: "95000000-0000-0000-0000-000000000100"),
+        name: "Main Composition",
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: document.settings.frameRate,
+        color: document.settings.color
+    )
+    document.compositionRegistry = [composition]
+    document.activeCompositionID = composition.id
+    return (document, composition)
+}
+
 private func effectDocument() throws -> (ProjectDocument, ProjectLayer) {
-    var document = try ProjectDocument.makeNew(name: "Effects")
-    let compositionID = try #require(document.activeCompositionID)
-    var composition = try #require(document.composition(id: compositionID))
+    var (document, composition) = try projectWithEffectTestComposition(name: "Effects")
+    let compositionID = composition.id
     let media = MediaReference.fixture(
         id: "95000000-0000-0000-0000-000000000001",
         name: "clip.mov"
@@ -70,9 +85,8 @@ func effectStackRoundTripsDeterministically() throws {
 
 @Test("AI effects are rejected on non-media phase 9 layers")
 func effectsRequireMediaLayerInPhase9() throws {
-    var document = try ProjectDocument.makeNew(name: "Invalid Effects")
-    let compositionID = try #require(document.activeCompositionID)
-    var composition = try #require(document.composition(id: compositionID))
+    var (document, composition) = try projectWithEffectTestComposition(name: "Invalid Effects")
+    let compositionID = composition.id
     let layer = ProjectLayer(
         compositionID: compositionID,
         name: "Null",

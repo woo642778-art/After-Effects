@@ -1,0 +1,90 @@
+name: Vertex2 11 Device Test IPA
+
+on:
+  push:
+    branches:
+      - agent/phase11-ae-time-engine-spec
+  workflow_dispatch:
+
+concurrency:
+  group: vertex2-11-device-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-ipa:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+
+      - name: Build unsigned iPad device app
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/DerivedDataPhase11DeviceTest" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-11-device-test-build.log"
+
+      - name: Package test IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedDataPhase11DeviceTest/Build/Products/Release-iphoneos/Vertex2.app"
+          test -d "$APP"
+          rm -rf Payload artifacts
+          mkdir -p Payload artifacts
+          cp -R "$APP" Payload/Vertex2.app
+          /usr/bin/zip -qry artifacts/Vertex2-11.0.0-TEST-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex2-11.0.0-TEST-unsigned.ipa | tee artifacts/Vertex2-11.0.0-TEST-unsigned.ipa.sha256
+          printf '%s\n' '${{ github.sha }}' > artifacts/commit-sha.txt
+
+      - name: Upload device test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-11.0.0-TEST-unsigned-ipa
+          path: |
+            artifacts/Vertex2-11.0.0-TEST-unsigned.ipa
+            artifacts/Vertex2-11.0.0-TEST-unsigned.ipa.sha256
+            artifacts/commit-sha.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-11.0.0-TEST-build-log
+          path: ${{ runner.temp }}/vertex2-11-device-test-build.log
+          if-no-files-found: warn
+          retention-days: 7

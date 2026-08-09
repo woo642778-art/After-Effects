@@ -74,12 +74,11 @@ func trackMatteModes() {
 
 @Test("Adjustment layers cannot serve as track matte sources")
 func adjustmentCannotServeAsTrackMatteSource() throws {
-    var project = try ProjectDocument.makeNew(
-        id: VertexID(rawValue: "82000000-0000-0000-0000-000000000100"),
-        name: "Matte validation",
-        timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+    var project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
     )
-    var composition = project.compositionRegistry[0]
+    var composition = try #require(project.compositionRegistry.first)
     let timing = LayerTiming(startTime: .zero, inPoint: .zero, outPoint: composition.duration)
     let adjustment = ProjectLayer(
         id: VertexID(rawValue: "82000000-0000-0000-0000-000000000101"),

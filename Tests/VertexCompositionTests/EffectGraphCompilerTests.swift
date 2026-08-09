@@ -38,10 +38,9 @@ private func effectFixture(
     masks: [ProjectMask] = [],
     trackMatte: ProjectTrackMatte? = nil
 ) throws -> (ProjectDocument, ProjectComposition, ProjectLayer) {
-    var project = try ProjectDocument.makeNew(
-        id: VertexID(rawValue: "96000000-0000-0000-0000-000000000001"),
-        name: "Effect Compiler",
-        timestamp: Date(timeIntervalSince1970: 1_700_400_000)
+    var project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_400_000),
+        media: []
     )
     let media = MediaReference.fixture(id: "96000000-0000-0000-0000-000000000010")
     project.mediaRegistry = [media]
@@ -65,6 +64,7 @@ private func effectFixture(
     )
     composition.layerIDs = [layer.id]
     project.compositionRegistry = [composition]
+    project.activeCompositionID = composition.id
     project.layerRegistry = [layer]
     return (try project.validated(), composition, layer)
 }
@@ -129,7 +129,6 @@ func sourceOffsetChangesResolvedFrameTime() async throws {
         effectRequest(fixture, at: RationalTime(value: 3, timescale: 1)), resolver: frames,
         cancellationToken: RenderCancellationToken()
     )
-    // 3 composition - 2 layer start + 1 LayerSource sourceStart + 4 sourceOffset = 6.
     #expect(await frames.requestedTimes() == [RationalTime(value: 6, timescale: 1)])
 }
 

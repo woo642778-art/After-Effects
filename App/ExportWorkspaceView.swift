@@ -1,4 +1,5 @@
 import SwiftUI
+import VertexCore
 import VertexExport
 
 struct ExportWorkspaceView: View {
@@ -8,12 +9,19 @@ struct ExportWorkspaceView: View {
     @State private var codec: ExportVideoCodec = .h264
     @State private var quality: ExportQualityPreset = .high
     @State private var includeAlpha = false
+    @State private var resolutionPreset: ExportResolutionPreset = .matchComposition
+    @State private var customWidth = 3840
+    @State private var customHeight = 2160
+    @State private var lockOutputAspectRatio = true
+    @State private var frameRatePreset: ExportFrameRatePreset = .matchComposition
+    @State private var customFrameRateText = "60"
+    @State private var outputError: String?
 
     var body: some View {
         GeometryReader { proxy in
             HStack(spacing: 0) {
                 settingsPanel
-                    .frame(width: min(330, max(260, proxy.size.width * 0.24)))
+                    .frame(width: min(360, max(290, proxy.size.width * 0.27)))
                 divider
                 summaryPanel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -23,9 +31,15 @@ struct ExportWorkspaceView: View {
             }
             .background(AfterEffectsTheme.background)
         }
+        .onAppear { syncCustomOutputWithComposition() }
+        .onChange(of: workspace.activeComposition?.id) { _, _ in syncCustomOutputWithComposition() }
         .onChange(of: format) { _, next in normalizeCodec(for: next) }
         .onChange(of: codec) { _, next in
             if next != .proRes4444 { includeAlpha = false }
+        }
+        .onChange(of: resolutionPreset) { _, _ in
+            outputError = nil
+            preferHighResolutionCodecIfNeeded()
         }
     }
 
@@ -59,12 +73,61 @@ struct ExportWorkspaceView: View {
                     }
                     .pickerStyle(.segmented)
 
+                    Divider().overlay(AfterEffectsTheme.border)
+                    settingLabel("Resolution")
+                    Picker("Resolution", selection: $resolutionPreset) {
+                        ForEach(ExportResolutionPreset.allCases, id: \.self) { preset in
+                            Text(resolutionName(preset)).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    if resolutionPreset == .custom {
+                        HStack(spacing: 8) {
+                            TextField("Width", value: customWidthBinding, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                            Text("×")
+                                .foregroundStyle(AfterEffectsTheme.secondaryText)
+                            TextField("Height", value: customHeightBinding, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Toggle("Lock Aspect Ratio", isOn: $lockOutputAspectRatio)
+                            .font(.caption)
+                    }
+
+                    settingLabel("Output Frame Rate")
+                    HStack(spacing: 8) {
+                        Picker("Frame Rate", selection: $frameRatePreset) {
+                            ForEach(ExportFrameRatePreset.allCases, id: \.self) { rate in
+                                Text(frameRateName(rate)).tag(rate)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        if frameRatePreset == .custom {
+                            TextField("fps", text: $customFrameRateText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 84)
+                        }
+                    }
+
                     if let composition = workspace.activeComposition {
                         VStack(alignment: .leading, spacing: 6) {
-                            settingLabel("Output")
-                            exportRow("Resolution", "\(composition.width) × \(composition.height)")
-                            exportRow("Frame Rate", String(format: "%.3f fps", composition.frameRate.seconds))
-                            exportRow("Duration", String(format: "%.2f s", composition.duration.seconds))
+                            settingLabel("Resolved Output")
+                            if let resolved = resolvedOutput(for: composition) {
+                                exportRow("Resolution", "\(resolved.dimensions.width) × \(resolved.dimensions.height)")
+                                exportRow("Frame Rate", String(format: "%.3f fps", resolved.frameRate.seconds))
+                                exportRow("Duration", String(format: "%.2f s", composition.duration.seconds))
+                                if resolved.dimensions.width > 4096 || resolved.dimensions.height > 2160 {
+                                    Text("High-resolution export uses the full render graph at the selected dimensions. HEVC or ProRes is recommended for 5K–8K video output.")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            } else {
+                                Text("Enter a valid custom resolution and frame rate.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
                         }
                     }
 
@@ -73,7 +136,14 @@ struct ExportWorkspaceView: View {
                             .font(.caption)
                     }
 
-                    Text("Export evaluates every frame through the same composition graph and AI effect path used by the editor preview.")
+                    if let outputError {
+                        Text(outputError)
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text("Preview and export evaluate the same composition graph. Resolution and frame rate may match the composition or be overridden per render.")
                         .font(.caption2)
                         .foregroundStyle(AfterEffectsTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -94,9 +164,11 @@ struct ExportWorkspaceView: View {
                     Text(composition.name)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(AfterEffectsTheme.primaryText)
-                    Text("\(composition.width) × \(composition.height) · \(String(format: "%.3f", composition.frameRate.seconds)) fps")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(AfterEffectsTheme.secondaryText)
+                    if let resolved = resolvedOutput(for: composition) {
+                        Text("\(resolved.dimensions.width) × \(resolved.dimensions.height) · \(String(format: "%.3f", resolved.frameRate.seconds)) fps")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(AfterEffectsTheme.secondaryText)
+                    }
                     Text("\(formatName(format)) · \(format.isVideoContainer ? codecName(codec) : quality.rawValue.capitalized)")
                         .font(.caption)
                         .foregroundStyle(AfterEffectsTheme.secondaryText)
@@ -160,7 +232,7 @@ struct ExportWorkspaceView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(workspace.activeComposition == nil)
+                    .disabled(workspace.activeComposition == nil || workspace.activeComposition.flatMap(resolvedOutput(for:)) == nil)
                 }
             }
             .padding(12)
@@ -179,21 +251,107 @@ struct ExportWorkspaceView: View {
 
     private func beginExport() {
         guard let project = workspace.project, let composition = workspace.activeComposition else { return }
-        controller.start(
-            project: project,
-            packageURL: workspace.packageURL,
-            composition: composition,
-            format: format,
-            codec: format.isVideoContainer ? codec : nil,
-            quality: quality,
-            includeAlpha: includeAlpha
+        guard let settings = makeOutputSettings() else {
+            outputError = "Custom frame rate must be a finite value from 1 to 240 fps, and resolution must be within 1...8192 pixels per side."
+            return
+        }
+        do {
+            _ = try settings.resolved(
+                compositionDimensions: ExportDimensions(width: composition.width, height: composition.height),
+                compositionFrameRate: composition.frameRate
+            )
+            outputError = nil
+            controller.start(
+                project: project,
+                packageURL: workspace.packageURL,
+                composition: composition,
+                format: format,
+                codec: format.isVideoContainer ? codec : nil,
+                quality: quality,
+                includeAlpha: includeAlpha,
+                outputSettings: settings
+            )
+        } catch {
+            outputError = "Output resolution must be within 1...8192 pixels per side and frame rate within 1...240 fps."
+        }
+    }
+
+    private func resolvedOutput(for composition: ProjectComposition) -> ResolvedExportOutputSettings? {
+        guard let settings = makeOutputSettings() else { return nil }
+        return try? settings.resolved(
+            compositionDimensions: ExportDimensions(width: composition.width, height: composition.height),
+            compositionFrameRate: composition.frameRate
         )
+    }
+
+    private func makeOutputSettings() -> ExportOutputSettings? {
+        let customRate: RationalTime?
+        if frameRatePreset == .custom {
+            guard let value = Double(customFrameRateText.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  value.isFinite, value >= 1, value <= 240 else { return nil }
+            let timescale: Int32 = 1_000_000
+            let numerator = Int64((value * Double(timescale)).rounded())
+            guard numerator > 0, numerator <= Int64(Int32.max) else { return nil }
+            customRate = RationalTime(value: numerator, timescale: timescale)
+        } else {
+            customRate = nil
+        }
+        return ExportOutputSettings(
+            resolution: resolutionPreset,
+            customDimensions: ExportDimensions(width: customWidth, height: customHeight),
+            frameRate: frameRatePreset,
+            customFrameRate: customRate
+        )
+    }
+
+    private var customWidthBinding: Binding<Int> {
+        Binding(
+            get: { customWidth },
+            set: { newValue in
+                let oldWidth = max(1, customWidth)
+                let ratio = Double(customHeight) / Double(oldWidth)
+                customWidth = newValue
+                if lockOutputAspectRatio {
+                    customHeight = max(1, min(8192, Int((Double(newValue) * ratio).rounded())))
+                }
+            }
+        )
+    }
+
+    private var customHeightBinding: Binding<Int> {
+        Binding(
+            get: { customHeight },
+            set: { newValue in
+                let oldHeight = max(1, customHeight)
+                let ratio = Double(customWidth) / Double(oldHeight)
+                customHeight = newValue
+                if lockOutputAspectRatio {
+                    customWidth = max(1, min(8192, Int((Double(newValue) * ratio).rounded())))
+                }
+            }
+        )
+    }
+
+    private func syncCustomOutputWithComposition() {
+        guard let composition = workspace.activeComposition else { return }
+        customWidth = composition.width
+        customHeight = composition.height
+        customFrameRateText = String(format: "%.6g", composition.frameRate.seconds)
+    }
+
+    private func preferHighResolutionCodecIfNeeded() {
+        guard format.isVideoContainer, codec == .h264 else { return }
+        let dimensions = resolutionPreset.dimensions
+        if let dimensions, dimensions.width > 4096 {
+            codec = .hevc
+        }
     }
 
     private func normalizeCodec(for format: ExportFormat) {
         if !format.isVideoContainer { includeAlpha = false; return }
         if !allowedCodecs.contains(codec) { codec = .h264 }
         if format != .mov { includeAlpha = false }
+        preferHighResolutionCodecIfNeeded()
     }
 
     private func formatName(_ format: ExportFormat) -> String {
@@ -212,6 +370,38 @@ struct ExportWorkspaceView: View {
         case .hevc: "HEVC"
         case .proRes422: "Apple ProRes 422"
         case .proRes4444: "Apple ProRes 4444"
+        }
+    }
+
+    private func resolutionName(_ preset: ExportResolutionPreset) -> String {
+        switch preset {
+        case .matchComposition: "Match Composition"
+        case .hd720: "HD 720p — 1280 × 720"
+        case .hd1080: "Full HD — 1920 × 1080"
+        case .qhd1440: "QHD — 2560 × 1440"
+        case .uhd4K: "UHD 4K — 3840 × 2160"
+        case .dci4K: "DCI 4K — 4096 × 2160"
+        case .uhd5K: "5K — 5120 × 2880"
+        case .uhd6K: "6K — 6144 × 3456"
+        case .uhd8K: "UHD 8K — 7680 × 4320"
+        case .dci8K: "DCI 8K — 8192 × 4320"
+        case .custom: "Custom"
+        }
+    }
+
+    private func frameRateName(_ preset: ExportFrameRatePreset) -> String {
+        switch preset {
+        case .matchComposition: "Match Composition"
+        case .fps23976: "23.976"
+        case .fps24: "24"
+        case .fps25: "25"
+        case .fps2997: "29.97"
+        case .fps30: "30"
+        case .fps50: "50"
+        case .fps5994: "59.94"
+        case .fps60: "60"
+        case .fps120: "120"
+        case .custom: "Custom"
         }
     }
 

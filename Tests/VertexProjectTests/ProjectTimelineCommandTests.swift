@@ -4,7 +4,10 @@ import VertexCore
 @testable import VertexProject
 
 private func commandTimelineProject() throws -> ProjectDocument {
-    var project = try ProjectDocument.makeNew(name: "Timeline Commands")
+    var project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_300_000),
+        media: []
+    )
     let compositionID = try #require(project.activeCompositionID)
     var composition = try #require(project.composition(id: compositionID))
     let media = MediaReference.fixture(

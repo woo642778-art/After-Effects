@@ -38,23 +38,28 @@ final class CompositionExportController: ObservableObject {
         format: ExportFormat,
         codec: ExportVideoCodec?,
         quality: ExportQualityPreset,
-        includeAlpha: Bool
+        includeAlpha: Bool,
+        outputSettings: ExportOutputSettings
     ) {
         cancel()
         do {
             let destination = try outputURL(projectName: project.metadata.name, format: format)
+            let resolved = try outputSettings.resolved(
+                compositionDimensions: ExportDimensions(width: composition.width, height: composition.height),
+                compositionFrameRate: composition.frameRate
+            )
             let job = try ExportJob(
                 format: format,
                 codec: codec,
                 quality: quality,
-                width: composition.width,
-                height: composition.height,
-                frameRate: composition.frameRate,
+                width: resolved.dimensions.width,
+                height: resolved.dimensions.height,
+                frameRate: resolved.frameRate,
                 outputURL: destination,
                 includeAlpha: includeAlpha,
                 includeAudio: false
             ).validated()
-            let frameCount = max(1, Int64(floor(composition.duration.seconds * composition.frameRate.seconds + 0.0000001)))
+            let frameCount = try job.frameCount(for: composition.duration)
             let cancellation = ExportCancellationToken()
             self.cancellation = cancellation
             progress = ExportProgressSnapshot(completedFrames: 0, totalFrames: frameCount)

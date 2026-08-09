@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import VertexCore
 import VertexProject
@@ -10,7 +11,10 @@ private struct TimelineFixture {
 }
 
 private func makeFixture(_ ranges: [(String, Int64, Int64, Int64, Int64)]) throws -> TimelineFixture {
-    var project = try ProjectDocument.makeNew(name: "Timeline")
+    var project = try ProjectDocument.makeFixture(
+        timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+        media: []
+    )
     let compositionID = try #require(project.activeCompositionID)
     var composition = try #require(project.composition(id: compositionID))
     var layers: [ProjectLayer] = []

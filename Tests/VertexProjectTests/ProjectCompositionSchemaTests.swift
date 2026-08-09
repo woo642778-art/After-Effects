@@ -72,15 +72,14 @@ private func makeDocument(
     )
 }
 
-@Test("New current-schema projects contain one active empty composition and no AI assets")
-func newProjectContainsMainComposition() throws {
+@Test("New current-schema projects start empty until the user creates a composition")
+func newProjectStartsEmpty() throws {
     let project = try ProjectDocument.makeNew(id: projectID, name: "New", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
     #expect(project.schemaVersion == ProjectDocument.currentSchemaVersion)
-    #expect(project.compositionRegistry.count == 1)
+    #expect(project.compositionRegistry.isEmpty)
     #expect(project.layerRegistry.isEmpty)
     #expect(project.aiAssetRegistry.isEmpty)
-    #expect(project.activeCompositionID == project.compositionRegistry[0].id)
-    #expect(project.compositionRegistry[0].name == "Main Composition")
+    #expect(project.activeCompositionID == nil)
 }
 
 @Test("Canonical project preserves authoritative Z-order")
