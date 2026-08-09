@@ -23,11 +23,7 @@ var targets: [Target] = [
     .target(name: "VertexMedia", dependencies: ["VertexCore"]),
     .target(name: "VertexMediaAVFoundation", dependencies: ["VertexCore", "VertexMedia"]),
     .target(name: "VertexRender", dependencies: ["VertexCore", "VertexMedia"]),
-    .target(
-        name: "VertexRenderMetal",
-        dependencies: ["VertexCore", "VertexMedia", "VertexRender"],
-        resources: [.process("Shaders")]
-    ),
+    .target(name: "VertexRenderMetal", dependencies: ["VertexCore", "VertexMedia", "VertexRender"], resources: [.process("Shaders")]),
     .target(name: "VertexProject", dependencies: ["VertexCore", "VertexMedia", "VertexRender"]),
     .target(name: "VertexTimeline", dependencies: ["VertexCore", "VertexProject"]),
     .target(name: "VertexProjectPersistence", dependencies: ["VertexCore", "VertexMedia", "VertexProject"]),
@@ -40,16 +36,10 @@ var targets: [Target] = [
     .testTarget(name: "VertexCoreTests", dependencies: ["VertexCore"]),
     .testTarget(name: "VertexMediaTests", dependencies: ["VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexRenderTests", dependencies: ["VertexRender", "VertexMedia", "VertexCore"]),
-    .testTarget(
-        name: "VertexRenderMetalTests",
-        dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]
-    ),
+    .testTarget(name: "VertexRenderMetalTests", dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexProjectTests", dependencies: ["VertexProject", "VertexCore", "VertexMedia", "VertexRender"]),
     .testTarget(name: "VertexTimelineTests", dependencies: ["VertexTimeline", "VertexProject", "VertexCore"]),
-    .testTarget(
-        name: "VertexProjectPersistenceTests",
-        dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]
-    ),
+    .testTarget(name: "VertexProjectPersistenceTests", dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]),
     .testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexAITests", dependencies: ["VertexAI", "VertexCore"]),
     .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"]),
@@ -59,15 +49,10 @@ var targets: [Target] = [
 
 #if !os(Linux)
 products.append(.library(name: "VertexAIAVFoundation", targets: ["VertexAIAVFoundation"]))
-targets.append(.target(
-    name: "VertexAIAVFoundation",
-    dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]
-))
+targets.append(.target(name: "VertexAIAVFoundation", dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]))
 products.append(.library(name: "VertexExportAVFoundation", targets: ["VertexExportAVFoundation"]))
-targets.append(.target(
-    name: "VertexExportAVFoundation",
-    dependencies: ["VertexCore", "VertexExport"]
-))
+targets.append(.target(name: "VertexExportAVFoundation", dependencies: ["VertexCore", "VertexExport"]))
+targets.append(.testTarget(name: "VertexExportAVFoundationTests", dependencies: ["VertexExportAVFoundation", "VertexExport", "VertexCore"]))
 #endif
 
 let package = Package(
