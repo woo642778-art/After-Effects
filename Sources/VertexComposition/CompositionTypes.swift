@@ -85,5 +85,5 @@ struct CompositionFrameCacheKey: Hashable, Sendable {
     var time: RationalTime
     var width: Int
     var height: Int
-    var interpolation: ProjectFrameInterpolationMode
+    var interpolation: ProjectFrameInterpolationMode = .nearest
 }
