@@ -52,13 +52,21 @@ targets:
         product: VertexAICoreML
       - package: Vertex
         product: VertexAIAVFoundation
+      - package: Vertex
+        product: Vertex3D
+      - package: Vertex
+        product: VertexRender3DMetal
+      - package: Vertex
+        product: VertexExport
+      - package: Vertex
+        product: VertexExportAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: Vertex2
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 9.0.0
-        CURRENT_PROJECT_VERSION: 9
+        MARKETING_VERSION: 10.0.0
+        CURRENT_PROJECT_VERSION: 10
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Vertex2
@@ -68,11 +76,10 @@ targets:
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "2"
         CODE_SIGN_STYLE: Automatic
     scheme:
       testTargets:
@@ -107,6 +114,14 @@ targets:
         product: VertexAICoreML
       - package: Vertex
         product: VertexAIAVFoundation
+      - package: Vertex
+        product: Vertex3D
+      - package: Vertex
+        product: VertexRender3DMetal
+      - package: Vertex
+        product: VertexExport
+      - package: Vertex
+        product: VertexExportAVFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects.tests

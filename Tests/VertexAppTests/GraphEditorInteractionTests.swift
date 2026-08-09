@@ -13,5 +13,6 @@ func graphEditorValidatesHandleDrag() throws {
 func graphEditorSpeedUsesSameHandle() throws {
     let source = ProjectBezierHandle(x: 0.35, y: 0.2)
     let adjusted = try GraphEditorMath.adjustedInfluence(source, deltaX: 0.1, deltaY: 0.3)
-    #expect(adjusted == ProjectBezierHandle(x: 0.45, y: 0.5))
+    #expect(abs(adjusted.x - 0.45) < 1e-12)
+    #expect(abs(adjusted.y - 0.5) < 1e-12)
 }

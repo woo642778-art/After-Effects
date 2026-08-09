@@ -12,7 +12,10 @@ var products: [Product] = [
     .library(name: "VertexProjectPersistence", targets: ["VertexProjectPersistence"]),
     .library(name: "VertexComposition", targets: ["VertexComposition"]),
     .library(name: "VertexAI", targets: ["VertexAI"]),
-    .library(name: "VertexAICoreML", targets: ["VertexAICoreML"])
+    .library(name: "VertexAICoreML", targets: ["VertexAICoreML"]),
+    .library(name: "Vertex3D", targets: ["Vertex3D"]),
+    .library(name: "VertexRender3DMetal", targets: ["VertexRender3DMetal"]),
+    .library(name: "VertexExport", targets: ["VertexExport"])
 ]
 
 var targets: [Target] = [
@@ -20,42 +23,36 @@ var targets: [Target] = [
     .target(name: "VertexMedia", dependencies: ["VertexCore"]),
     .target(name: "VertexMediaAVFoundation", dependencies: ["VertexCore", "VertexMedia"]),
     .target(name: "VertexRender", dependencies: ["VertexCore", "VertexMedia"]),
-    .target(
-        name: "VertexRenderMetal",
-        dependencies: ["VertexCore", "VertexMedia", "VertexRender"],
-        resources: [.process("Shaders")]
-    ),
+    .target(name: "VertexRenderMetal", dependencies: ["VertexCore", "VertexMedia", "VertexRender"], resources: [.process("Shaders")]),
     .target(name: "VertexProject", dependencies: ["VertexCore", "VertexMedia", "VertexRender"]),
     .target(name: "VertexTimeline", dependencies: ["VertexCore", "VertexProject"]),
     .target(name: "VertexProjectPersistence", dependencies: ["VertexCore", "VertexMedia", "VertexProject"]),
     .target(name: "VertexComposition", dependencies: ["VertexCore", "VertexMedia", "VertexProject", "VertexRender"]),
     .target(name: "VertexAI", dependencies: ["VertexCore"]),
     .target(name: "VertexAICoreML", dependencies: ["VertexCore", "VertexAI"]),
-
+    .target(name: "Vertex3D"),
+    .target(name: "VertexRender3DMetal", dependencies: ["Vertex3D"]),
+    .target(name: "VertexExport", dependencies: ["VertexCore"]),
     .testTarget(name: "VertexCoreTests", dependencies: ["VertexCore"]),
     .testTarget(name: "VertexMediaTests", dependencies: ["VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexRenderTests", dependencies: ["VertexRender", "VertexMedia", "VertexCore"]),
-    .testTarget(
-        name: "VertexRenderMetalTests",
-        dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]
-    ),
+    .testTarget(name: "VertexRenderMetalTests", dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexProjectTests", dependencies: ["VertexProject", "VertexCore", "VertexMedia", "VertexRender"]),
     .testTarget(name: "VertexTimelineTests", dependencies: ["VertexTimeline", "VertexProject", "VertexCore"]),
-    .testTarget(
-        name: "VertexProjectPersistenceTests",
-        dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]
-    ),
+    .testTarget(name: "VertexProjectPersistenceTests", dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]),
     .testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexAITests", dependencies: ["VertexAI", "VertexCore"]),
-    .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"])
+    .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"]),
+    .testTarget(name: "Vertex3DTests", dependencies: ["Vertex3D"]),
+    .testTarget(name: "VertexExportTests", dependencies: ["VertexExport", "VertexCore"])
 ]
 
 #if !os(Linux)
 products.append(.library(name: "VertexAIAVFoundation", targets: ["VertexAIAVFoundation"]))
-targets.append(.target(
-    name: "VertexAIAVFoundation",
-    dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]
-))
+targets.append(.target(name: "VertexAIAVFoundation", dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]))
+products.append(.library(name: "VertexExportAVFoundation", targets: ["VertexExportAVFoundation"]))
+targets.append(.target(name: "VertexExportAVFoundation", dependencies: ["VertexCore", "VertexExport"]))
+targets.append(.testTarget(name: "VertexExportAVFoundationTests", dependencies: ["VertexExportAVFoundation", "VertexExport", "VertexCore"]))
 #endif
 
 let package = Package(

@@ -44,7 +44,9 @@ private func coordinatorFixture() throws -> (ProjectDocument, ProjectLayer, Proj
         timing: LayerTiming(startTime: .zero, inPoint: .zero, outPoint: RationalTime(value: 5, timescale: 1)), effects: [effect])
     comp.layerIDs = [layer.id]; project.mediaRegistry=[source]; project.layerRegistry=[layer]; project.compositionRegistry=[comp]; project.selectedLayerID=layer.id
     project = try project.validated()
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        .appendingPathExtension("vertexproject")
     try FileManager.default.createDirectory(at: root.appendingPathComponent("Media", isDirectory: true), withIntermediateDirectories: true)
     try Data([1,2,3]).write(to: root.appendingPathComponent("Media/source.mov"))
     let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mov")
@@ -77,7 +79,6 @@ private func coordinatorFixture() throws -> (ProjectDocument, ProjectLayer, Proj
         #expect(commitCount == 0)
     }
 }
-
 
 @Test("Malformed finalized media is rejected before the project command")
 @MainActor func coordinatorRejectsMalformedFinalMedia() async throws {
