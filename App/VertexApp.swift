@@ -2,44 +2,36 @@ import SwiftUI
 
 @main
 struct AfterEffectsApp: App {
-    @State private var startupState: AppStartupState = .splash
+    @StateObject private var startup: VertexStartupCoordinator
+
+    init() {
+        _startup = StateObject(
+            wrappedValue: VertexStartupCoordinator(services: .live())
+        )
+    }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                switch startupState {
-                case .splash:
-                    Vertex2SplashView()
+                switch startup.phase {
+                case .ready:
+                    RootView()
+                        .transition(.opacity.combined(with: .scale(scale: 1.005)))
+
+                case .fatal(let message):
+                    StartupFatalErrorView(message: message)
                         .transition(.opacity)
 
-                case .workspace:
-                    RootView()
-                        .transition(.opacity.combined(with: .scale(scale: 1.01)))
-
-                case .fatalConfigurationError(let message):
-                    StartupFatalErrorView(message: message)
+                case .coldStart, .loading, .restoringSession:
+                    Vertex2SplashView(phase: startup.phase)
                         .transition(.opacity)
                 }
             }
             .background(AfterEffectsTheme.background.ignoresSafeArea())
+            .animation(.easeInOut(duration: 0.18), value: startup.phase)
             .task {
-                await finishStartupIfNeeded()
+                await startup.start()
             }
-        }
-    }
-
-    @MainActor
-    private func finishStartupIfNeeded() async {
-        guard startupState == .splash else { return }
-
-        // Splash is presentation only. Cancellation, AI/model availability, Metal,
-        // project inspection, and milestone numbers must never leave the app here.
-        try? await Task.sleep(for: .milliseconds(850))
-
-        let hasRequiredUI = Bundle.main.url(forResource: "Assets", withExtension: "car") != nil
-        let terminal = AppStartupPolicy.terminalState(bundleUIAvailable: hasRequiredUI)
-        withAnimation(.easeInOut(duration: 0.28)) {
-            startupState = terminal
         }
     }
 }
