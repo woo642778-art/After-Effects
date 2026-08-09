@@ -1,3 +1,5 @@
+import CoreTransferable
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 import VertexCore
@@ -10,6 +12,7 @@ struct AutomationWorkspaceView: View {
     @State private var renameText = ""
     @State private var commandError: String?
     @State private var isFileImporterPresented = false
+    @State private var photoSelection: [PhotosPickerItem] = []
 
     var body: some View {
         HStack(spacing: 0) {
@@ -21,6 +24,9 @@ struct AutomationWorkspaceView: View {
         .background(AfterEffectsTheme.background)
         .onAppear { synchronizeRename() }
         .onChange(of: workspace.project?.selectedLayerID) { _, _ in synchronizeRename() }
+        .onChange(of: photoSelection) { _, items in
+            importPhotoSelection(items)
+        }
         .fileImporter(
             isPresented: $isFileImporterPresented,
             allowedContentTypes: [.image, .movie, .video, .audio],
@@ -52,6 +58,28 @@ struct AutomationWorkspaceView: View {
                                 Text("Import Files")
                                 Spacer()
                                 Text("Multi-select")
+                                    .font(.caption2)
+                                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AfterEffectsTheme.primaryText)
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(AfterEffectsTheme.elevatedPanel, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(workspace.project == nil)
+
+                        PhotosPicker(
+                            selection: $photoSelection,
+                            maxSelectionCount: 50,
+                            matching: .any(of: [.images, .videos])
+                        ) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo.on.rectangle.angled").frame(width: 18)
+                                Text("Import Photos / Videos")
+                                Spacer()
+                                Text("File-backed")
                                     .font(.caption2)
                                     .foregroundStyle(AfterEffectsTheme.secondaryText)
                             }
@@ -279,6 +307,23 @@ struct AutomationWorkspaceView: View {
         }
     }
 
+    private func importPhotoSelection(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task { @MainActor in
+            do {
+                for item in items {
+                    guard let media = try await item.loadTransferable(type: PhotoLibraryMediaFile.self) else { continue }
+                    workspace.registerImportedMedia(from: media.url)
+                }
+                photoSelection = []
+                commandError = nil
+            } catch {
+                photoSelection = []
+                commandError = error.localizedDescription
+            }
+        }
+    }
+
     private func synchronizeRename() {
         renameText = workspace.selectedLayer?.name ?? ""
     }
@@ -305,5 +350,42 @@ struct AutomationWorkspaceView: View {
         case .legacyReference: "Reference"
         case .unsupportedExternal: "External"
         }
+    }
+}
+
+private struct PhotoLibraryMediaFile: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .image) { media in
+            SentTransferredFile(media.url)
+        } importing: { received in
+            PhotoLibraryMediaFile(url: try persistentCopy(of: received.file))
+        }
+
+        FileRepresentation(contentType: .movie) { media in
+            SentTransferredFile(media.url)
+        } importing: { received in
+            PhotoLibraryMediaFile(url: try persistentCopy(of: received.file))
+        }
+    }
+
+    private static func persistentCopy(of source: URL) throws -> URL {
+        let fileManager = FileManager.default
+        let applicationSupport = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = applicationSupport
+            .appendingPathComponent("Vertex2", isDirectory: true)
+            .appendingPathComponent("PhotoImports", isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let ext = source.pathExtension.isEmpty ? "media" : source.pathExtension
+        let destination = directory.appendingPathComponent("\(UUID().uuidString).\(ext)")
+        try fileManager.copyItem(at: source, to: destination)
+        return destination
     }
 }
