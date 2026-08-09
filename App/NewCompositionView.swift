@@ -32,14 +32,14 @@ enum CompositionFrameRateChoice: String, CaseIterable, Identifiable, Sendable {
 
     func rational(customText: String) throws -> RationalTime {
         switch self {
-        case .fps23976: RationalTime(value: 24_000, timescale: 1_001)
-        case .fps24: RationalTime(value: 24, timescale: 1)
-        case .fps25: RationalTime(value: 25, timescale: 1)
-        case .fps2997: RationalTime(value: 30_000, timescale: 1_001)
-        case .fps30: RationalTime(value: 30, timescale: 1)
-        case .fps50: RationalTime(value: 50, timescale: 1)
-        case .fps5994: RationalTime(value: 60_000, timescale: 1_001)
-        case .fps60: RationalTime(value: 60, timescale: 1)
+        case .fps23976: return RationalTime(value: 24_000, timescale: 1_001)
+        case .fps24: return RationalTime(value: 24, timescale: 1)
+        case .fps25: return RationalTime(value: 25, timescale: 1)
+        case .fps2997: return RationalTime(value: 30_000, timescale: 1_001)
+        case .fps30: return RationalTime(value: 30, timescale: 1)
+        case .fps50: return RationalTime(value: 50, timescale: 1)
+        case .fps5994: return RationalTime(value: 60_000, timescale: 1_001)
+        case .fps60: return RationalTime(value: 60, timescale: 1)
         case .custom:
             guard let value = Double(customText.trimmingCharacters(in: .whitespacesAndNewlines)),
                   value.isFinite,
