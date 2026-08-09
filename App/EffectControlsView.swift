@@ -21,14 +21,14 @@ struct EffectControlsView: View {
                     } label: {
                         Label("Add", systemImage: "plus")
                     }
-                    .disabled(!layer.isPhase9EffectEligible)
+                    .disabled(!layer.isEffectEligible)
                 }
             }
             .buttonStyle(.bordered)
 
             if let layer = workspace.selectedLayer {
                 if layer.effects.isEmpty {
-                    Text(layer.isPhase9EffectEligible ? "Add an AI effect to this layer." : "AI pixel effects require a media layer.")
+                    Text(layer.isEffectEligible ? "Add an effect to this media layer." : "Pixel effects require a media layer.")
                         .font(.caption)
                         .foregroundStyle(AfterEffectsTheme.secondaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -66,19 +66,25 @@ struct EffectControlsView: View {
 }
 
 private extension ProjectLayer {
-    var isPhase9EffectEligible: Bool {
+    var isEffectEligible: Bool {
         if case .media = source { return true }
         return false
     }
 }
 
-private extension ProjectEffectType {
+extension ProjectEffectType {
     var displayName: String {
         switch self {
         case .depthMap: "Depth Map"
         case .cutout: "Cutout"
         case .upscale: "Upscale"
         case .restore: "Restore"
+        case .gaussianBlur: "Gaussian Blur"
+        case .sharpen: "Sharpen"
+        case .exposure: "Exposure"
+        case .colorControls: "Color Controls"
+        case .hueAdjust: "Hue Adjust"
+        case .invert: "Invert"
         }
     }
 }
