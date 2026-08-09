@@ -3,34 +3,93 @@ import UIKit
 import VertexCore
 import VertexProject
 
+enum VertexWorkspaceMode: String, CaseIterable, Identifiable {
+    case composition = "Composition"
+    case threeD = "3D"
+    case export = "Export"
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .composition: "rectangle.on.rectangle"
+        case .threeD: "cube"
+        case .export: "square.and.arrow.up"
+        }
+    }
+}
+
 struct VertexEditorWorkspaceView: View {
     @EnvironmentObject private var workspace: ProjectWorkspaceViewModel
     @StateObject private var editorState = EditorWorkspaceState()
     @StateObject private var preview = CompositionPreviewController()
+    @State private var workspaceMode: VertexWorkspaceMode = .composition
 
     var body: some View {
         Group {
             if workspace.project == nil {
                 projectBootstrap
             } else {
-                IPadEditorWorkspaceView(editorState: editorState, preview: preview)
+                VStack(spacing: 0) {
+                    workspaceModeBar
+                    switch workspaceMode {
+                    case .composition:
+                        IPadEditorWorkspaceView(editorState: editorState, preview: preview)
+                    case .threeD:
+                        ThreeDWorkspaceView()
+                    case .export:
+                        ExportWorkspaceView()
+                    }
+                }
+                .background(AfterEffectsTheme.background)
             }
         }
-        .onAppear {
-            synchronizeAndRender()
+        .onAppear { synchronizeAndRender() }
+        .onChange(of: workspace.project?.activeCompositionID) { _, _ in synchronizeAndRender() }
+        .onChange(of: workspace.project?.revision) { _, _ in synchronizeAndRender() }
+        .onChange(of: editorState.playhead) { _, _ in renderCurrentFrame() }
+        .onChange(of: preview.aiResultGeneration) { _, _ in renderCurrentFrame() }
+        .onChange(of: workspaceMode) { _, mode in
+            if mode == .composition { renderCurrentFrame() }
+            else { preview.cancel() }
         }
-        .onChange(of: workspace.project?.activeCompositionID) { _, _ in
-            synchronizeAndRender()
+    }
+
+    private var workspaceModeBar: some View {
+        HStack(spacing: 4) {
+            Image("LaunchLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            Text("Vertex2")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AfterEffectsTheme.primaryText)
+                .padding(.trailing, 8)
+            ForEach(VertexWorkspaceMode.allCases) { mode in
+                Button {
+                    workspaceMode = mode
+                } label: {
+                    Label(mode.rawValue, systemImage: mode.systemImage)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .frame(height: 27)
+                        .foregroundStyle(workspaceMode == mode ? AfterEffectsTheme.primaryText : AfterEffectsTheme.secondaryText)
+                        .background(workspaceMode == mode ? AfterEffectsTheme.selection : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            if let composition = workspace.activeComposition {
+                Text(composition.name)
+                    .font(.caption2)
+                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                    .lineLimit(1)
+            }
         }
-        .onChange(of: workspace.project?.revision) { _, _ in
-            synchronizeAndRender()
-        }
-        .onChange(of: editorState.playhead) { _, _ in
-            renderCurrentFrame()
-        }
-        .onChange(of: preview.aiResultGeneration) { _, _ in
-            renderCurrentFrame()
-        }
+        .padding(.horizontal, 9)
+        .frame(height: 34)
+        .background(AfterEffectsTheme.elevatedPanel)
+        .overlay(alignment: .bottom) { Rectangle().fill(AfterEffectsTheme.border).frame(height: 1) }
     }
 
     private var projectBootstrap: some View {
@@ -97,6 +156,7 @@ struct VertexEditorWorkspaceView: View {
     }
 
     private func renderCurrentFrame() {
+        guard workspaceMode == .composition else { return }
         guard let project = workspace.project else {
             preview.cancel()
             return
