@@ -30,11 +30,7 @@ let package = Package(
         .target(name: "VertexMedia", dependencies: ["VertexCore"]),
         .target(name: "VertexMediaAVFoundation", dependencies: ["VertexCore", "VertexMedia"]),
         .target(name: "VertexRender", dependencies: ["VertexCore", "VertexMedia"]),
-        .target(
-            name: "VertexRenderMetal",
-            dependencies: ["VertexCore", "VertexMedia", "VertexRender"],
-            resources: [.process("Shaders")]
-        ),
+        .target(name: "VertexRenderMetal", dependencies: ["VertexCore", "VertexMedia", "VertexRender"], resources: [.process("Shaders")]),
         .target(name: "VertexProject", dependencies: ["VertexCore", "VertexMedia", "VertexRender"]),
         .target(name: "VertexTimeline", dependencies: ["VertexCore", "VertexProject"]),
         .target(name: "VertexProjectPersistence", dependencies: ["VertexCore", "VertexMedia", "VertexProject"]),
@@ -49,20 +45,15 @@ let package = Package(
         .testTarget(name: "VertexCoreTests", dependencies: ["VertexCore"]),
         .testTarget(name: "VertexMediaTests", dependencies: ["VertexMedia", "VertexCore"]),
         .testTarget(name: "VertexRenderTests", dependencies: ["VertexRender", "VertexMedia", "VertexCore"]),
-        .testTarget(
-            name: "VertexRenderMetalTests",
-            dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]
-        ),
+        .testTarget(name: "VertexRenderMetalTests", dependencies: ["VertexRenderMetal", "VertexRender", "VertexComposition", "VertexProject", "VertexMedia", "VertexCore"]),
         .testTarget(name: "VertexProjectTests", dependencies: ["VertexProject", "VertexCore", "VertexMedia", "VertexRender"]),
         .testTarget(name: "VertexTimelineTests", dependencies: ["VertexTimeline", "VertexProject", "VertexCore"]),
-        .testTarget(
-            name: "VertexProjectPersistenceTests",
-            dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]
-        ),
+        .testTarget(name: "VertexProjectPersistenceTests", dependencies: ["VertexProjectPersistence", "VertexProject", "VertexCore", "VertexMedia", "VertexComposition", "VertexRender", "VertexRenderMetal"]),
         .testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]),
         .testTarget(name: "VertexAITests", dependencies: ["VertexAI", "VertexCore"]),
         .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"]),
         .testTarget(name: "Vertex3DTests", dependencies: ["Vertex3D"]),
-        .testTarget(name: "VertexExportTests", dependencies: ["VertexExport", "VertexCore"])
+        .testTarget(name: "VertexExportTests", dependencies: ["VertexExport", "VertexCore"]),
+        .testTarget(name: "VertexExportAVFoundationTests", dependencies: ["VertexExportAVFoundation", "VertexExport", "VertexCore"])
     ]
 )
