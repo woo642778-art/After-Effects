@@ -56,7 +56,9 @@ targets:
         product: Vertex3D
       - package: Vertex
         product: VertexRender3DMetal
-      - package: VertexExport
+      - package: Vertex
+        product: VertexExport
+      - package: Vertex
         product: VertexExportAVFoundation
     settings:
       base:
