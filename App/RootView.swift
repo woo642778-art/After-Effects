@@ -10,11 +10,22 @@ struct RootView: View {
     var body: some View {
         ZStack {
             AfterEffectsTheme.background.ignoresSafeArea()
-            VertexEditorWorkspaceView()
+            if projectWorkspace.project == nil {
+                VertexHomeView()
+                    .transition(.opacity)
+            } else {
+                VertexEditorWorkspaceView()
+                    .transition(.opacity)
+            }
         }
         .environmentObject(projectWorkspace)
         .preferredColorScheme(.dark)
-        .onAppear(perform: presentTelegramPromotionIfNeeded)
+        .animation(.easeInOut(duration: 0.16), value: projectWorkspace.project?.projectID)
+        .onChange(of: projectWorkspace.project?.projectID) { _, projectID in
+            if projectID != nil {
+                presentTelegramPromotionIfNeeded()
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { projectWorkspace.flushAutosave() }
         }
