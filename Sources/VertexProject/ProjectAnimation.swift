@@ -72,10 +72,7 @@ public struct ProjectVector2: Codable, Equatable, Sendable {
     }
 
     fileprivate func interpolated(to other: Self, progress: Double) -> Self {
-        Self(
-            x: x + (other.x - x) * progress,
-            y: y + (other.y - y) * progress
-        )
+        Self(x: x + (other.x - x) * progress, y: y + (other.y - y) * progress)
     }
 }
 
@@ -132,7 +129,6 @@ public struct ProjectBezierPath: Codable, Equatable, Sendable {
     }
 
     public static func ellipse(centerX: Double, centerY: Double, radiusX: Double, radiusY: Double) -> Self {
-        // Cubic approximation of a quarter circle. Tangents are stored as offsets.
         let kappa = 0.552_284_749_830_793_6
         return Self(
             vertices: [
@@ -166,9 +162,7 @@ public struct ProjectBezierPath: Codable, Equatable, Sendable {
         guard vertices.count >= minimum, vertices.count <= maximumVertices else {
             throw ProjectError.invalidValue("Bezier paths must contain \(minimum)...\(maximumVertices) vertices.")
         }
-        for vertex in vertices {
-            _ = try vertex.validated()
-        }
+        for vertex in vertices { _ = try vertex.validated() }
         return self
     }
 
@@ -205,9 +199,7 @@ public enum ProjectAnimatableValue: Codable, Equatable, Sendable {
     public func validated() throws -> Self {
         switch self {
         case .scalar(let value):
-            guard value.isFinite else {
-                throw ProjectError.invalidValue("Scalar animation values must be finite.")
-            }
+            guard value.isFinite else { throw ProjectError.invalidValue("Scalar animation values must be finite.") }
         case .vector2(let value):
             _ = try value.validated()
         case .color(let value):
@@ -253,6 +245,49 @@ public enum ProjectKeyframeInterpolation: String, Codable, CaseIterable, Sendabl
     case cubicBezier
 }
 
+public enum ProjectSpatialInterpolationMode: String, Codable, CaseIterable, Sendable {
+    case linear
+    case bezier
+    case autoBezier
+    case continuousBezier
+}
+
+public struct ProjectSpatialTangent: Codable, Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public var z: Double?
+
+    public init(x: Double, y: Double, z: Double? = nil) {
+        self.x = x
+        self.y = y
+        self.z = z
+    }
+
+    public func validated() throws -> Self {
+        guard x.isFinite, y.isFinite, z?.isFinite ?? true else {
+            throw ProjectError.invalidValue("Spatial tangent components must be finite.")
+        }
+        return self
+    }
+}
+
+public struct ProjectKeyframeVelocity: Codable, Equatable, Sendable {
+    public var valuePerSecond: Double
+    public var influence: Double
+
+    public init(valuePerSecond: Double, influence: Double) {
+        self.valuePerSecond = valuePerSecond
+        self.influence = influence
+    }
+
+    public func validated() throws -> Self {
+        guard valuePerSecond.isFinite, influence.isFinite, (0...100).contains(influence) else {
+            throw ProjectError.invalidValue("Keyframe velocity must be finite and influence must be within 0...100.")
+        }
+        return self
+    }
+}
+
 public struct ProjectBezierHandle: Codable, Equatable, Sendable {
     public var x: Double
     public var y: Double
@@ -277,6 +312,27 @@ public struct ProjectKeyframe: Codable, Equatable, Sendable, Identifiable {
     public var interpolation: ProjectKeyframeInterpolation
     public var incomingTemporalHandle: ProjectBezierHandle?
     public var outgoingTemporalHandle: ProjectBezierHandle?
+    public var incomingVelocity: ProjectKeyframeVelocity?
+    public var outgoingVelocity: ProjectKeyframeVelocity?
+    public var spatialIncomingTangent: ProjectSpatialTangent?
+    public var spatialOutgoingTangent: ProjectSpatialTangent?
+    public var spatialInterpolation: ProjectSpatialInterpolationMode
+    public var isRoving: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case time
+        case value
+        case interpolation
+        case incomingTemporalHandle
+        case outgoingTemporalHandle
+        case incomingVelocity
+        case outgoingVelocity
+        case spatialIncomingTangent
+        case spatialOutgoingTangent
+        case spatialInterpolation
+        case isRoving
+    }
 
     public init(
         id: VertexID = VertexID(),
@@ -284,7 +340,13 @@ public struct ProjectKeyframe: Codable, Equatable, Sendable, Identifiable {
         value: ProjectAnimatableValue,
         interpolation: ProjectKeyframeInterpolation,
         incomingTemporalHandle: ProjectBezierHandle? = nil,
-        outgoingTemporalHandle: ProjectBezierHandle? = nil
+        outgoingTemporalHandle: ProjectBezierHandle? = nil,
+        incomingVelocity: ProjectKeyframeVelocity? = nil,
+        outgoingVelocity: ProjectKeyframeVelocity? = nil,
+        spatialIncomingTangent: ProjectSpatialTangent? = nil,
+        spatialOutgoingTangent: ProjectSpatialTangent? = nil,
+        spatialInterpolation: ProjectSpatialInterpolationMode = .linear,
+        isRoving: Bool = false
     ) {
         self.id = id
         self.time = time
@@ -292,6 +354,44 @@ public struct ProjectKeyframe: Codable, Equatable, Sendable, Identifiable {
         self.interpolation = interpolation
         self.incomingTemporalHandle = incomingTemporalHandle
         self.outgoingTemporalHandle = outgoingTemporalHandle
+        self.incomingVelocity = incomingVelocity
+        self.outgoingVelocity = outgoingVelocity
+        self.spatialIncomingTangent = spatialIncomingTangent
+        self.spatialOutgoingTangent = spatialOutgoingTangent
+        self.spatialInterpolation = spatialInterpolation
+        self.isRoving = isRoving
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(VertexID.self, forKey: .id)
+        time = try container.decode(RationalTime.self, forKey: .time)
+        value = try container.decode(ProjectAnimatableValue.self, forKey: .value)
+        interpolation = try container.decode(ProjectKeyframeInterpolation.self, forKey: .interpolation)
+        incomingTemporalHandle = try container.decodeIfPresent(ProjectBezierHandle.self, forKey: .incomingTemporalHandle)
+        outgoingTemporalHandle = try container.decodeIfPresent(ProjectBezierHandle.self, forKey: .outgoingTemporalHandle)
+        incomingVelocity = try container.decodeIfPresent(ProjectKeyframeVelocity.self, forKey: .incomingVelocity)
+        outgoingVelocity = try container.decodeIfPresent(ProjectKeyframeVelocity.self, forKey: .outgoingVelocity)
+        spatialIncomingTangent = try container.decodeIfPresent(ProjectSpatialTangent.self, forKey: .spatialIncomingTangent)
+        spatialOutgoingTangent = try container.decodeIfPresent(ProjectSpatialTangent.self, forKey: .spatialOutgoingTangent)
+        spatialInterpolation = try container.decodeIfPresent(ProjectSpatialInterpolationMode.self, forKey: .spatialInterpolation) ?? .linear
+        isRoving = try container.decodeIfPresent(Bool.self, forKey: .isRoving) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(time, forKey: .time)
+        try container.encode(value, forKey: .value)
+        try container.encode(interpolation, forKey: .interpolation)
+        try container.encodeIfPresent(incomingTemporalHandle, forKey: .incomingTemporalHandle)
+        try container.encodeIfPresent(outgoingTemporalHandle, forKey: .outgoingTemporalHandle)
+        try container.encodeIfPresent(incomingVelocity, forKey: .incomingVelocity)
+        try container.encodeIfPresent(outgoingVelocity, forKey: .outgoingVelocity)
+        try container.encodeIfPresent(spatialIncomingTangent, forKey: .spatialIncomingTangent)
+        try container.encodeIfPresent(spatialOutgoingTangent, forKey: .spatialOutgoingTangent)
+        if spatialInterpolation != .linear { try container.encode(spatialInterpolation, forKey: .spatialInterpolation) }
+        if isRoving { try container.encode(true, forKey: .isRoving) }
     }
 
     public func validated(expectedKind: ProjectAnimatableValueKind) throws -> Self {
@@ -304,8 +404,15 @@ public struct ProjectKeyframe: Codable, Equatable, Sendable, Identifiable {
         _ = try value.validated()
         if let incomingTemporalHandle { _ = try incomingTemporalHandle.validated() }
         if let outgoingTemporalHandle { _ = try outgoingTemporalHandle.validated() }
+        if let incomingVelocity { _ = try incomingVelocity.validated() }
+        if let outgoingVelocity { _ = try outgoingVelocity.validated() }
+        if let spatialIncomingTangent { _ = try spatialIncomingTangent.validated() }
+        if let spatialOutgoingTangent { _ = try spatialOutgoingTangent.validated() }
         if case .boolean = value, interpolation != .hold {
             throw ProjectError.invalidValue("Boolean animation supports Hold interpolation only.")
+        }
+        if isRoving, interpolation == .hold {
+            throw ProjectError.invalidValue("Hold keyframes cannot be roving.")
         }
         return self
     }
@@ -359,11 +466,7 @@ public struct ProjectAnimationChannel: Codable, Equatable, Sendable, Identifiabl
         var high = keyframes.count - 1
         while low + 1 < high {
             let middle = (low + high) / 2
-            if keyframes[middle].time <= time {
-                low = middle
-            } else {
-                high = middle
-            }
+            if keyframes[middle].time <= time { low = middle } else { high = middle }
         }
 
         let left = keyframes[low]
@@ -415,11 +518,7 @@ public struct ProjectAnimationChannel: Codable, Equatable, Sendable, Identifiabl
             var upper = 1.0
             for _ in 0..<20 {
                 t = (lower + upper) * 0.5
-                if cubic(t, p1: outgoing.x, p2: incoming.x) < target {
-                    lower = t
-                } else {
-                    upper = t
-                }
+                if cubic(t, p1: outgoing.x, p2: incoming.x) < target { lower = t } else { upper = t }
             }
         }
         return min(max(cubic(t, p1: outgoing.y, p2: incoming.y), 0), 1)
