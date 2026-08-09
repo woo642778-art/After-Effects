@@ -32,9 +32,17 @@ private func phase8Project() throws -> (ProjectDocument, ProjectComposition, Pro
     let mediaA = MediaReference.fixture(id: "84000000-0000-0000-0000-000000000010", name: "target.mov")
     let mediaB = MediaReference.fixture(id: "84000000-0000-0000-0000-000000000011", name: "matte.mov")
     project.mediaRegistry = [mediaA, mediaB]
-    var composition = project.compositionRegistry[0]
-    composition.width = 16
-    composition.height = 16
+    var composition = ProjectComposition(
+        id: VertexID(rawValue: "84000000-0000-0000-0000-000000000002"),
+        name: "Main Composition",
+        width: 16,
+        height: 16,
+        duration: RationalTime(value: 10, timescale: 1),
+        frameRate: project.settings.frameRate,
+        color: project.settings.color
+    )
+    project.compositionRegistry = [composition]
+    project.activeCompositionID = composition.id
     let timing = LayerTiming(startTime: .zero, inPoint: .zero, outPoint: composition.duration)
     var target = ProjectLayer(
         id: VertexID(rawValue: "84000000-0000-0000-0000-000000000021"),
