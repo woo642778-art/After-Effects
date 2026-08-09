@@ -17,7 +17,7 @@ enum AELeftDockTab: String, CaseIterable, Identifiable {
 struct AEPanel<Content: View>: View {
     let title: String
     let systemImage: String?
-    @ViewBuilder let content: Content
+    let content: Content
 
     init(title: String, systemImage: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -110,7 +110,7 @@ struct AEWorkspaceToolbar: View {
             Menu {
                 ForEach(AEWorkspacePreset.allCases) { preset in
                     Button {
-                        editorState.activeWorkspace = preset
+                        editorState.setWorkspace(preset)
                     } label: {
                         Label(preset.title, systemImage: preset.systemImage)
                     }
