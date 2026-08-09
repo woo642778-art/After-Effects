@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import VertexCore
 import VertexProject
 import VertexTimeline
@@ -8,6 +9,7 @@ struct AutomationWorkspaceView: View {
     @EnvironmentObject private var workspace: ProjectWorkspaceViewModel
     @State private var renameText = ""
     @State private var commandError: String?
+    @State private var isFileImporterPresented = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -19,6 +21,21 @@ struct AutomationWorkspaceView: View {
         .background(AfterEffectsTheme.background)
         .onAppear { synchronizeRename() }
         .onChange(of: workspace.project?.selectedLayerID) { _, _ in synchronizeRename() }
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.image, .movie, .video, .audio],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                for url in urls {
+                    workspace.registerImportedMedia(from: url)
+                }
+                commandError = nil
+            case .failure(let error):
+                commandError = error.localizedDescription
+            }
+        }
     }
 
     private var commandPanel: some View {
@@ -26,6 +43,45 @@ struct AutomationWorkspaceView: View {
             panelHeader("AUTOMATION / COMMANDS", systemImage: "command")
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    commandGroup("Media Intake") {
+                        Button {
+                            isFileImporterPresented = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder.badge.plus").frame(width: 18)
+                                Text("Import Files")
+                                Spacer()
+                                Text("Multi-select")
+                                    .font(.caption2)
+                                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AfterEffectsTheme.primaryText)
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(AfterEffectsTheme.elevatedPanel, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(workspace.project == nil)
+
+                        Button {
+                            workspace.addSelectedMediaLayer()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.rectangle.on.rectangle").frame(width: 18)
+                                Text("Add Selected Media to Composition")
+                                Spacer()
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AfterEffectsTheme.primaryText)
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(AfterEffectsTheme.elevatedPanel, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(workspace.selectedMedia == nil || workspace.activeComposition == nil)
+                    }
+
                     commandGroup("Layer") {
                         commandButton("Duplicate Selected", systemImage: "plus.square.on.square") {
                             workspace.duplicateSelectedLayer()
