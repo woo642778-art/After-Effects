@@ -14,7 +14,8 @@ var products: [Product] = [
     .library(name: "VertexAI", targets: ["VertexAI"]),
     .library(name: "VertexAICoreML", targets: ["VertexAICoreML"]),
     .library(name: "Vertex3D", targets: ["Vertex3D"]),
-    .library(name: "VertexRender3DMetal", targets: ["VertexRender3DMetal"])
+    .library(name: "VertexRender3DMetal", targets: ["VertexRender3DMetal"]),
+    .library(name: "VertexExport", targets: ["VertexExport"])
 ]
 
 var targets: [Target] = [
@@ -35,6 +36,7 @@ var targets: [Target] = [
     .target(name: "VertexAICoreML", dependencies: ["VertexCore", "VertexAI"]),
     .target(name: "Vertex3D"),
     .target(name: "VertexRender3DMetal", dependencies: ["Vertex3D"]),
+    .target(name: "VertexExport", dependencies: ["VertexCore"]),
     .testTarget(name: "VertexCoreTests", dependencies: ["VertexCore"]),
     .testTarget(name: "VertexMediaTests", dependencies: ["VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexRenderTests", dependencies: ["VertexRender", "VertexMedia", "VertexCore"]),
@@ -51,7 +53,8 @@ var targets: [Target] = [
     .testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]),
     .testTarget(name: "VertexAITests", dependencies: ["VertexAI", "VertexCore"]),
     .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"]),
-    .testTarget(name: "Vertex3DTests", dependencies: ["Vertex3D"])
+    .testTarget(name: "Vertex3DTests", dependencies: ["Vertex3D"]),
+    .testTarget(name: "VertexExportTests", dependencies: ["VertexExport", "VertexCore"])
 ]
 
 #if !os(Linux)
@@ -59,6 +62,11 @@ products.append(.library(name: "VertexAIAVFoundation", targets: ["VertexAIAVFoun
 targets.append(.target(
     name: "VertexAIAVFoundation",
     dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]
+))
+products.append(.library(name: "VertexExportAVFoundation", targets: ["VertexExportAVFoundation"]))
+targets.append(.target(
+    name: "VertexExportAVFoundation",
+    dependencies: ["VertexCore", "VertexExport"]
 ))
 #endif
 
