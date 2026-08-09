@@ -88,6 +88,46 @@ jobs:
           set -o pipefail
           swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-11-swift-tests.log"
 
+      - name: Build unsigned iOS 17 arm64 test app
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/DerivedDataPhase11Release" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-11-release-build.log"
+
+      - name: Package device test IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedDataPhase11Release/Build/Products/Release-iphoneos/Vertex2.app"
+          test -d "$APP"
+          rm -rf Payload test-artifacts
+          mkdir -p Payload test-artifacts
+          cp -R "$APP" Payload/Vertex2.app
+          /usr/bin/zip -qry test-artifacts/Vertex2-11.0.0-TEST-unsigned.ipa Payload
+          shasum -a 256 test-artifacts/Vertex2-11.0.0-TEST-unsigned.ipa | tee test-artifacts/Vertex2-11.0.0-TEST-unsigned.ipa.sha256
+          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > test-artifacts/commit-sha.txt
+
+      - name: Upload device test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-11.0.0-TEST-unsigned-ipa
+          path: |
+            test-artifacts/Vertex2-11.0.0-TEST-unsigned.ipa
+            test-artifacts/Vertex2-11.0.0-TEST-unsigned.ipa.sha256
+            test-artifacts/commit-sha.txt
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Select and boot iPad Simulator
         run: |
           set -euo pipefail
@@ -131,24 +171,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             test 2>&1 | tee "$RUNNER_TEMP/vertex2-11-ipad-tests.log"
 
-      - name: Build unsigned iOS 17 arm64 Release app
-        env:
-          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project Vertex.xcodeproj \
-            -scheme Vertex \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$PWD/DerivedDataPhase11Release" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-11-release-build.log"
-
-      - name: Package and audit unsigned IPA
+      - name: Package and audit qualified unsigned IPA
         run: |
           set -euo pipefail
           APP="$PWD/DerivedDataPhase11Release/Build/Products/Release-iphoneos/Vertex2.app"
