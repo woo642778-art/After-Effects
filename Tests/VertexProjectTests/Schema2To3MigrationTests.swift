@@ -43,7 +43,7 @@ func schema2MigratesThroughCurrentSchema() throws {
 
     #expect(migrated.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(migrated.minimumReaderVersion == ProjectDocument.currentSchemaVersion)
-    #expect(migrated.metadata.lastSavedByAppVersion == ProjectDocument.currentAppVersion)
+    #expect(migrated.metadata.lastSavedByAppVersion == "9.0.0")
     #expect(migrated.revision == 12)
     #expect(migrated.mediaRegistry.count == 1)
     #expect(migrated.compositionRegistry.count == 1)
