@@ -11,6 +11,20 @@ private func actorPackageURL(_ name: String = UUID().uuidString) -> URL {
         .appendingPathExtension("vertexproject")
 }
 
+private func actorTestComposition(id: VertexID = VertexID(), name: String = "Main") -> ProjectComposition {
+    ProjectComposition(
+        id: id,
+        name: name,
+        width: 1920,
+        height: 1080,
+        duration: RationalTime(value: 5, timescale: 1),
+        frameRate: RationalTime(value: 30, timescale: 1),
+        color: .rec709SDR(alphaMode: .straight),
+        backgroundColor: .transparent,
+        layerIDs: []
+    )
+}
+
 @Test("Reopening a saved project starts with empty session history")
 func reopenedProjectHasNoPersistentHistory() async throws {
     let url = actorPackageURL("Reopen")
@@ -132,9 +146,11 @@ func actorCoalescesCompatibleEdits() async throws {
     defer { try? FileManager.default.removeItem(at: url) }
 
     let actor = ProjectSessionActor()
-    let created = try await actor.create(name: "Coalescing", packageURL: url)
-    let compositionID = try #require(created.document.activeCompositionID)
-    let composition = try #require(created.document.composition(id: compositionID))
+    _ = try await actor.create(name: "Coalescing", packageURL: url)
+    let composition = actorTestComposition()
+    _ = try await actor.apply(.insertComposition(composition, ownedLayers: [], index: 0), mergeKey: nil)
+    _ = try await actor.setActiveComposition(composition.id)
+    let compositionID = composition.id
     let layerID = VertexID(rawValue: "58000000-0000-0000-0000-000000000010")
     let layer = ProjectLayer(
         id: layerID,
