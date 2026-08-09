@@ -55,49 +55,50 @@ public struct Milestone: Codable, Equatable, Sendable {
 
 public enum MilestoneCatalog {
     public static let current = Milestone(
-        number: 9,
-        title: "AE Workspace and Live AI Effects",
+        number: 10,
+        title: "iPad AE Workspace and 3D",
         status: .implemented,
         deliverables: [
-            "Adaptive AE-style iPad workspace with Project, Composition, Effect Controls, Graph Editor, and Timeline panels",
-            "Compact iPhone workspace backed by the same canonical playhead, selection, project commands, and render state",
-            "Exact-time editable layer timeline with trim, move, split, ripple, roll, slip, slide, parenting, track mattes, blend mode, lock, solo, and visibility controls",
-            "Ordered non-destructive Depth Map, Cutout, Upscale, and Restore layer effects with typed parameters and live preview rerendering",
-            "Bounded AI frame scheduling and cache reuse with explicit computing, stale, cached, and failure semantics",
-            "Value and Speed Graph Editor surfaces over canonical animation channels and temporal Bezier handles",
-            "Atomic Extract / Bake to Layer workflow that verifies derived media before project registration",
-            "Versioned Vertex2 9.0.0 build 9 unsigned iOS 17 arm64 IPA"
+            "iPad-only adaptive AE-style workspace with Stage Manager aware panel collapse and resizable docks",
+            "Composition, 3D, and Export workspaces behind one Vertex2 editing shell",
+            "Portable editable 3D scene model with cube, sphere, plane, camera, light, materials, transforms, projection math, and deterministic mesh operations",
+            "GLB and glTF triangle mesh import plus USDZ mesh import through Apple Model I/O",
+            "MetalKit 3D viewport with depth testing, camera projection, indexed mesh rendering, and transform evaluation",
+            "Project-package 3D scene persistence under the Vertex-owned Scene3D sidecar",
+            "Exact-rational-time composition export through the existing composition graph and Metal render backend",
+            "Transactional MOV, MP4, GIF, PNG sequence, and JPEG sequence writing with H.264, HEVC, and supported ProRes paths",
+            "Versioned Vertex2 10.0.0 build 10 unsigned iPadOS 17 arm64 IPA"
         ],
         sourceAdoptions: [
             SourceAdoption(
-                id: "apple-swiftui-phase9",
+                id: "apple-swiftui-phase10",
                 repository: "Apple SwiftUI",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "Adaptive iPad and iPhone professional editing workspace and interaction surfaces"
+                purpose: "Adaptive iPad-only professional editing, 3D, and export workspaces"
             ),
             SourceAdoption(
-                id: "apple-coreml-phase9",
-                repository: "Apple Core ML and Vision",
+                id: "apple-metal-phase10",
+                repository: "Apple Metal and MetalKit",
                 license: "Apple platform SDK",
                 mode: .wrappedDependency,
-                purpose: "On-device AI frame inference without a server dependency"
+                purpose: "2D composition rendering and depth-tested 3D viewport rendering"
             ),
             SourceAdoption(
-                id: "opentimelineio-phase9",
-                repository: "AcademySoftwareFoundation/OpenTimelineIO",
-                license: "Apache-2.0",
-                mode: .designReference,
-                purpose: "Timeline and track data-model reference only; no runtime dependency or copied implementation"
+                id: "apple-modelio-phase10",
+                repository: "Apple Model I/O",
+                license: "Apple platform SDK",
+                mode: .wrappedDependency,
+                purpose: "USDZ normalization into Vertex-owned mesh structures"
             ),
             SourceAdoption(
-                id: "natron-phase9",
-                repository: "NatronGitHub/Natron",
-                license: "GPL-2.0",
-                mode: .designReference,
-                purpose: "Professional compositor workspace and effect-control interaction reference only; no source code copied"
+                id: "apple-avfoundation-phase10",
+                repository: "Apple AVFoundation",
+                license: "Apple platform SDK",
+                mode: .wrappedDependency,
+                purpose: "Transactional frame-accurate delivery encoding"
             )
         ],
-        artifactPolicy: "Phase 9 publishes Vertex2-9.0.0-unsigned.ipa only after AI model/license audits, complete Swift tests, iPhone and iPad Simulator tests, Metal compilation, unsigned iOS 17 arm64 Release build, bundle inspection, independent IPA audit, and SHA-256 verification pass. The IPA remains unsigned until external signing credentials are supplied."
+        artifactPolicy: "Phase 10 publishes Vertex2-10.0.0-unsigned.ipa only after portable Swift tests, iPad Simulator tests, native Metal/Model I/O/export compilation, unsigned iOS 17 arm64 Release build, bundle inspection, IPA audit, and SHA-256 verification pass. The IPA remains unsigned until external signing credentials are supplied."
     )
 }
