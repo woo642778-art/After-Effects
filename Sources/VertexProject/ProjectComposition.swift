@@ -1,6 +1,26 @@
 import Foundation
 import VertexCore
 
+public enum ProjectCompositionPreviewResolution: String, Codable, CaseIterable, Sendable {
+    case full
+    case half
+    case third
+    case quarter
+
+    public var scale: Double {
+        switch self {
+        case .full: 1
+        case .half: 0.5
+        case .third: 1.0 / 3.0
+        case .quarter: 0.25
+        }
+    }
+}
+
+public enum ProjectCompositionRendererMode: String, Codable, CaseIterable, Sendable {
+    case classic2D
+}
+
 public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
     public var id: VertexID
     public var name: String
@@ -13,9 +33,33 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
     public var layerIDs: [VertexID]
     public var workArea: ProjectWorkArea?
     public var markers: [ProjectMarker]
+    public var displayStartTime: RationalTime
+    public var pixelAspectRatio: Double
+    public var previewResolution: ProjectCompositionPreviewResolution
+    public var bpm: Double?
+    public var motionBlurShutterAngle: Double
+    public var motionBlurShutterPhase: Double
+    public var rendererMode: ProjectCompositionRendererMode
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, width, height, duration, frameRate, color, backgroundColor, layerIDs, workArea, markers
+        case id
+        case name
+        case width
+        case height
+        case duration
+        case frameRate
+        case color
+        case backgroundColor
+        case layerIDs
+        case workArea
+        case markers
+        case displayStartTime
+        case pixelAspectRatio
+        case previewResolution
+        case bpm
+        case motionBlurShutterAngle
+        case motionBlurShutterPhase
+        case rendererMode
     }
 
     public init(
@@ -29,7 +73,14 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         backgroundColor: ProjectRGBAColor = .transparent,
         layerIDs: [VertexID] = [],
         workArea: ProjectWorkArea? = nil,
-        markers: [ProjectMarker] = []
+        markers: [ProjectMarker] = [],
+        displayStartTime: RationalTime = .zero,
+        pixelAspectRatio: Double = 1,
+        previewResolution: ProjectCompositionPreviewResolution = .full,
+        bpm: Double? = nil,
+        motionBlurShutterAngle: Double = 180,
+        motionBlurShutterPhase: Double = -90,
+        rendererMode: ProjectCompositionRendererMode = .classic2D
     ) {
         self.id = id
         self.name = name
@@ -42,6 +93,13 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         self.layerIDs = layerIDs
         self.workArea = workArea
         self.markers = markers
+        self.displayStartTime = displayStartTime
+        self.pixelAspectRatio = pixelAspectRatio
+        self.previewResolution = previewResolution
+        self.bpm = bpm
+        self.motionBlurShutterAngle = motionBlurShutterAngle
+        self.motionBlurShutterPhase = motionBlurShutterPhase
+        self.rendererMode = rendererMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -57,6 +115,13 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         layerIDs = try container.decode([VertexID].self, forKey: .layerIDs)
         workArea = try container.decodeIfPresent(ProjectWorkArea.self, forKey: .workArea)
         markers = try container.decodeIfPresent([ProjectMarker].self, forKey: .markers) ?? []
+        displayStartTime = try container.decodeIfPresent(RationalTime.self, forKey: .displayStartTime) ?? .zero
+        pixelAspectRatio = try container.decodeIfPresent(Double.self, forKey: .pixelAspectRatio) ?? 1
+        previewResolution = try container.decodeIfPresent(ProjectCompositionPreviewResolution.self, forKey: .previewResolution) ?? .full
+        bpm = try container.decodeIfPresent(Double.self, forKey: .bpm)
+        motionBlurShutterAngle = try container.decodeIfPresent(Double.self, forKey: .motionBlurShutterAngle) ?? 180
+        motionBlurShutterPhase = try container.decodeIfPresent(Double.self, forKey: .motionBlurShutterPhase) ?? -90
+        rendererMode = try container.decodeIfPresent(ProjectCompositionRendererMode.self, forKey: .rendererMode) ?? .classic2D
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -72,6 +137,13 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         try container.encode(layerIDs, forKey: .layerIDs)
         try container.encodeIfPresent(workArea, forKey: .workArea)
         try container.encode(markers, forKey: .markers)
+        try container.encode(displayStartTime, forKey: .displayStartTime)
+        try container.encode(pixelAspectRatio, forKey: .pixelAspectRatio)
+        try container.encode(previewResolution, forKey: .previewResolution)
+        try container.encodeIfPresent(bpm, forKey: .bpm)
+        try container.encode(motionBlurShutterAngle, forKey: .motionBlurShutterAngle)
+        try container.encode(motionBlurShutterPhase, forKey: .motionBlurShutterPhase)
+        try container.encode(rendererMode, forKey: .rendererMode)
     }
 
     public func validated(layerByID: [VertexID: ProjectLayer]) throws -> Self {
@@ -86,6 +158,20 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         }
         guard frameRate > .zero else {
             throw ProjectError.invalidValue("Composition frame rate must be positive.")
+        }
+        guard pixelAspectRatio.isFinite, pixelAspectRatio > 0, pixelAspectRatio <= 10 else {
+            throw ProjectError.invalidValue("Composition pixel aspect ratio must be finite and within 0...10.")
+        }
+        if let bpm {
+            guard bpm.isFinite, (1...999).contains(bpm) else {
+                throw ProjectError.invalidValue("Composition BPM must be within 1...999.")
+            }
+        }
+        guard motionBlurShutterAngle.isFinite, (0...720).contains(motionBlurShutterAngle) else {
+            throw ProjectError.invalidValue("Motion-blur shutter angle must be within 0...720 degrees.")
+        }
+        guard motionBlurShutterPhase.isFinite, (-360...360).contains(motionBlurShutterPhase) else {
+            throw ProjectError.invalidValue("Motion-blur shutter phase must be within -360...360 degrees.")
         }
         guard layerIDs.count <= 256 else {
             throw ProjectError.invalidValue("A composition may contain at most 256 layers.")
