@@ -17,6 +17,15 @@ public protocol CompositionFrameResolver: Sendable {
     ) async throws -> CompositionFrameResolution
 }
 
+public protocol CompositionInterpolatingFrameResolver: CompositionFrameResolver {
+    func resolve(
+        mediaID: VertexID,
+        exactSourceTime: RationalTime,
+        targetSize: VertexSize,
+        interpolation: ProjectFrameInterpolationMode
+    ) async throws -> CompositionFrameResolution
+}
+
 public struct CompositionRenderLimits: Codable, Equatable, Sendable {
     public var maximumDimension: Int
     public var maximumLayersPerComposition: Int
@@ -76,4 +85,5 @@ struct CompositionFrameCacheKey: Hashable, Sendable {
     var time: RationalTime
     var width: Int
     var height: Int
+    var interpolation: ProjectFrameInterpolationMode
 }
