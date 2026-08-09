@@ -13,6 +13,9 @@ struct RootView: View {
             if projectWorkspace.project == nil {
                 VertexHomeView()
                     .transition(.opacity)
+            } else if projectWorkspace.activeComposition == nil {
+                VertexEmptyProjectView()
+                    .transition(.opacity)
             } else {
                 VertexEditorWorkspaceView()
                     .transition(.opacity)
@@ -21,6 +24,7 @@ struct RootView: View {
         .environmentObject(projectWorkspace)
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.16), value: projectWorkspace.project?.projectID)
+        .animation(.easeInOut(duration: 0.16), value: projectWorkspace.project?.activeCompositionID)
         .onChange(of: projectWorkspace.project?.projectID) { _, projectID in
             if projectID != nil {
                 presentTelegramPromotionIfNeeded()
