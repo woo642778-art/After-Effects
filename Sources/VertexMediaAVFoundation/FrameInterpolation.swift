@@ -5,6 +5,7 @@ import CoreVideo
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+import VertexCore
 import VertexMedia
 import Vision
 
@@ -42,20 +43,15 @@ public struct AppleFrameInterpolator: Sendable {
         guard a.width == b.width, a.height == b.height else { throw FrameInterpolationError.dimensionMismatch }
         let rgbaA = try rgba(a)
         let rgbaB = try rgba(b)
-        var result = Data(count: rgbaA.count)
-        result.withUnsafeMutableBytes { destination in
-            rgbaA.withUnsafeBytes { lhs in
-                rgbaB.withUnsafeBytes { rhs in
-                    let d = destination.bindMemory(to: UInt8.self)
-                    let l = lhs.bindMemory(to: UInt8.self)
-                    let r = rhs.bindMemory(to: UInt8.self)
-                    for index in 0..<d.count {
-                        d[index] = UInt8(clamping: Int((Double(l[index]) * (1 - progress) + Double(r[index]) * progress).rounded()))
-                    }
-                }
-            }
+        let lhs = [UInt8](rgbaA)
+        let rhs = [UInt8](rgbaB)
+        let inverseProgress = 1 - progress
+        var result = [UInt8](repeating: 0, count: lhs.count)
+        for index in result.indices {
+            let blended = Double(lhs[index]) * inverseProgress + Double(rhs[index]) * progress
+            result[index] = UInt8(clamping: Int(blended.rounded()))
         }
-        return try encodeRGBA(result, width: a.width, height: a.height)
+        return try encodeRGBA(Data(result), width: a.width, height: a.height)
     }
 
     public func opticalFlow(
