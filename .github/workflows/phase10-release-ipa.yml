@@ -13,7 +13,7 @@ concurrency:
 jobs:
   release-qualification:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +40,37 @@ jobs:
             echo 'iPhone orientation contract is still present'
             exit 1
           fi
+          python3 Tools/ai/audit_models.py
           git diff --check
+
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+          test -f App/GeneratedAIResources/AI_MODEL_MANIFEST.json
+          test -d App/GeneratedAIResources/AIModels/DepthAnythingV2SmallF16.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3.mlmodelc
+          test -d App/GeneratedAIResources/AIModels/RealESRGAN-x4v3-denoise.mlmodelc
+          test -s App/GeneratedAIResources/AIModelNotices/DEPTH_ANYTHING_V2_NOTICE.md
+          test -s App/GeneratedAIResources/AIModelNotices/REALESRGAN_NOTICE.md
+          test -s App/GeneratedAIResources/AIModelNotices/APACHE-2.0.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('App/GeneratedAIResources/AI_MODEL_MANIFEST.json').read_text())
+          models = manifest.get('models', [])
+          if len(models) != 3:
+              raise SystemExit(f'Expected 3 compiled AI models, found {len(models)}')
+          if any(int(model.get('compiledSizeBytes', 0)) <= 0 for model in models):
+              raise SystemExit('Compiled AI model manifest contains an empty model')
+          print('compiled AI bytes:', sum(int(model['compiledSizeBytes']) for model in models))
+          PY
 
       - name: Generate assets and Xcode project
         run: |
@@ -48,7 +78,9 @@ jobs:
           bash Tools/generate_app_assets.sh
           xcodegen generate
 
-      - name: Run Swift package tests including native export
+      - name: Run Swift package tests including native export and pinned AI inference
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
         run: |
           set -o pipefail
           swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-10-swift-tests.log"
@@ -97,6 +129,8 @@ jobs:
             test 2>&1 | tee "$RUNNER_TEMP/vertex2-10-ipad-tests.log"
 
       - name: Build unsigned iOS 17 arm64 Release app
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
         run: |
           set -o pipefail
           xcodebuild \
@@ -116,6 +150,9 @@ jobs:
           set -euo pipefail
           APP="$PWD/DerivedDataPhase10Release/Build/Products/Release-iphoneos/Vertex2.app"
           test -d "$APP"
+          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP" Payload/Vertex2.app
@@ -124,6 +161,7 @@ jobs:
           python3 Tools/release/audit_vertex2_ipa.py \
             artifacts/Vertex2-10.0.0-unsigned.ipa \
             --json artifacts/Vertex2-10.0.0-audit.json | tee artifacts/Vertex2-10.0.0-audit.txt
+          cp App/GeneratedAIResources/AI_MODEL_MANIFEST.json artifacts/AI_MODEL_MANIFEST-10.0.json
           printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
 
       - name: Upload Vertex2 10 IPA and evidence
@@ -135,6 +173,7 @@ jobs:
             artifacts/Vertex2-10.0.0-unsigned.ipa.sha256
             artifacts/Vertex2-10.0.0-audit.json
             artifacts/Vertex2-10.0.0-audit.txt
+            artifacts/AI_MODEL_MANIFEST-10.0.json
             artifacts/commit-sha.txt
           if-no-files-found: error
           retention-days: 14
