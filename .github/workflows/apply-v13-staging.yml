@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s Tools/staging/v13-changes.tar.gz.base64
-          base64 --decode Tools/staging/v13-changes.tar.gz.base64 > "$RUNNER_TEMP/v13-changes.tar.gz"
+          base64 -D -i Tools/staging/v13-changes.tar.gz.base64 -o "$RUNNER_TEMP/v13-changes.tar.gz"
           tar -xzf "$RUNNER_TEMP/v13-changes.tar.gz"
           rm -f Tools/staging/v13-changes.tar.gz.base64
           rmdir Tools/staging 2>/dev/null || true
