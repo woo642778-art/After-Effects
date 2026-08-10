@@ -80,13 +80,13 @@ func trackingSourceTimeMappingWithRemap() throws {
 @Test("Tracking decode timeline rejects mismatched and negative explicit source times")
 func trackingDecodeTimelineValidation() throws {
     let compositionTimes = [.zero, RationalTime(value: 1, timescale: 1)]
-    #expect(throws: Error.self) {
+    #expect(throws: ProjectError.self) {
         try VisionMotionTracker.validatedDecodeTimes(
             compositionTimes: compositionTimes,
             sourceTimes: [.zero]
         )
     }
-    #expect(throws: Error.self) {
+    #expect(throws: ProjectError.self) {
         try VisionMotionTracker.validatedDecodeTimes(
             compositionTimes: compositionTimes,
             sourceTimes: [.zero, RationalTime(value: -1, timescale: 1)]
