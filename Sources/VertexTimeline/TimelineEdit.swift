@@ -17,6 +17,7 @@ public enum TimelineEdit: Equatable, Sendable {
     case roll(leftLayerID: VertexID, rightLayerID: VertexID, boundary: RationalTime)
     case slip(layerID: VertexID, sourceDelta: RationalTime)
     case slide(layerID: VertexID, delta: RationalTime, previousLayerID: VertexID?, nextLayerID: VertexID?)
+    case replaceAnimationChannels(layerID: VertexID, channels: [ProjectAnimationChannel])
 }
 
 public struct TimelineEditResult: Equatable, Sendable {
