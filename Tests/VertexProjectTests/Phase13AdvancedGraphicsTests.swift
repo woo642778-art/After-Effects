@@ -23,7 +23,8 @@ func bezierGraphicMorphing() throws {
     )
     let vector = ProjectVectorGraphic(bezierPaths: [source], morphTargets: [target], morphProgress: 0.5)
     let resolved = try #require(vector.resolvedBezierPaths().first)
-    #expect(resolved.vertices[0].anchor == ProjectVector2(x: 0.35, y: 0.15))
+    #expect(abs(resolved.vertices[0].anchor.x - 0.35) < 1e-12)
+    #expect(abs(resolved.vertices[0].anchor.y - 0.15) < 1e-12)
     #expect(resolved.closed)
 }
 
