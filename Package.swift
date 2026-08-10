@@ -39,7 +39,7 @@ let package = Package(
         .target(name: "VertexAI", dependencies: ["VertexCore"]),
         .target(name: "VertexAICoreML", dependencies: ["VertexCore", "VertexAI"]),
         .target(name: "VertexAIAVFoundation", dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]),
-        .target(name: "VertexTrackingVision", dependencies: ["VertexCore", "VertexProject"]),
+        .target(name: "VertexTrackingVision", dependencies: ["VertexCore", "VertexProject", "VertexTimeline"]),
         .target(name: "Vertex3D"),
         .target(name: "VertexRender3DMetal", dependencies: ["Vertex3D"]),
         .target(name: "VertexExport", dependencies: ["VertexCore"]),
