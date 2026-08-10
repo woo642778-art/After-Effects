@@ -20,6 +20,7 @@ let package = Package(
         .library(name: "VertexAI", targets: ["VertexAI"]),
         .library(name: "VertexAICoreML", targets: ["VertexAICoreML"]),
         .library(name: "VertexAIAVFoundation", targets: ["VertexAIAVFoundation"]),
+        .library(name: "VertexTrackingVision", targets: ["VertexTrackingVision"]),
         .library(name: "Vertex3D", targets: ["Vertex3D"]),
         .library(name: "VertexRender3DMetal", targets: ["VertexRender3DMetal"]),
         .library(name: "VertexExport", targets: ["VertexExport"]),
@@ -38,6 +39,7 @@ let package = Package(
         .target(name: "VertexAI", dependencies: ["VertexCore"]),
         .target(name: "VertexAICoreML", dependencies: ["VertexCore", "VertexAI"]),
         .target(name: "VertexAIAVFoundation", dependencies: ["VertexCore", "VertexAI", "VertexAICoreML"]),
+        .target(name: "VertexTrackingVision", dependencies: ["VertexCore", "VertexProject"]),
         .target(name: "Vertex3D"),
         .target(name: "VertexRender3DMetal", dependencies: ["Vertex3D"]),
         .target(name: "VertexExport", dependencies: ["VertexCore"]),
@@ -52,6 +54,7 @@ let package = Package(
         .testTarget(name: "VertexCompositionTests", dependencies: ["VertexComposition", "VertexProject", "VertexRender", "VertexMedia", "VertexCore"]),
         .testTarget(name: "VertexAITests", dependencies: ["VertexAI", "VertexCore"]),
         .testTarget(name: "VertexAICoreMLTests", dependencies: ["VertexAICoreML", "VertexAI", "VertexCore"]),
+        .testTarget(name: "VertexTrackingVisionTests", dependencies: ["VertexTrackingVision", "VertexProject", "VertexCore"]),
         .testTarget(name: "Vertex3DTests", dependencies: ["Vertex3D"]),
         .testTarget(name: "VertexExportTests", dependencies: ["VertexExport", "VertexCore"]),
         .testTarget(name: "VertexExportAVFoundationTests", dependencies: ["VertexExportAVFoundation", "VertexExport", "VertexCore"])
