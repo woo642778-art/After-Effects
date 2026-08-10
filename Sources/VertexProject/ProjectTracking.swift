@@ -154,12 +154,12 @@ public struct ProjectMotionTrack: Codable, Equatable, Sendable, Identifiable {
         guard referenceWidth > 0, baseScale.isFinite, baseScale > 0, baseRotationDegrees.isFinite else {
             throw ProjectError.invalidValue("Planar tracking solve has invalid scale or rotation input.")
         }
-        let scaleFrames = accepted.map { sample -> ProjectAnimationKeyframe in
+        let scaleFrames = accepted.map { sample -> ProjectKeyframe in
             let ratio = sample.region.width / referenceWidth
             let value = mode == .follow ? baseScale * ratio : baseScale / max(ratio, 0.000_001)
             return .init(time: sample.time, value: .scalar(value), interpolation: .linear)
         }
-        let rotationFrames = accepted.map { sample -> ProjectAnimationKeyframe in
+        let rotationFrames = accepted.map { sample -> ProjectKeyframe in
             let delta = sample.rotationDegrees - reference.rotationDegrees
             let value = mode == .follow ? baseRotationDegrees + delta : baseRotationDegrees - delta
             return .init(time: sample.time, value: .scalar(value), interpolation: .linear)
