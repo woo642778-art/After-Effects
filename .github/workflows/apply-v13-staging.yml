@@ -28,11 +28,14 @@ jobs:
       - name: Apply staged v13 source tree
         run: |
           set -euo pipefail
-          test -s Tools/staging/v13-changes.tar.gz.base64
-          base64 -D -i Tools/staging/v13-changes.tar.gz.base64 -o "$RUNNER_TEMP/v13-changes.tar.gz"
+          PARTS=(Tools/staging/v13-part{00..11}.b64)
+          for part in "${PARTS[@]}"; do test -s "$part"; done
+          cat "${PARTS[@]}" > "$RUNNER_TEMP/v13-changes.b64"
+          printf '%s  %s\n' '6a47fa40eddc0ea1c8e78a17c790b0bd95c104ccc5ac53b17271d03238c8c2be' "$RUNNER_TEMP/v13-changes.b64" | shasum -a 256 -c -
+          base64 -D -i "$RUNNER_TEMP/v13-changes.b64" -o "$RUNNER_TEMP/v13-changes.tar.gz"
+          printf '%s  %s\n' 'a2699cf18319d974ddabccf614fe2fe022a0c0e5c7af693ab5e3b3d4fa4e70c0' "$RUNNER_TEMP/v13-changes.tar.gz" | shasum -a 256 -c -
           tar -xzf "$RUNNER_TEMP/v13-changes.tar.gz"
-          rm -f Tools/staging/v13-changes.tar.gz.base64
-          rmdir Tools/staging 2>/dev/null || true
+          rm -rf Tools/staging
           rm -f .github/workflows/apply-v13-staging.yml
           grep -q 'currentAppVersion = "13.0.0"' Sources/VertexProject/ProjectSchema.swift
           grep -q 'currentSchemaVersion = 6' Sources/VertexProject/ProjectSchema.swift
