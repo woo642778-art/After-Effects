@@ -25,14 +25,35 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      - name: Verify Vertex2 12 product metadata and AI lock
+      - name: Verify product metadata, iPad contract, and AI lock
         run: |
           set -euo pipefail
-          grep -q 'currentSchemaVersion = 5' Sources/VertexProject/ProjectSchema.swift
-          grep -q 'MARKETING_VERSION: 12.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 12' project.yml
-          grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
-          grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          schema = Path('Sources/VertexProject/ProjectSchema.swift').read_text()
+          yml = Path('project.yml').read_text()
+
+          app = re.search(r'currentAppVersion\s*=\s*"([0-9]+)\.0\.0"', schema)
+          marketing = re.search(r'MARKETING_VERSION:\s*([0-9]+)\.0\.0', yml)
+          build = re.search(r'CURRENT_PROJECT_VERSION:\s*([0-9]+)', yml)
+          schema_version = re.search(r'currentSchemaVersion\s*=\s*([0-9]+)', schema)
+          if not all((app, marketing, build, schema_version)):
+              raise SystemExit('Unable to resolve version/schema contract')
+          major = int(app.group(1))
+          if int(marketing.group(1)) != major or int(build.group(1)) != major:
+              raise SystemExit(f'Version mismatch: app={major}, marketing={marketing.group(1)}, build={build.group(1)}')
+          if int(schema_version.group(1)) < 5:
+              raise SystemExit('Project schema regressed below the verified v12 baseline')
+          if 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' not in yml:
+              raise SystemExit('Bundle identifier contract changed')
+          if 'TARGETED_DEVICE_FAMILY: "2"' not in yml:
+              raise SystemExit('iPad-only device family contract changed')
+          if 'UISupportedInterfaceOrientations_iPhone' in yml:
+              raise SystemExit('iPhone orientation configuration must remain absent')
+          print(f'Verified Vertex2 {major}.0.0 ({major}), schema {schema_version.group(1)}')
+          PY
           python3 Tools/ai/audit_models.py
           python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
           git diff --check
