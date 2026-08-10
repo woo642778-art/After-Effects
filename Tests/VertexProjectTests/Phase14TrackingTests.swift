@@ -77,8 +77,8 @@ func cameraMotionSummary() throws {
     #expect(abs(summary.translationX - 0.15) < 0.000_001)
     #expect(abs(summary.translationY - 0.05) < 0.000_001)
     #expect(abs(summary.zoomRatio - 1.5) < 0.000_001)
-    #expect(summary.rotationDegrees == 10)
-    #expect(summary.confidence == 0.9)
+    #expect(abs(summary.rotationDegrees - 10) < 0.000_001)
+    #expect(abs(summary.confidence - 0.9) < 0.000_001)
 }
 
 private extension ProjectAnimatableValue {
