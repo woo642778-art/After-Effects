@@ -53,6 +53,8 @@ targets:
       - package: Vertex
         product: VertexAIAVFoundation
       - package: Vertex
+        product: VertexTrackingVision
+      - package: Vertex
         product: Vertex3D
       - package: Vertex
         product: VertexRender3DMetal
@@ -114,6 +116,8 @@ targets:
         product: VertexAICoreML
       - package: Vertex
         product: VertexAIAVFoundation
+      - package: Vertex
+        product: VertexTrackingVision
       - package: Vertex
         product: Vertex3D
       - package: Vertex
