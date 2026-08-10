@@ -3,6 +3,7 @@ name: Vertex2 Roadmap App Validation
 on:
   pull_request:
     branches:
+      - agent/phase12-media-effects-automation
       - agent/phase28-roadmap
   workflow_dispatch:
 
