@@ -30,33 +30,50 @@ struct GraphicsStudioView: View {
     @State private var errorMessage: String?
 
     var body: some View {
+        studioBody
+            .background(AfterEffectsTheme.background)
+            .task { refreshPreview() }
+            .onChange(of: previewVersion) { _, _ in refreshPreview() }
+    }
+
+    private var studioBody: some View {
         HStack(spacing: 0) {
             controls
                 .frame(width: 340)
-            Rectangle().fill(AfterEffectsTheme.border).frame(width: 1)
+            Rectangle()
+                .fill(AfterEffectsTheme.border)
+                .frame(width: 1)
             preview
         }
-        .background(AfterEffectsTheme.background)
-        .task { refreshPreview() }
-        .onChange(of: kind) { _, _ in refreshPreview() }
-        .onChange(of: text) { _, _ in refreshPreview() }
-        .onChange(of: fontSize) { _, _ in refreshPreview() }
-        .onChange(of: tracking) { _, _ in refreshPreview() }
-        .onChange(of: arcDegrees) { _, _ in refreshPreview() }
-        .onChange(of: fillColor) { _, _ in refreshPreview() }
-        .onChange(of: gradientColor) { _, _ in refreshPreview() }
-        .onChange(of: usesGradient) { _, _ in refreshPreview() }
-        .onChange(of: gradientAngle) { _, _ in refreshPreview() }
-        .onChange(of: strokeWidth) { _, _ in refreshPreview() }
-        .onChange(of: cornerRadius) { _, _ in refreshPreview() }
-        .onChange(of: starPoints) { _, _ in refreshPreview() }
-        .onChange(of: innerRadius) { _, _ in refreshPreview() }
-        .onChange(of: trimStart) { _, _ in refreshPreview() }
-        .onChange(of: trimEnd) { _, _ in refreshPreview() }
-        .onChange(of: repeaterCount) { _, _ in refreshPreview() }
-        .onChange(of: repeaterRotation) { _, _ in refreshPreview() }
-        .onChange(of: repeaterOffsetX) { _, _ in refreshPreview() }
-        .onChange(of: repeaterOffsetY) { _, _ in refreshPreview() }
+    }
+
+    private var previewVersion: String {
+        [
+            kind.rawValue,
+            text,
+            String(fontSize),
+            String(tracking),
+            String(lineSpacing),
+            String(arcDegrees),
+            alignment,
+            String(describing: fillColor),
+            String(describing: gradientColor),
+            String(usesGradient),
+            String(gradientAngle),
+            String(describing: strokeColor),
+            String(strokeWidth),
+            String(cornerRadius),
+            String(starPoints),
+            String(innerRadius),
+            String(trimStart),
+            String(trimEnd),
+            String(repeaterCount),
+            String(repeaterRotation),
+            String(repeaterOffsetX),
+            String(repeaterOffsetY),
+            String(workspace.activeComposition?.width ?? 0),
+            String(workspace.activeComposition?.height ?? 0)
+        ].joined(separator: "|")
     }
 
     private var controls: some View {
@@ -215,7 +232,10 @@ struct GraphicsStudioView: View {
             for y in stride(from: 0.0, to: size.height, by: cell) {
                 for x in stride(from: 0.0, to: size.width, by: cell) {
                     let even = (Int(x / cell) + Int(y / cell)).isMultiple(of: 2)
-                    context.fill(Path(CGRect(x: x, y: y, width: cell, height: cell)), with: .color(even ? .white.opacity(0.035) : .white.opacity(0.07)))
+                    context.fill(
+                        Path(CGRect(x: x, y: y, width: cell, height: cell)),
+                        with: .color(even ? .white.opacity(0.035) : .white.opacity(0.07))
+                    )
                 }
             }
         }
@@ -230,7 +250,9 @@ struct GraphicsStudioView: View {
     ) -> some View {
         VStack(spacing: 3) {
             HStack {
-                Text(title).font(.caption2).foregroundStyle(AfterEffectsTheme.secondaryText)
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(AfterEffectsTheme.secondaryText)
                 Spacer()
                 Text(String(format: format, value.wrappedValue))
                     .font(.caption2.monospacedDigit())
