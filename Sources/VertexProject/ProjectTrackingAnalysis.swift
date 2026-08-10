@@ -139,7 +139,7 @@ public extension ProjectMotionTrack {
         }
         let refinementByTime = Dictionary(uniqueKeysWithValues: refinements.map { ($0.time, $0.path) })
 
-        let keyframes = try accepted.map { sample -> ProjectRotoscopeKeyframe in
+        let keyframes = accepted.map { sample -> ProjectRotoscopeKeyframe in
             if let refined = refinementByTime[sample.time] {
                 return .init(time: sample.time, path: refined)
             }
