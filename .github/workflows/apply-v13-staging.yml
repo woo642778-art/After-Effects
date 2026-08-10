@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/phase13-text-vector
+  pull_request:
+    branches:
+      - agent/phase28-roadmap
   workflow_dispatch:
 
 permissions:
