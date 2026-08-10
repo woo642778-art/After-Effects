@@ -1,0 +1,170 @@
+name: Apply and Validate Vertex2 13
+
+on:
+  push:
+    branches:
+      - agent/phase13-text-vector
+  pull_request:
+    branches:
+      - agent/phase28-roadmap
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vertex2-v13-staging
+  cancel-in-progress: true
+
+jobs:
+  validate-and-commit:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase13-text-vector
+          fetch-depth: 0
+      - name: Apply staged v13 source tree
+        run: |
+          set -euo pipefail
+          PARTS=()
+          EXPECTED=(
+            bbd8f9c0b424dd4e6352c12133f15c2e6d4e9a5e9041195ac09947d7be273bf9
+            fb27040e1d4b44d9325259a448e889999174187a16febd071cf5053c40d8ce7f
+            53246693b3c42757f79f7d1c6d09e61c6eaec2c53cb1fce2dc6b9085cfe6e1c6
+            2833c3b0fb88863de6112f2c0cfe8f1fd373d81c1fdedd3a5723e604b41024bd
+            f53d8fa7e587ff99223d5bdde07164c71837ccf9d8d5a1543434c4274504f5f2
+            2f794f618639734e1cce51ef271bcdd64d319cd01f3500a8fc4012c368f54a34
+            9f6dd89ccaf04b1e9f1fb8ada3f9d89bf1419edce1cade1a9f77c0d98887ce17
+            f6e91a8e24d43e43fe2fd9b7b4705be67ff8167f34a7186f3c436a2154f48fb6
+            fc34c020b48d19a8ed35b62a4d71d815bfbeaea26d573f10e596463169c27f2f
+            b7c9260fadcd3207dc31759277903383034337859f110049290ffc299f613699
+            54772dca8900154b8ef40ff368a98d92d06f4038eae8cef5376b8e6aeaa1d1d0
+            6b2fab45cae7c8bcf8047e814f486da08f9e48e6148aff9f6358183a2b2b31a3
+          )
+          CHUNK_FAILURE=0
+          for i in $(seq 0 11); do
+            printf -v part 'Tools/staging/v13-part%02d.b64' "$i"
+            PARTS+=("$part")
+            test -s "$part" || { echo "Missing payload chunk: $part"; CHUNK_FAILURE=1; continue; }
+            ACTUAL="$(shasum -a 256 "$part" | awk '{print $1}')"
+            printf 'chunk %02d SHA-256 actual=%s expected=%s\n' "$i" "$ACTUAL" "${EXPECTED[$i]}"
+            test "$ACTUAL" = "${EXPECTED[$i]}" || CHUNK_FAILURE=1
+          done
+          test "$CHUNK_FAILURE" = 0 || { echo 'One or more v13 chunks are corrupt'; exit 1; }
+          cat "${PARTS[@]}" > "$RUNNER_TEMP/v13-changes.b64"
+          ACTUAL_B64="$(shasum -a 256 "$RUNNER_TEMP/v13-changes.b64" | awk '{print $1}')"
+          echo "v13 base64 SHA-256: $ACTUAL_B64"
+          test "$ACTUAL_B64" = '6a47fa40eddc0ea1c8e78a17c790b0bd95c104ccc5ac53b17271d03238c8c2be' || exit 1
+          base64 -D -i "$RUNNER_TEMP/v13-changes.b64" -o "$RUNNER_TEMP/v13-changes.tar.gz"
+          ACTUAL_TAR="$(shasum -a 256 "$RUNNER_TEMP/v13-changes.tar.gz" | awk '{print $1}')"
+          echo "v13 tar SHA-256: $ACTUAL_TAR"
+          test "$ACTUAL_TAR" = 'a2699cf18319d974ddabccf614fe2fe022a0c0e5c7af693ab5e3b3d4fa4e70c0' || exit 1
+          tar -xzf "$RUNNER_TEMP/v13-changes.tar.gz"
+          rm -rf Tools/staging
+          rm -f .github/workflows/apply-v13-staging.yml
+          APP_VERSION="$(grep -E 'currentAppVersion' Sources/VertexProject/ProjectSchema.swift | head -1)"
+          SCHEMA_VERSION="$(grep -E 'currentSchemaVersion' Sources/VertexProject/ProjectSchema.swift | head -1)"
+          MARKETING="$(grep -E 'MARKETING_VERSION:' project.yml | head -1)"
+          BUILD="$(grep -E 'CURRENT_PROJECT_VERSION:' project.yml | head -1)"
+          echo "$APP_VERSION"
+          echo "$SCHEMA_VERSION"
+          echo "$MARKETING"
+          echo "$BUILD"
+          [[ "$APP_VERSION" == *'currentAppVersion = "13.0.0"'* ]] || exit 1
+          [[ "$SCHEMA_VERSION" == *'currentSchemaVersion = 6'* ]] || exit 1
+          [[ "$MARKETING" == *'MARKETING_VERSION: 13.0.0'* ]] || exit 1
+          [[ "$BUILD" == *'CURRENT_PROJECT_VERSION: 13'* ]] || exit 1
+          git diff --check || { echo 'git diff --check failed'; git diff --check; exit 1; }
+          echo 'v13 staging source contract verified'
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -version
+          swift --version
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Run full Swift package tests
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/v13-swift-tests.log"
+      - name: Select and boot newest iPad Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              match = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in devices:
+                  name = device.get('name', '')
+                  if device.get('isAvailable') and name.startswith('iPad'):
+                      candidates.append((version, 1 if 'Pro' in name else 0, name, device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPad Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][3])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Run iPad app tests
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataV13Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test 2>&1 | tee "$RUNNER_TEMP/v13-ipad-tests.log"
+      - name: Commit only the verified v13 tree
+        run: |
+          set -euo pipefail
+          git config user.name 'Vertex Roadmap Agent'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git status --short
+          git diff --cached --check
+          git commit -m 'feat: implement v13 text and vector engine'
+          git push origin HEAD:agent/phase13-text-vector
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertex2-v13-staging-validation
+          path: |
+            ${{ runner.temp }}/v13-swift-tests.log
+            ${{ runner.temp }}/v13-ipad-tests.log
+          if-no-files-found: warn
+          retention-days: 7
