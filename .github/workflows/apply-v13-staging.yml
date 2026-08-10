@@ -1,0 +1,128 @@
+name: Apply and Validate Vertex2 13
+
+on:
+  push:
+    branches:
+      - agent/phase13-text-vector
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vertex2-v13-staging
+  cancel-in-progress: true
+
+jobs:
+  validate-and-commit:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase13-text-vector
+          fetch-depth: 0
+      - name: Apply staged v13 source tree
+        run: |
+          set -euo pipefail
+          test -s Tools/staging/v13-changes.tar.gz.base64
+          base64 --decode Tools/staging/v13-changes.tar.gz.base64 > "$RUNNER_TEMP/v13-changes.tar.gz"
+          tar -xzf "$RUNNER_TEMP/v13-changes.tar.gz"
+          rm -f Tools/staging/v13-changes.tar.gz.base64
+          rmdir Tools/staging 2>/dev/null || true
+          rm -f .github/workflows/apply-v13-staging.yml
+          grep -q 'currentAppVersion = "13.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'currentSchemaVersion = 6' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'MARKETING_VERSION: 13.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 13' project.yml
+          git diff --check
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -version
+          swift --version
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Run full Swift package tests
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/v13-swift-tests.log"
+      - name: Select and boot newest iPad Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              match = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in devices:
+                  name = device.get('name', '')
+                  if device.get('isAvailable') and name.startswith('iPad'):
+                      candidates.append((version, 1 if 'Pro' in name else 0, name, device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPad Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][3])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Run iPad app tests
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataV13Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test 2>&1 | tee "$RUNNER_TEMP/v13-ipad-tests.log"
+      - name: Commit only the verified v13 tree
+        run: |
+          set -euo pipefail
+          git config user.name 'Vertex Roadmap Agent'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git status --short
+          git diff --cached --check
+          git commit -m 'feat: implement v13 text and vector engine'
+          git push origin HEAD:agent/phase13-text-vector
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertex2-v13-staging-validation
+          path: |
+            ${{ runner.temp }}/v13-swift-tests.log
+            ${{ runner.temp }}/v13-ipad-tests.log
+          if-no-files-found: warn
+          retention-days: 7
