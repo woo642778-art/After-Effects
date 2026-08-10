@@ -29,11 +29,30 @@ jobs:
         run: |
           set -euo pipefail
           PARTS=()
+          EXPECTED=(
+            bbd8f9c0b424dd4e6352c12133f15c2e6d4e9a5e9041195ac09947d7be273bf9
+            fb27040e1d4b44d9325259a448e889999174187a16febd071cf5053c40d8ce7f
+            53246693b3c42757f79f7d1c6d09e61c6eaec2c53cb1fce2dc6b9085cfe6e1c6
+            2833c3b0fb88863de6112f2c0cfe8f1fd373d81c1fdedd3a5723e604b41024bd
+            f53d8fa7e587ff99223d5bdde07164c71837ccf9d8d5a1543434c4274504f5f2
+            2f794f618639734e1cce51ef271bcdd64d319cd01f3500a8fc4012c368f54a34
+            9f6dd89ccaf04b1e9f1fb8ada3f9d89bf1419edce1cade1a9f77c0d98887ce17
+            f6e91a8e24d43e43fe2fd9b7b4705be67ff8167f34a7186f3c436a2154f48fb6
+            fc34c020b48d19a8ed35b62a4d71d815bfbeaea26d573f10e596463169c27f2f
+            b7c9260fadcd3207dc31759277903383034337859f110049290ffc299f613699
+            54772dca8900154b8ef40ff368a98d92d06f4038eae8cef5376b8e6aeaa1d1d0
+            6b2fab45cae7c8bcf8047e814f486da08f9e48e6148aff9f6358183a2b2b31a3
+          )
+          CHUNK_FAILURE=0
           for i in $(seq 0 11); do
             printf -v part 'Tools/staging/v13-part%02d.b64' "$i"
             PARTS+=("$part")
+            test -s "$part" || { echo "Missing payload chunk: $part"; CHUNK_FAILURE=1; continue; }
+            ACTUAL="$(shasum -a 256 "$part" | awk '{print $1}')"
+            printf 'chunk %02d SHA-256 actual=%s expected=%s\n' "$i" "$ACTUAL" "${EXPECTED[$i]}"
+            test "$ACTUAL" = "${EXPECTED[$i]}" || CHUNK_FAILURE=1
           done
-          for part in "${PARTS[@]}"; do test -s "$part" || { echo "Missing payload chunk: $part"; exit 1; }; done
+          test "$CHUNK_FAILURE" = 0 || { echo 'One or more v13 chunks are corrupt'; exit 1; }
           cat "${PARTS[@]}" > "$RUNNER_TEMP/v13-changes.b64"
           ACTUAL_B64="$(shasum -a 256 "$RUNNER_TEMP/v13-changes.b64" | awk '{print $1}')"
           echo "v13 base64 SHA-256: $ACTUAL_B64"
