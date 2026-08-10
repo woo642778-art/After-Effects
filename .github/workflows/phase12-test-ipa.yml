@@ -5,6 +5,8 @@ on:
     branches:
       - agent/phase12-media-effects-automation
   pull_request:
+    branches:
+      - agent/phase11-ae-time-engine-spec
   workflow_dispatch:
 
 concurrency:
