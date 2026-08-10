@@ -32,6 +32,7 @@ public actor VisionMotionTracker {
     public func analyze(
         mediaURL: URL,
         request sourceRequest: ProjectTrackingAnalysisRequest,
+        sourceTimes: [RationalTime]? = nil,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> ProjectMotionTrack {
         let request = try sourceRequest.validated()
@@ -39,6 +40,10 @@ public actor VisionMotionTracker {
         guard times.count >= 2 else {
             throw ProjectError.invalidValue("Tracking requires at least two exact sample times.")
         }
+        let decodeTimes = try Self.validatedDecodeTimes(
+            compositionTimes: times,
+            sourceTimes: sourceTimes
+        )
 
         let asset = AVURLAsset(url: mediaURL)
         let generator = AVAssetImageGenerator(asset: asset)
@@ -48,7 +53,7 @@ public actor VisionMotionTracker {
         generator.maximumSize = CGSize(width: 1920, height: 1920)
 
         try Task.checkCancellation()
-        let firstImage = try frameImage(generator: generator, at: times[0])
+        let firstImage = try frameImage(generator: generator, at: decodeTimes[0])
         let initial = try initialObservation(
             kind: request.kind,
             requestedRegion: request.region,
@@ -72,7 +77,8 @@ public actor VisionMotionTracker {
             }
             try await trackPlanar(
                 rectangle: rectangle,
-                times: times,
+                compositionTimes: times,
+                sourceTimes: decodeTimes,
                 generator: generator,
                 minimumConfidence: request.minimumConfidence,
                 samples: &samples,
@@ -83,7 +89,8 @@ public actor VisionMotionTracker {
             try await trackObject(
                 kind: request.kind,
                 observation: observation,
-                times: times,
+                compositionTimes: times,
+                sourceTimes: decodeTimes,
                 generator: generator,
                 minimumConfidence: request.minimumConfidence,
                 samples: &samples,
@@ -101,7 +108,8 @@ public actor VisionMotionTracker {
     private func trackObject(
         kind: ProjectTrackingKind,
         observation initialObservation: VNDetectedObjectObservation,
-        times: [RationalTime],
+        compositionTimes: [RationalTime],
+        sourceTimes: [RationalTime],
         generator: AVAssetImageGenerator,
         minimumConfidence: Double,
         samples: inout [ProjectTrackingSample],
@@ -110,33 +118,34 @@ public actor VisionMotionTracker {
         let sequence = VNSequenceRequestHandler()
         var previous = initialObservation
 
-        for index in 1..<times.count {
+        for index in 1..<compositionTimes.count {
             try Task.checkCancellation()
-            let image = try frameImage(generator: generator, at: times[index])
+            let image = try frameImage(generator: generator, at: sourceTimes[index])
             let tracking = VNTrackObjectRequest(detectedObjectObservation: previous)
             tracking.trackingLevel = .accurate
             try sequence.perform([tracking], on: image)
             guard let result = tracking.results?.first else {
-                throw VisionMotionTrackingError.trackingLost(kind, times[index])
+                throw VisionMotionTrackingError.trackingLost(kind, compositionTimes[index])
             }
             let confidence = Double(result.confidence)
             guard confidence >= minimumConfidence else {
-                throw VisionMotionTrackingError.trackingLost(kind, times[index])
+                throw VisionMotionTrackingError.trackingLost(kind, compositionTimes[index])
             }
             samples.append(ProjectTrackingSample(
-                time: times[index],
+                time: compositionTimes[index],
                 region: Self.projectRegion(fromVision: result.boundingBox),
                 rotationDegrees: 0,
                 confidence: confidence
             ))
             previous = result
-            progress?(Double(index + 1) / Double(times.count))
+            progress?(Double(index + 1) / Double(compositionTimes.count))
         }
     }
 
     private func trackPlanar(
         rectangle initialRectangle: VNRectangleObservation,
-        times: [RationalTime],
+        compositionTimes: [RationalTime],
+        sourceTimes: [RationalTime],
         generator: AVAssetImageGenerator,
         minimumConfidence: Double,
         samples: inout [ProjectTrackingSample],
@@ -145,27 +154,27 @@ public actor VisionMotionTracker {
         let sequence = VNSequenceRequestHandler()
         var previous = initialRectangle
 
-        for index in 1..<times.count {
+        for index in 1..<compositionTimes.count {
             try Task.checkCancellation()
-            let image = try frameImage(generator: generator, at: times[index])
+            let image = try frameImage(generator: generator, at: sourceTimes[index])
             let tracking = VNTrackRectangleRequest(rectangleObservation: previous)
             tracking.trackingLevel = .accurate
             try sequence.perform([tracking], on: image)
             guard let result = tracking.results?.first else {
-                throw VisionMotionTrackingError.trackingLost(.planar, times[index])
+                throw VisionMotionTrackingError.trackingLost(.planar, compositionTimes[index])
             }
             let confidence = Double(result.confidence)
             guard confidence >= minimumConfidence else {
-                throw VisionMotionTrackingError.trackingLost(.planar, times[index])
+                throw VisionMotionTrackingError.trackingLost(.planar, compositionTimes[index])
             }
             samples.append(ProjectTrackingSample(
-                time: times[index],
+                time: compositionTimes[index],
                 region: Self.projectRegion(fromVision: result.boundingBox),
                 rotationDegrees: Self.projectRotationDegrees(for: result),
                 confidence: confidence
             ))
             previous = result
-            progress?(Double(index + 1) / Double(times.count))
+            progress?(Double(index + 1) / Double(compositionTimes.count))
         }
     }
 
@@ -251,6 +260,20 @@ public actor VisionMotionTracker {
                 rectangle: nil
             )
         }
+    }
+
+    nonisolated static func validatedDecodeTimes(
+        compositionTimes: [RationalTime],
+        sourceTimes: [RationalTime]?
+    ) throws -> [RationalTime] {
+        let decoded = sourceTimes ?? compositionTimes
+        guard decoded.count == compositionTimes.count else {
+            throw ProjectError.invalidValue("Tracking source-time count must match the exact composition sample count.")
+        }
+        guard decoded.allSatisfy({ $0 >= .zero }) else {
+            throw ProjectError.invalidValue("Tracking source decode times must be nonnegative.")
+        }
+        return decoded
     }
 
     public nonisolated static func visionRegion(fromProject region: ProjectTrackingRegion) -> CGRect {
