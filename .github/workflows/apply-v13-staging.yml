@@ -29,19 +29,32 @@ jobs:
         run: |
           set -euo pipefail
           PARTS=(Tools/staging/v13-part{00..11}.b64)
-          for part in "${PARTS[@]}"; do test -s "$part"; done
+          for part in "${PARTS[@]}"; do test -s "$part" || { echo "Missing payload chunk: $part"; exit 1; }; done
           cat "${PARTS[@]}" > "$RUNNER_TEMP/v13-changes.b64"
-          printf '%s  %s\n' '6a47fa40eddc0ea1c8e78a17c790b0bd95c104ccc5ac53b17271d03238c8c2be' "$RUNNER_TEMP/v13-changes.b64" | shasum -a 256 -c -
+          ACTUAL_B64="$(shasum -a 256 "$RUNNER_TEMP/v13-changes.b64" | awk '{print $1}')"
+          echo "v13 base64 SHA-256: $ACTUAL_B64"
+          test "$ACTUAL_B64" = '6a47fa40eddc0ea1c8e78a17c790b0bd95c104ccc5ac53b17271d03238c8c2be' || exit 1
           base64 -D -i "$RUNNER_TEMP/v13-changes.b64" -o "$RUNNER_TEMP/v13-changes.tar.gz"
-          printf '%s  %s\n' 'a2699cf18319d974ddabccf614fe2fe022a0c0e5c7af693ab5e3b3d4fa4e70c0' "$RUNNER_TEMP/v13-changes.tar.gz" | shasum -a 256 -c -
+          ACTUAL_TAR="$(shasum -a 256 "$RUNNER_TEMP/v13-changes.tar.gz" | awk '{print $1}')"
+          echo "v13 tar SHA-256: $ACTUAL_TAR"
+          test "$ACTUAL_TAR" = 'a2699cf18319d974ddabccf614fe2fe022a0c0e5c7af693ab5e3b3d4fa4e70c0' || exit 1
           tar -xzf "$RUNNER_TEMP/v13-changes.tar.gz"
           rm -rf Tools/staging
           rm -f .github/workflows/apply-v13-staging.yml
-          grep -q 'currentAppVersion = "13.0.0"' Sources/VertexProject/ProjectSchema.swift
-          grep -q 'currentSchemaVersion = 6' Sources/VertexProject/ProjectSchema.swift
-          grep -q 'MARKETING_VERSION: 13.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 13' project.yml
-          git diff --check
+          APP_VERSION="$(grep -E 'currentAppVersion' Sources/VertexProject/ProjectSchema.swift | head -1)"
+          SCHEMA_VERSION="$(grep -E 'currentSchemaVersion' Sources/VertexProject/ProjectSchema.swift | head -1)"
+          MARKETING="$(grep -E 'MARKETING_VERSION:' project.yml | head -1)"
+          BUILD="$(grep -E 'CURRENT_PROJECT_VERSION:' project.yml | head -1)"
+          echo "$APP_VERSION"
+          echo "$SCHEMA_VERSION"
+          echo "$MARKETING"
+          echo "$BUILD"
+          [[ "$APP_VERSION" == *'currentAppVersion = "13.0.0"'* ]] || exit 1
+          [[ "$SCHEMA_VERSION" == *'currentSchemaVersion = 6'* ]] || exit 1
+          [[ "$MARKETING" == *'MARKETING_VERSION: 13.0.0'* ]] || exit 1
+          [[ "$BUILD" == *'CURRENT_PROJECT_VERSION: 13'* ]] || exit 1
+          git diff --check || { echo 'git diff --check failed'; git diff --check; exit 1; }
+          echo 'v13 staging source contract verified'
       - name: Select Xcode and install XcodeGen
         run: |
           set -euo pipefail
