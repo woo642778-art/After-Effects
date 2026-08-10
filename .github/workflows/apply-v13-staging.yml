@@ -28,7 +28,11 @@ jobs:
       - name: Apply staged v13 source tree
         run: |
           set -euo pipefail
-          PARTS=(Tools/staging/v13-part{00..11}.b64)
+          PARTS=()
+          for i in $(seq 0 11); do
+            printf -v part 'Tools/staging/v13-part%02d.b64' "$i"
+            PARTS+=("$part")
+          done
           for part in "${PARTS[@]}"; do test -s "$part" || { echo "Missing payload chunk: $part"; exit 1; }; done
           cat "${PARTS[@]}" > "$RUNNER_TEMP/v13-changes.b64"
           ACTUAL_B64="$(shasum -a 256 "$RUNNER_TEMP/v13-changes.b64" | awk '{print $1}')"
