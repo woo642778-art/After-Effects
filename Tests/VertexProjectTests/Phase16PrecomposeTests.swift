@@ -17,7 +17,7 @@ private func makePrecomposeFixture() throws -> (ProjectDocument, ProjectComposit
         source: .media(mediaID: media.id, sourceStartTime: .zero),
         timing: LayerTiming(
             startTime: RationalTime(value: 2, timescale: 1),
-            inPoint: .zero,
+            inPoint: RationalTime(value: 2, timescale: 1),
             outPoint: RationalTime(value: 6, timescale: 1)
         )
     )
@@ -28,7 +28,7 @@ private func makePrecomposeFixture() throws -> (ProjectDocument, ProjectComposit
         source: .media(mediaID: media.id, sourceStartTime: RationalTime(value: 1, timescale: 1)),
         timing: LayerTiming(
             startTime: RationalTime(value: 4, timescale: 1),
-            inPoint: RationalTime(value: 1, timescale: 1),
+            inPoint: RationalTime(value: 4, timescale: 1),
             outPoint: RationalTime(value: 8, timescale: 1)
         )
     )
@@ -59,27 +59,31 @@ func phase16PrecomposePreservesOrderingAndTiming() throws {
     #expect(plan.childLayers.map(\.name) == ["First", "Second"])
     #expect(plan.childLayers[0].timing.startTime == .zero)
     #expect(plan.childLayers[1].timing.startTime == RationalTime(value: 2, timescale: 1))
+    #expect(plan.childLayers[0].timing.inPoint == .zero)
+    #expect(plan.childLayers[1].timing.inPoint == RationalTime(value: 2, timescale: 1))
+    #expect(plan.childLayers[1].timing.outPoint == RationalTime(value: 6, timescale: 1))
     #expect(plan.nestedLayer.timing.startTime == RationalTime(value: 2, timescale: 1))
-    #expect(plan.nestedLayer.timing.outPoint == RationalTime(value: 6, timescale: 1))
+    #expect(plan.nestedLayer.timing.inPoint == RationalTime(value: 2, timescale: 1))
+    #expect(plan.nestedLayer.timing.outPoint == RationalTime(value: 8, timescale: 1))
+    #expect(plan.childComposition.duration == RationalTime(value: 6, timescale: 1))
     #expect(plan.nestedLayer.source == .composition(compositionID: newCompositionID, sourceStartTime: .zero))
 }
 
-@Test("Precompose rejects mixed compositions and external parenting dependencies")
+@Test("Precompose rejects external parenting dependencies but remaps internal parents")
 func phase16PrecomposeRejectsUnsafeDependencies() throws {
     var (document, composition, first, second) = try makePrecomposeFixture()
     second.parentLayerID = first.id
     document.layerRegistry = [first, second]
     document = try document.validated()
 
-    #expect(throws: Never.self) {
-        _ = try ProjectPrecomposePlanner.plan(
-            document: document,
-            compositionID: composition.id,
-            layerIDs: [first.id, second.id],
-            newCompositionID: VertexID(rawValue: "66000000-0000-0000-0000-000000000101"),
-            name: "Safe Parent Precomp"
-        )
-    }
+    let safePlan = try ProjectPrecomposePlanner.plan(
+        document: document,
+        compositionID: composition.id,
+        layerIDs: [first.id, second.id],
+        newCompositionID: VertexID(rawValue: "66000000-0000-0000-0000-000000000101"),
+        name: "Safe Parent Precomp"
+    )
+    #expect(safePlan.childLayers[1].parentLayerID == safePlan.childLayers[0].id)
 
     #expect(throws: ProjectError.self) {
         _ = try ProjectPrecomposePlanner.plan(
