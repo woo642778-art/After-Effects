@@ -87,3 +87,4 @@ jobs:
           path: ${{ runner.temp }}/vertex2-v17-ipad.log
           if-no-files-found: warn
           retention-days: 7
+# registered trigger
