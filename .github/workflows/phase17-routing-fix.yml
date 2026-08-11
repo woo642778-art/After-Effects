@@ -22,7 +22,6 @@ jobs:
               s=s.replace('import VertexComposition\n','import VertexComposition\nimport VertexCore\n',1)
           s=s.replace('exactTime: VertexCore.RationalTime','exactTime: RationalTime')
           p.write_text(s)
-
           p=Path('App/NativeExpandedFrameEffectProcessor.swift'); s=p.read_text()
           anchor='''    private static let legacyNativeTypes: Set<ProjectEffectType> = [
               .gaussianBlur, .fastBoxBlur, .directionalBlur, .sharpen, .median, .noiseReduction,
@@ -58,3 +57,4 @@ jobs:
           git add App/NativeFrameEffectProcessor.swift App/NativeExpandedFrameEffectProcessor.swift .github/workflows/phase17-routing-fix.yml
           git commit -m 'fix: isolate V17 GPU effects from V16 renderer'
           git push origin HEAD:agent/phase17-particles-focus-audio
+# trigger
