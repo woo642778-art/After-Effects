@@ -18,90 +18,33 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
+          import re
           p = Path('Sources/VertexProject/ProjectEffect.swift')
           s = p.read_text()
-          anchor = '''    // Keying / matte expansion
-              case lumaKey
-              case brightMatte
-              case darkMatte
-
-              public var isNativePixelEffect: Bool {'''.replace('              ','    ')
-          replacement = '''    // Keying / matte expansion
-              case lumaKey
-              case brightMatte
-              case darkMatte
-
-              // V17 particles and procedural graphics
-              case vertexParticleEmitter
-              case vertexParticleTrails
-              case vertexParticleBurst
-              case vertexParticleSnow
-              case vertexFractalNoise
-              case vertexTurbulenceField
-              case vertexProceduralGrid
-              case vertexProceduralRays
-              case vertexProceduralDots
-              case vertexPlasma
-              case vertexVoronoi
-              case vertexChecker
-              case vertexGradient
-              case vertexStarField
-
-              public var isNativePixelEffect: Bool {'''.replace('              ','    ')
+          anchor = "    // Keying / matte expansion\n    case lumaKey\n    case brightMatte\n    case darkMatte\n\n    public var isNativePixelEffect: Bool {"
+          replacement = "    // Keying / matte expansion\n    case lumaKey\n    case brightMatte\n    case darkMatte\n\n    // V17 particles and procedural graphics\n    case vertexParticleEmitter\n    case vertexParticleTrails\n    case vertexParticleBurst\n    case vertexParticleSnow\n    case vertexFractalNoise\n    case vertexTurbulenceField\n    case vertexProceduralGrid\n    case vertexProceduralRays\n    case vertexProceduralDots\n    case vertexPlasma\n    case vertexVoronoi\n    case vertexChecker\n    case vertexGradient\n    case vertexStarField\n\n    public var isNativePixelEffect: Bool {"
           if anchor not in s: raise SystemExit('ProjectEffect V17 anchor missing')
           p.write_text(s.replace(anchor, replacement, 1))
 
           p = Path('Sources/VertexProject/ProjectEffectExpansionDescriptors.swift')
           s = p.read_text()
           id_anchor = '    public static let zoom = "zoom"\n'
-          ids = id_anchor + '''    public static let seed = "seed"
-              public static let birthRate = "birthRate"
-              public static let lifetime = "lifetime"
-              public static let speed = "speed"
-              public static let gravity = "gravity"
-              public static let turbulence = "turbulence"
-              public static let density = "density"
-              public static let hue = "hue"
-'''.replace('              ','    ')
+          ids = id_anchor + '    public static let seed = "seed"\n    public static let birthRate = "birthRate"\n    public static let lifetime = "lifetime"\n    public static let speed = "speed"\n    public static let gravity = "gravity"\n    public static let turbulence = "turbulence"\n    public static let density = "density"\n    public static let hue = "hue"\n'
           if 'public static let birthRate' not in s:
               if id_anchor not in s: raise SystemExit('descriptor ID anchor missing')
               s = s.replace(id_anchor, ids, 1)
-
-          tail = '''        descriptor(.darkMatte, "Dark Matte", .keying, keywords: ["dark", "matte", "luma", "mask"], summary: "Dark Matte implemented on Vertex2's native preview/export effect path.", parameters: [scalar(ExpandedEffectParameterID.threshold, "Threshold", 0.35, 0.0...1.0), scalar(ExpandedEffectParameterID.softness, "Softness", 0.05, 0.0...0.5)])
-              ]
-          }'''.replace('              ','    ')
-          common_particle = '''scalar(ExpandedEffectParameterID.seed, "Seed", 17, 1...9999), scalar(ExpandedEffectParameterID.birthRate, "Birth Rate", 52, 1...240), scalar(ExpandedEffectParameterID.lifetime, "Lifetime", 3.2, 0.2...12), scalar(ExpandedEffectParameterID.size, "Size", 7, 1...80), scalar(ExpandedEffectParameterID.speed, "Speed", 0.24, 0...2), scalar(ExpandedEffectParameterID.gravity, "Gravity", 0.12, -2...2), scalar(ExpandedEffectParameterID.turbulence, "Turbulence", 0.2, 0...2), scalar(ExpandedEffectParameterID.density, "Density", 0.55, 0.05...1), scalar(ExpandedEffectParameterID.hue, "Hue", 0.58, 0...1), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.8, 0...2), scalar(ExpandedEffectParameterID.angle, "Angle", 0, -180...180), scalar(ExpandedEffectParameterID.centerX, "Center X", 0.5, 0...1), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.5, 0...1)'''
-          common_proc = '''scalar(ExpandedEffectParameterID.seed, "Seed", 17, 1...9999), scalar(ExpandedEffectParameterID.scale, "Scale", 24, 1...120), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.8, 0...2), scalar(ExpandedEffectParameterID.hue, "Hue", 0.58, 0...1), scalar(ExpandedEffectParameterID.angle, "Angle", 0, -180...180), scalar(ExpandedEffectParameterID.density, "Density", 0.55, 0.05...1), scalar(ExpandedEffectParameterID.size, "Size", 7, 1...80), scalar(ExpandedEffectParameterID.turbulence, "Turbulence", 0.2, 0...2), scalar(ExpandedEffectParameterID.centerX, "Center X", 0.5, 0...1), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.5, 0...1)'''
-          additions = [
-              ('vertexParticleEmitter','Vertex Particle Emitter','particle emitter birth velocity gravity turbulence'),
-              ('vertexParticleTrails','Vertex Particle Trails','particle trails motion streaks'),
-              ('vertexParticleBurst','Vertex Particle Burst','particle burst radial explosion'),
-              ('vertexParticleSnow','Vertex Particle Snow','particle snow falling procedural')]
-          proc = [
-              ('vertexFractalNoise','Vertex Fractal Noise','fractal noise procedural texture'),
-              ('vertexTurbulenceField','Vertex Turbulence Field','turbulence field procedural flow'),
-              ('vertexProceduralGrid','Vertex Procedural Grid','grid procedural generator'),
-              ('vertexProceduralRays','Vertex Procedural Rays','rays beams procedural'),
-              ('vertexProceduralDots','Vertex Procedural Dots','dots pattern procedural'),
-              ('vertexPlasma','Vertex Plasma','plasma animated procedural'),
-              ('vertexVoronoi','Vertex Voronoi','voronoi cells procedural'),
-              ('vertexChecker','Vertex Checker','checkerboard procedural'),
-              ('vertexGradient','Vertex Gradient','gradient procedural'),
-              ('vertexStarField','Vertex Star Field','stars space procedural')]
+          tail = '        descriptor(.darkMatte, "Dark Matte", .keying, keywords: ["dark", "matte", "luma", "mask"], summary: "Dark Matte implemented on Vertex2\'s native preview/export effect path.", parameters: [scalar(ExpandedEffectParameterID.threshold, "Threshold", 0.35, 0.0...1.0), scalar(ExpandedEffectParameterID.softness, "Softness", 0.05, 0.0...0.5)])\n    ]\n}'
+          common_particle = 'scalar(ExpandedEffectParameterID.seed, "Seed", 17, 1...9999), scalar(ExpandedEffectParameterID.birthRate, "Birth Rate", 52, 1...240), scalar(ExpandedEffectParameterID.lifetime, "Lifetime", 3.2, 0.2...12), scalar(ExpandedEffectParameterID.size, "Size", 7, 1...80), scalar(ExpandedEffectParameterID.speed, "Speed", 0.24, 0...2), scalar(ExpandedEffectParameterID.gravity, "Gravity", 0.12, -2...2), scalar(ExpandedEffectParameterID.turbulence, "Turbulence", 0.2, 0...2), scalar(ExpandedEffectParameterID.density, "Density", 0.55, 0.05...1), scalar(ExpandedEffectParameterID.hue, "Hue", 0.58, 0...1), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.8, 0...2), scalar(ExpandedEffectParameterID.angle, "Angle", 0, -180...180), scalar(ExpandedEffectParameterID.centerX, "Center X", 0.5, 0...1), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.5, 0...1)'
+          common_proc = 'scalar(ExpandedEffectParameterID.seed, "Seed", 17, 1...9999), scalar(ExpandedEffectParameterID.scale, "Scale", 24, 1...120), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.8, 0...2), scalar(ExpandedEffectParameterID.hue, "Hue", 0.58, 0...1), scalar(ExpandedEffectParameterID.angle, "Angle", 0, -180...180), scalar(ExpandedEffectParameterID.density, "Density", 0.55, 0.05...1), scalar(ExpandedEffectParameterID.size, "Size", 7, 1...80), scalar(ExpandedEffectParameterID.turbulence, "Turbulence", 0.2, 0...2), scalar(ExpandedEffectParameterID.centerX, "Center X", 0.5, 0...1), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.5, 0...1)'
+          particle = [('vertexParticleEmitter','Vertex Particle Emitter',['particle','emitter','birth','velocity']),('vertexParticleTrails','Vertex Particle Trails',['particle','trails','motion','streaks']),('vertexParticleBurst','Vertex Particle Burst',['particle','burst','radial']),('vertexParticleSnow','Vertex Particle Snow',['particle','snow','falling'])]
+          procedural = [('vertexFractalNoise','Vertex Fractal Noise',['fractal','noise','procedural']),('vertexTurbulenceField','Vertex Turbulence Field',['turbulence','field','procedural']),('vertexProceduralGrid','Vertex Procedural Grid',['grid','procedural']),('vertexProceduralRays','Vertex Procedural Rays',['rays','beams','procedural']),('vertexProceduralDots','Vertex Procedural Dots',['dots','pattern','procedural']),('vertexPlasma','Vertex Plasma',['plasma','animated','procedural']),('vertexVoronoi','Vertex Voronoi',['voronoi','cells','procedural']),('vertexChecker','Vertex Checker',['checkerboard','procedural']),('vertexGradient','Vertex Gradient',['gradient','procedural']),('vertexStarField','Vertex Star Field',['stars','space','procedural'])]
           lines = ['        descriptor(.darkMatte, "Dark Matte", .keying, keywords: ["dark", "matte", "luma", "mask"], summary: "Dark Matte implemented on Vertex2\'s native preview/export effect path.", parameters: [scalar(ExpandedEffectParameterID.threshold, "Threshold", 0.35, 0.0...1.0), scalar(ExpandedEffectParameterID.softness, "Softness", 0.05, 0.0...0.5)]),']
-          for case,name,keywords in additions:
-              lines.append(f'        descriptor(.{case}, "{name}", .stylize, keywords: {keywords.split()!r}.map(String.init), summary: "Vertex-owned deterministic GPU particle simulation evaluated from exact composition time.", parameters: [{common_particle}]),')
-          for idx,(case,name,keywords) in enumerate(proc):
-              suffix=',' if idx < len(proc)-1 else ''
-              lines.append(f'        descriptor(.{case}, "{name}", .stylize, keywords: {keywords.split()!r}.map(String.init), summary: "Vertex-owned deterministic GPU procedural generator evaluated from exact composition time.", parameters: [{common_proc}]){suffix}')
-          # Python repr uses single quotes, invalid Swift: normalize keyword expressions into literal arrays.
-          import re
-          rendered='\n'.join(lines)
-          rendered=re.sub(r"\[([^\]]+)\]\.map\(String\.init\)", lambda m: '['+', '.join('"'+x.strip().strip("\'")+'"' for x in m.group(1).split(','))+']', rendered)
-          replacement_tail = rendered + '\n    ]\n}'
+          for case,name,keys in particle:
+              kw=', '.join('"'+k+'"' for k in keys); lines.append(f'        descriptor(.{case}, "{name}", .stylize, keywords: [{kw}], summary: "Vertex-owned deterministic GPU particle simulation evaluated from exact composition time.", parameters: [{common_particle}]),')
+          for i,(case,name,keys) in enumerate(procedural):
+              kw=', '.join('"'+k+'"' for k in keys); suffix=',' if i<len(procedural)-1 else ''; lines.append(f'        descriptor(.{case}, "{name}", .stylize, keywords: [{kw}], summary: "Vertex-owned deterministic GPU procedural generator evaluated from exact composition time.", parameters: [{common_proc}]){suffix}')
           if tail not in s: raise SystemExit('descriptor tail anchor missing')
-          p.write_text(s.replace(tail, replacement_tail, 1))
+          p.write_text(s.replace(tail, '\n'.join(lines)+'\n    ]\n}', 1))
           PY
           git diff --check
       - name: Commit and remove applicator
@@ -113,3 +56,4 @@ jobs:
           git add Sources/VertexProject/ProjectEffect.swift Sources/VertexProject/ProjectEffectExpansionDescriptors.swift .github/workflows/phase17-model-apply.yml
           git commit -m 'feat: add V17 particle and procedural effect descriptors'
           git push origin HEAD:agent/phase17-particles-focus-audio
+# trigger registered workflow
