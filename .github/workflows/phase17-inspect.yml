@@ -1,0 +1,45 @@
+name: Phase17 Repository Inspection
+on:
+  push:
+    branches:
+      - agent/phase17-particles-focus-audio
+    paths:
+      - .github/workflows/phase17-inspect.yml
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase17-particles-focus-audio
+          fetch-depth: 0
+      - name: Inspect Focus Music, audio assets, effects, and V17 roadmap
+        run: |
+          set -euo pipefail
+          {
+            echo '# Phase17 inspection'
+            echo
+            echo '## Focus/music references'
+            grep -RniE 'focus.?music|focus music|AVAudio|AudioPlayer|music|playlist|ambient|song' App Sources Tests Documentation docs project.yml 2>/dev/null | head -n 500 || true
+            echo
+            echo '## Audio-like files'
+            find . -type f \( -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.wav' -o -iname '*.aac' -o -iname '*.caf' -o -iname '*.aiff' \) -not -path './.git/*' | sort || true
+            echo
+            echo '## V17 / particles / procedural references'
+            grep -RniE 'V17|v17|particle|procedural|Phase 17|phase17' Documentation docs App Sources Tests 2>/dev/null | head -n 700 || true
+            echo
+            echo '## Relevant filenames'
+            find App Sources Tests Documentation docs -type f 2>/dev/null | grep -Ei 'focus|music|audio|particle|procedural|effect|roadmap|phase17|v17' | sort | head -n 700 || true
+          } > phase17-inspection.md
+      - name: Commit inspection report and remove workflow
+        run: |
+          set -euo pipefail
+          rm .github/workflows/phase17-inspect.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add phase17-inspection.md .github/workflows/phase17-inspect.yml
+          git commit -m 'chore: inspect focus music and V17 roadmap'
+          git push origin HEAD:agent/phase17-particles-focus-audio
+# registered trigger
