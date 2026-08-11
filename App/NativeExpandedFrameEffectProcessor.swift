@@ -298,14 +298,14 @@ struct NativeExpandedFrameEffectProcessor {
         case length, count, decay, chroma, size, frequency
     }
 
-    private func scalar(_ effect: ProjectEffect, _ id: Parameter) throws -> Double {
+    private func scalar(_ effect: ProjectEffect, _ id: Parameter) throws -> CGFloat {
         guard case .scalar(let value)? = effect.parameter(id: id.rawValue)?.value, value.isFinite else {
             throw CompositionError.graphCompilationFailed("Expanded effect parameter is missing or invalid: \(id.rawValue).")
         }
-        return value
+        return CGFloat(value)
     }
 
-    private func radians(_ degrees: Double) -> Double { degrees * .pi / 180 }
+    private func radians(_ degrees: CGFloat) -> CGFloat { degrees * .pi / 180 }
 
     private func point(_ effect: ProjectEffect, in extent: CGRect) throws -> CGPoint {
         CGPoint(
@@ -347,7 +347,7 @@ struct NativeExpandedFrameEffectProcessor {
         try apply("CIMultiplyBlendMode", input: foreground, values: [kCIInputBackgroundImageKey: background])
     }
 
-    private func scaleRGB(_ image: CIImage, amount: Double) throws -> CIImage {
+    private func scaleRGB(_ image: CIImage, amount: CGFloat) throws -> CIImage {
         try apply("CIColorMatrix", input: image, values: [
             "inputRVector": CIVector(x: amount, y: 0, z: 0, w: 0),
             "inputGVector": CIVector(x: 0, y: amount, z: 0, w: 0),
@@ -356,7 +356,7 @@ struct NativeExpandedFrameEffectProcessor {
         ])
     }
 
-    private func threshold(_ image: CIImage, value: Double) throws -> CIImage {
+    private func threshold(_ image: CIImage, value: CGFloat) throws -> CIImage {
         if CIFilter(name: "CIColorThreshold") != nil {
             return try apply("CIColorThreshold", input: image, values: ["inputThreshold": value])
         }
@@ -369,7 +369,7 @@ struct NativeExpandedFrameEffectProcessor {
         ])
     }
 
-    private func lumaMask(_ image: CIImage, threshold value: Double, softness: Double = 0, invert: Bool = false) throws -> CIImage {
+    private func lumaMask(_ image: CIImage, threshold value: CGFloat, softness: CGFloat = 0, invert: Bool = false) throws -> CIImage {
         var gray = try apply("CIColorControls", input: image, values: [kCIInputSaturationKey: 0])
         if invert { gray = try apply("CIColorInvert", input: gray) }
         var mask = try threshold(gray, value: value)
