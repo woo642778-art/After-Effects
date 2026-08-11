@@ -1,0 +1,34 @@
+name: Apply expanded effect try fixes
+on:
+  push:
+    paths:
+      - .github/workflows/apply-expanded-effect-try-fixes.yml
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase16-effects-expansion
+      - name: Add explicit try to throwing parameter helpers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('App/NativeExpandedFrameEffectProcessor.swift')
+          s = p.read_text()
+          for name in ('scalar', 'center', 'point', 'radialDistortionValues', 'tileValues'):
+              s = re.sub(rf'(?<!try )\b{name}\(effect,', f'try {name}(effect,', s)
+          p.write_text(s)
+          PY
+          grep -nE 'let (y|half|lower|upper|inset|c|length|a|r|size|spacing|intensity|amount) = ' App/NativeExpandedFrameEffectProcessor.swift || true
+      - name: Commit patch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add App/NativeExpandedFrameEffectProcessor.swift
+          git commit -m 'fix: mark expanded effect parameter reads as throwing'
+          git push origin HEAD:agent/phase16-effects-expansion
