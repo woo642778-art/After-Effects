@@ -11,10 +11,6 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case removeAIAsset(id: VertexID)
     case registerBakedAIEffect(ProjectAIEffectBakeRegistration)
 
-    // Transitional non-persistent Render Lab compatibility while the Phase 6
-    // workspace is being reconnected. These mutate actual composition/layer
-    // state through ProjectDocument.renderSettings and are removed from UI use
-    // by the end of Phase 6 reintegration.
     case setRenderParameter(ProjectRenderParameter, value: Double)
     case setRenderBoolean(ProjectRenderBooleanParameter, value: Bool)
     case setOutputDimensions(width: Int, height: Int)
@@ -30,7 +26,6 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setCompositionWorkArea(id: VertexID, workArea: ProjectWorkArea?)
     case setCompositionMarkers(id: VertexID, markers: [ProjectMarker])
     case applyTimelineEdit(compositionID: VertexID, result: TimelineProjectMutation)
-    case precompose(ProjectPrecomposePlan)
 
     case insertLayer(ProjectLayer, index: Int)
     case removeLayer(id: VertexID)
