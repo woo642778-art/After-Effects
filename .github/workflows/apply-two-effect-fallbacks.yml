@@ -1,0 +1,37 @@
+name: Apply two expanded effect fallbacks
+on:
+  push:
+    paths:
+      - .github/workflows/apply-two-effect-fallbacks.yml
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase16-effects-expansion
+      - name: Replace two unstable Core Image filters
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('App/NativeExpandedFrameEffectProcessor.swift')
+          s = p.read_text()
+          old_wrap = '''        case .circularWrap:\n            return try apply("CICircularWrap", input: input, values: [\n                "inputCenter": try center(effect, in: extent),\n                "inputRadius": try scalar(effect, .radius),\n                "inputAngle": radians(try scalar(effect, .angle))\n            ])\n'''
+          new_wrap = '''        case .circularWrap:\n            // Vertex-owned circular coordinate wrap. CIVortexDistortion is used as\n            // the stable public primitive because CICircularWrap can produce an\n            // unrenderable output on current iPadOS simulator/device pipelines.\n            return try apply("CIVortexDistortion", input: input, values: [\n                "inputCenter": try center(effect, in: extent),\n                "inputRadius": try scalar(effect, .radius),\n                "inputAngle": radians(try scalar(effect, .angle))\n            ])\n'''
+          old_six = '''        case .sixfoldReflectedTile:\n            return try apply("CISixfoldReflectedTile", input: input, values: tileValues(effect, extent: extent))\n'''
+          new_six = '''        case .sixfoldReflectedTile:\n            // Build the six-way reflected look from a supported kaleidoscope\n            // primitive. Width controls source scale around the chosen center so\n            // every exposed parameter remains functional.\n            let tileCenter = try point(effect, in: extent)\n            let tileWidth = max(1, try scalar(effect, .width))\n            let sourceScale = max(0.15, min(4.0, 100.0 / tileWidth))\n            var transform = CGAffineTransform(translationX: tileCenter.x, y: tileCenter.y)\n            transform = transform.scaledBy(x: sourceScale, y: sourceScale)\n            transform = transform.translatedBy(x: -tileCenter.x, y: -tileCenter.y)\n            let prepared = input.transformed(by: transform)\n            return try apply("CIKaleidoscope", input: prepared, values: [\n                "inputCount": 6.0,\n                "inputCenter": CIVector(x: tileCenter.x, y: tileCenter.y),\n                "inputAngle": radians(try scalar(effect, .angle))\n            ])\n'''
+          if old_wrap not in s: raise SystemExit('circularWrap source block not found')
+          if old_six not in s: raise SystemExit('sixfoldReflectedTile source block not found')
+          s = s.replace(old_wrap, new_wrap, 1).replace(old_six, new_six, 1)
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add App/NativeExpandedFrameEffectProcessor.swift
+          git commit -m 'fix: replace unstable wrap and reflected tile filters'
+          git push origin HEAD:agent/phase16-effects-expansion
