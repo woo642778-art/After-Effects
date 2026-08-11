@@ -53,6 +53,8 @@ targets:
       - package: Vertex
         product: VertexAIAVFoundation
       - package: Vertex
+        product: VertexTrackingVision
+      - package: Vertex
         product: Vertex3D
       - package: Vertex
         product: VertexRender3DMetal
@@ -65,8 +67,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects
         PRODUCT_NAME: Vertex2
         PRODUCT_MODULE_NAME: Vertex
-        MARKETING_VERSION: 12.0.0
-        CURRENT_PROJECT_VERSION: 12
+        MARKETING_VERSION: 14.0.0
+        CURRENT_PROJECT_VERSION: 14
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Vertex2
@@ -114,6 +116,8 @@ targets:
         product: VertexAICoreML
       - package: Vertex
         product: VertexAIAVFoundation
+      - package: Vertex
+        product: VertexTrackingVision
       - package: Vertex
         product: Vertex3D
       - package: Vertex

@@ -35,12 +35,13 @@ private func aiAsset() -> ProjectAIAsset {
     )
 }
 
-@Test("New projects use schema 5 and the Vertex2 12 app version")
+@Test("New projects use schema 5 and the current app version")
 func newProjectUsesCurrentPhase12Schema() throws {
     let document = try aiDocument()
     #expect(ProjectDocument.currentSchemaVersion == 5)
-    #expect(ProjectDocument.currentAppVersion == "12.0.0")
     #expect(document.schemaVersion == ProjectDocument.currentSchemaVersion)
+    #expect(document.metadata.createdByAppVersion == ProjectDocument.currentAppVersion)
+    #expect(document.metadata.lastSavedByAppVersion == ProjectDocument.currentAppVersion)
     #expect(document.aiAssetRegistry.isEmpty)
 }
 

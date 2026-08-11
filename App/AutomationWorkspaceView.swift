@@ -13,6 +13,7 @@ struct AutomationWorkspaceView: View {
     @State private var commandError: String?
     @State private var isFileImporterPresented = false
     @State private var photoSelection: [PhotosPickerItem] = []
+    @State private var isTrackingStudioPresented = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -41,6 +42,12 @@ struct AutomationWorkspaceView: View {
             case .failure(let error):
                 commandError = error.localizedDescription
             }
+        }
+        .sheet(isPresented: $isTrackingStudioPresented) {
+            TrackingStudioView(editorState: editorState) {
+                isTrackingStudioPresented = false
+            }
+            .environmentObject(workspace)
         }
     }
 
@@ -130,6 +137,32 @@ struct AutomationWorkspaceView: View {
                         commandButton("Ripple Delete", systemImage: "arrow.left.and.right") {
                             rippleDelete()
                         }
+                    }
+
+                    commandGroup("Tracking & Rotoscope") {
+                        Button {
+                            isTrackingStudioPresented = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "scope").frame(width: 18)
+                                Text("Open Tracking Studio")
+                                Spacer()
+                                Text("Vision")
+                                    .font(.caption2)
+                                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AfterEffectsTheme.primaryText)
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(AfterEffectsTheme.elevatedPanel, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!selectedLayerCanTrack)
+
+                        Text("Runs real source-frame analysis and can write follow, stabilization, and tracked Bezier-mask channels back into the selected layer.")
+                            .font(.caption2)
+                            .foregroundStyle(AfterEffectsTheme.secondaryText)
                     }
 
                     commandGroup("Rename") {
@@ -282,6 +315,12 @@ struct AutomationWorkspaceView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(Color.white.opacity(0.06), in: Capsule())
+    }
+
+    private var selectedLayerCanTrack: Bool {
+        guard let layer = workspace.selectedLayer, !layer.locked else { return false }
+        if case .media = layer.source { return true }
+        return false
     }
 
     private func splitAtCurrentTime() {
