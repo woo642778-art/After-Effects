@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/phase14-runtime
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Select Xcode and install XcodeGen
         run: |
@@ -106,7 +107,7 @@ jobs:
           cp -R "$APP" Payload/Vertex2.app
           /usr/bin/zip -qry artifacts/Vertex2-14.0.0-unsigned.ipa Payload
           shasum -a 256 artifacts/Vertex2-14.0.0-unsigned.ipa | tee artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
-          printf '%s\n' '${{ github.sha }}' > artifacts/commit-sha.txt
+          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
 
       - name: Upload v14 IPA artifact
         uses: actions/upload-artifact@v4
@@ -126,11 +127,12 @@ jobs:
           set -euo pipefail
           TAG='v14.0.0'
           TITLE='Vertex2 14.0.0'
+          TARGET='${{ github.event.pull_request.head.sha || github.sha }}'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md
             gh release upload "$TAG" artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256 --clobber
           else
-            gh release create "$TAG" --target '${{ github.sha }}' --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
+            gh release create "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
           fi
 
       - name: Upload validation and build logs
