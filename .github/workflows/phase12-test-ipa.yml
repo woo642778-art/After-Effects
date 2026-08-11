@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate-build-release:
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,6 +71,50 @@ jobs:
           set -euo pipefail
           bash Tools/generate_app_assets.sh
           xcodegen generate
+
+      - name: Select and boot newest iPad Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              match = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in devices:
+                  name = device.get('name', '')
+                  if device.get('isAvailable') and name.startswith('iPad'):
+                      candidates.append((version, 1 if 'Pro' in name else 0, name, device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPad Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][3])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Run iPad app regression tests
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataV15Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test 2>&1 | tee "$RUNNER_TEMP/vertex2-v15-ipad-tests.log"
 
       - name: Build unsigned iPad Release app
         env:
@@ -151,6 +195,7 @@ jobs:
           name: Vertex2-15.0.0-validation-build-logs
           path: |
             ${{ runner.temp }}/vertex2-v15-swift-tests.log
+            ${{ runner.temp }}/vertex2-v15-ipad-tests.log
             ${{ runner.temp }}/vertex2-v15-release-build.log
           if-no-files-found: warn
           retention-days: 14
