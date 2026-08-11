@@ -2,18 +2,14 @@ import CoreGraphics
 import CoreImage
 import Foundation
 import VertexComposition
+import VertexCore
 import VertexMedia
 import VertexProject
 
 struct NativeFrameEffectProcessor {
-    /// Keep one Core Image context per worker thread. This preserves the expensive
-    /// context/Metal state across frames without sharing a non-Sendable CIContext
-    /// across Swift concurrency domains.
     private static let contextThreadKey = "com.vertex2.native-effects.ci-context"
     private static var context: CIContext {
-        if let cached = Thread.current.threadDictionary[contextThreadKey] as? CIContext {
-            return cached
-        }
+        if let cached = Thread.current.threadDictionary[contextThreadKey] as? CIContext { return cached }
         let created = CIContext(options: [.cacheIntermediates: true])
         Thread.current.threadDictionary[contextThreadKey] = created
         return created
@@ -27,7 +23,6 @@ struct NativeFrameEffectProcessor {
         guard let input = CIImage(data: request.input.data) else {
             throw CompositionError.graphCompilationFailed("Native effect input is not a decodable image.")
         }
-
         let output = try filteredImage(effect: request.effect, input: input, exactTime: request.exactCompositionTime).cropped(to: input.extent)
         guard let data = Self.context.pngRepresentation(of: output, format: .RGBA8, colorSpace: Self.colorSpace, options: [:]) else {
             throw CompositionError.graphCompilationFailed("Native effect output could not be encoded as PNG.")
@@ -35,13 +30,9 @@ struct NativeFrameEffectProcessor {
         return try PortableImage(data: data, format: .png, pixelSize: request.input.pixelSize)
     }
 
-    private func filteredImage(effect: ProjectEffect, input: CIImage, exactTime: VertexCore.RationalTime) throws -> CIImage {
-        if let generated = try V17GPUFrameEffectProcessor().filteredImage(effect: effect, input: input, exactTime: exactTime) {
-            return generated
-        }
-        if let expanded = try NativeExpandedFrameEffectProcessor().filteredImage(effect: effect, input: input) {
-            return expanded
-        }
+    private func filteredImage(effect: ProjectEffect, input: CIImage, exactTime: RationalTime) throws -> CIImage {
+        if let generated = try V17GPUFrameEffectProcessor().filteredImage(effect: effect, input: input, exactTime: exactTime) { return generated }
+        if let expanded = try NativeExpandedFrameEffectProcessor().filteredImage(effect: effect, input: input) { return expanded }
 
         let filterName: String
         switch effect.type {
@@ -72,11 +63,8 @@ struct NativeFrameEffectProcessor {
             throw CompositionError.graphCompilationFailed("Expanded native effect was not handled: \(effect.type.rawValue).")
         }
 
-        guard let filter = CIFilter(name: filterName) else {
-            throw CompositionError.graphCompilationFailed("Core Image filter is unavailable: \(filterName).")
-        }
+        guard let filter = CIFilter(name: filterName) else { throw CompositionError.graphCompilationFailed("Core Image filter is unavailable: \(filterName).") }
         filter.setValue(input, forKey: kCIInputImageKey)
-
         switch effect.type {
         case .gaussianBlur: filter.setValue(try scalar(effect, GaussianBlurParameterID.radius), forKey: kCIInputRadiusKey)
         case .fastBoxBlur: filter.setValue(try scalar(effect, FastBoxBlurParameterID.radius), forKey: kCIInputRadiusKey)
@@ -120,10 +108,7 @@ struct NativeFrameEffectProcessor {
         case .depthMap, .cutout, .upscale, .restore: break
         default: break
         }
-
-        guard let output = filter.outputImage else {
-            throw CompositionError.graphCompilationFailed("Core Image filter produced no output: \(filterName).")
-        }
+        guard let output = filter.outputImage else { throw CompositionError.graphCompilationFailed("Core Image filter produced no output: \(filterName).") }
         return output
     }
 
