@@ -75,3 +75,4 @@ METAL
           git add Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal .github/workflows/phase17-particle-shader-apply.yml
           git commit -m 'feat: add V17 Metal particle shaders'
           git push origin HEAD:agent/phase17-particles-music-effects
+# trigger
