@@ -28,14 +28,100 @@ public enum ProjectEffectType: String, Codable, CaseIterable, Sendable {
     case cartoon
     case twirl
 
+    // Blur & Sharpen expansion
+    case discBlur
+    case zoomBlur
+    case bokehBlur
+    case unsharpMask
+    case morphologyGradient
+    case morphologyMinimum
+    case morphologyMaximum
+    case morphologyRectangleMinimum
+    case morphologyRectangleMaximum
+
+    // Color / Channel expansion
+    case temperatureTint
+    case colorMonochrome
+    case colorClamp
+    case photoChrome
+    case photoFade
+    case photoInstant
+    case photoMono
+    case photoNoir
+    case photoProcess
+    case photoTonal
+    case photoTransfer
+    case linearToSRGB
+    case sRGBToLinear
+    case colorThreshold
+    case colorThresholdOtsu
+
+    // Stylize / Halftone expansion
+    case crystallize
+    case edgeWork
+    case gloom
+    case hexagonalPixelate
+    case lineOverlay
+    case pointillize
+    case circularScreen
+    case dotScreen
+    case hatchedScreen
+    case lineScreen
+    case cmykHalftone
+    case depthOfField
+
+    // Distortion expansion
+    case bumpDistortion
+    case bumpLinear
+    case circleSplash
+    case circularWrap
+    case droste
+    case holeDistortion
+    case lightTunnel
+    case pinchDistortion
+    case stretchCrop
+    case torusLens
+    case vortexDistortion
+    case glassLozenge
+
+    // Tile expansion
+    case kaleidoscope
+    case opTile
+    case triangleKaleidoscope
+    case sixfoldReflectedTile
+    case twelvefoldReflectedTile
+    case parallelogramTile
+    case triangleTile
+    case fourfoldReflectedTile
+    case fourfoldRotatedTile
+    case fourfoldTranslatedTile
+    case eightfoldReflectedTile
+    case glideReflectedTile
+    case sixfoldRotatedTile
+
+    // Vertex2 clean-room composites
+    case vertexAuraGlow
+    case vertexDarkGlow
+    case vertexEdgeGlow
+    case vertexHalation
+    case vertexFilmGrain
+    case vertexScanlines
+    case vertexRGBSplit
+    case vertexPrismBlur
+    case vertexLightLeak
+    case vertexSunRays
+
+    // Keying / matte expansion
+    case lumaKey
+    case brightMatte
+    case darkMatte
+
     public var isNativePixelEffect: Bool {
         switch self {
-        case .gaussianBlur, .fastBoxBlur, .directionalBlur, .sharpen, .median, .noiseReduction,
-             .exposure, .colorControls, .hueAdjust, .vibrance, .gammaAdjust, .highlightShadow,
-             .sepiaTone, .invert, .posterize, .mosaic, .findEdges, .glow, .vignette, .cartoon, .twirl:
-            true
         case .depthMap, .cutout, .upscale, .restore:
             false
+        default:
+            true
         }
     }
 }
