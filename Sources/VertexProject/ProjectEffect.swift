@@ -116,6 +116,22 @@ public enum ProjectEffectType: String, Codable, CaseIterable, Sendable {
     case brightMatte
     case darkMatte
 
+    // V17 particles and procedural graphics
+    case vertexParticleEmitter
+    case vertexParticleTrails
+    case vertexParticleBurst
+    case vertexParticleSnow
+    case vertexFractalNoise
+    case vertexTurbulenceField
+    case vertexProceduralGrid
+    case vertexProceduralRays
+    case vertexProceduralDots
+    case vertexPlasma
+    case vertexVoronoi
+    case vertexChecker
+    case vertexGradient
+    case vertexStarField
+
     public var isNativePixelEffect: Bool {
         switch self {
         case .depthMap, .cutout, .upscale, .restore:
