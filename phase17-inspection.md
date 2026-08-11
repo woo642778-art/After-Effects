@@ -1,6 +1,28 @@
 # Phase17 inspection
 
 ## Focus/music references
+App/FocusMusicView.swift:3:struct FocusMusicView: View {
+App/FocusMusicView.swift:4:    @EnvironmentObject private var player: FocusMusicPlayer
+App/FocusMusicView.swift:27:                Image(systemName: "music.note")
+App/FocusMusicView.swift:32:                Text("Focus Music")
+App/FocusMusicView.swift:34:                Text("Original offline music for long editing sessions")
+App/FocusMusicView.swift:73:                .help(player.isPlaying ? "Pause Focus Music" : "Play Focus Music")
+App/FocusMusicView.swift:94:                .accessibilityLabel("Focus Music volume")
+App/FocusMusicView.swift:107:                ForEach(FocusMusicTrack.allCases) { track in
+App/FocusMusicView.swift:110:                            Image(systemName: player.selectedTrack == track ? "waveform.circle.fill" : "music.note.list")
+App/FocusMusicView.swift:146:            Label("Music keeps playing while you work anywhere in Vertex2.", systemImage: "arrow.triangle.2.circlepath")
+App/FocusMusicView.swift:147:            Label("Focus Music is separate from timeline audio and is never exported.", systemImage: "square.and.arrow.up")
+App/AEWorkspaceChrome.swift:53:    @EnvironmentObject private var focusMusic: FocusMusicPlayer
+App/AEWorkspaceChrome.swift:55:    @State private var isFocusMusicPresented = false
+App/AEWorkspaceChrome.swift:88:            Button { isFocusMusicPresented.toggle() } label: {
+App/AEWorkspaceChrome.swift:89:                Image(systemName: focusMusic.isPlaying ? "music.note.list" : "music.note")
+App/AEWorkspaceChrome.swift:91:            .buttonStyle(AEToolButtonStyle(isActive: focusMusic.isPlaying))
+App/AEWorkspaceChrome.swift:92:            .help("Focus Music")
+App/AEWorkspaceChrome.swift:93:            .popover(isPresented: $isFocusMusicPresented, arrowEdge: .top) {
+App/AEWorkspaceChrome.swift:94:                FocusMusicView()
+App/VertexApp.swift:6:    @StateObject private var focusMusic: FocusMusicPlayer
+App/VertexApp.swift:12:        _focusMusic = StateObject(wrappedValue: FocusMusicPlayer())
+App/VertexApp.swift:32:            .environmentObject(focusMusic)
 App/FocusMusicPlayer.swift:7:enum FocusMusicTrack: String, CaseIterable, Identifiable, Sendable {
 App/FocusMusicPlayer.swift:41:    fileprivate var configuration: FocusMusicConfiguration {
 App/FocusMusicPlayer.swift:44:            FocusMusicConfiguration(rootMIDI: 50, progression: [0, 5, 3, 7], chordIntervals: [0, 3, 7, 10], bpm: 72, brightness: 0.16, air: 0.0018, pluck: 0.050, phase: 0.1)
@@ -37,28 +59,6 @@ App/FocusMusicPlayer.swift:290:                self.audioPlayer?.stop()
 App/FocusMusicPlayer.swift:291:                self.audioPlayer = player
 App/FocusMusicPlayer.swift:308:        let session = AVAudioSession.sharedInstance()
 App/FocusMusicPlayer.swift:309:        try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-App/FocusMusicView.swift:3:struct FocusMusicView: View {
-App/FocusMusicView.swift:4:    @EnvironmentObject private var player: FocusMusicPlayer
-App/FocusMusicView.swift:27:                Image(systemName: "music.note")
-App/FocusMusicView.swift:32:                Text("Focus Music")
-App/FocusMusicView.swift:34:                Text("Original offline music for long editing sessions")
-App/FocusMusicView.swift:73:                .help(player.isPlaying ? "Pause Focus Music" : "Play Focus Music")
-App/FocusMusicView.swift:94:                .accessibilityLabel("Focus Music volume")
-App/FocusMusicView.swift:107:                ForEach(FocusMusicTrack.allCases) { track in
-App/FocusMusicView.swift:110:                            Image(systemName: player.selectedTrack == track ? "waveform.circle.fill" : "music.note.list")
-App/FocusMusicView.swift:146:            Label("Music keeps playing while you work anywhere in Vertex2.", systemImage: "arrow.triangle.2.circlepath")
-App/FocusMusicView.swift:147:            Label("Focus Music is separate from timeline audio and is never exported.", systemImage: "square.and.arrow.up")
-App/VertexApp.swift:6:    @StateObject private var focusMusic: FocusMusicPlayer
-App/VertexApp.swift:12:        _focusMusic = StateObject(wrappedValue: FocusMusicPlayer())
-App/VertexApp.swift:32:            .environmentObject(focusMusic)
-App/AEWorkspaceChrome.swift:53:    @EnvironmentObject private var focusMusic: FocusMusicPlayer
-App/AEWorkspaceChrome.swift:55:    @State private var isFocusMusicPresented = false
-App/AEWorkspaceChrome.swift:88:            Button { isFocusMusicPresented.toggle() } label: {
-App/AEWorkspaceChrome.swift:89:                Image(systemName: focusMusic.isPlaying ? "music.note.list" : "music.note")
-App/AEWorkspaceChrome.swift:91:            .buttonStyle(AEToolButtonStyle(isActive: focusMusic.isPlaying))
-App/AEWorkspaceChrome.swift:92:            .help("Focus Music")
-App/AEWorkspaceChrome.swift:93:            .popover(isPresented: $isFocusMusicPresented, arrowEdge: .top) {
-App/AEWorkspaceChrome.swift:94:                FocusMusicView()
 Sources/Vertex3D/Scene3DTypes.swift:128:    case ambient
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:53:Boris FX Continuum|BCC Lights|BCC+ Ambient Light
 Tests/VertexAppTests/FocusMusicTests.swift:5:@Test func focusMusicCatalogHasDistinctOriginalWorkTracks() {
@@ -83,6 +83,13 @@ docs/superpowers/plans/2026-08-08-vertex2-11-ae-parity-time-engine.md:430:Use `A
 ## Audio-like files
 
 ## V17 / particles / procedural references
+Documentation/PROJECT_PERSISTENCE_ARCHITECTURE.md:153:Phase 5 does not claim layers/compositions, continuous playback, timeline editing, video export, motion keyframes, retiming, masks, tracking, AI cutout, shape or text animation, professional color/audio, particles, node compositing, or 3D.
+Documentation/PHASE_4_COMPLETION.md:85:Not implemented: continuous playback, timeline editing, multilayer composition, video export, project persistence, general effects, keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, nodes, or 3D.
+Documentation/PHASE_5_COMPLETION.md:68:Phase 5 does not implement layers/compositions, continuous playback, timeline editing, video export, effects, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, nodes, or 3D.
+Documentation/GPU_RENDER_GRAPH_ARCHITECTURE.md:128:Phase 4 does not implement continuous video playback, temporal effects, multilayer composition, video export, render caching, masks, motion blur, HDR grading, shape rasterization, text, tracking, AI, particles, node editing, or 3D.
+Documentation/HANDOFF.md:87:- Do not claim continuous playback, video export, motion, tracking, AI, text/shape engines, professional color/audio, particles, nodes, or 3D until implemented and tested.
+Documentation/PRODUCT_VISION.md:12:- Node Video's procedural power without forcing every user into a difficult node-only workflow.
+Documentation/ROADMAP_28_PHASES.md:26:| 17 | 17.0.0 | Particles and procedural graphics | Deterministic GPU particles, emitters, forces, turbulence, trails, procedural/noise generators |
 Documentation/ROADMAP_7_TO_26.md:26:5. Add particles, nodes, AI, asset infrastructure, and 3D.
 Documentation/ROADMAP_7_TO_26.md:80:The exact Swift API is determined during the Phase 7 design, but animation cannot be hard-coded only for transforms. Later effects, masks, text, lights, particles, color controls, and other properties must be able to reuse the same channel/keyframe engine.
 Documentation/ROADMAP_7_TO_26.md:326:## 17.0.0 — Particles and Procedural Graphics
@@ -90,27 +97,24 @@ Documentation/ROADMAP_7_TO_26.md:334:- GPU particle system.
 Documentation/ROADMAP_7_TO_26.md:336:- Particle lifetime and birth controls.
 Documentation/ROADMAP_7_TO_26.md:342:- Sprite and procedural particle rendering.
 Documentation/ROADMAP_7_TO_26.md:344:- Procedural generators.
-Documentation/PHASE_5_COMPLETION.md:68:Phase 5 does not implement layers/compositions, continuous playback, timeline editing, video export, effects, motion keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, nodes, or 3D.
-Documentation/PHASE_4_COMPLETION.md:85:Not implemented: continuous playback, timeline editing, multilayer composition, video export, project persistence, general effects, keyframes, retiming, masks, tracking, AI cutout, shapes, text animation, professional color/audio, particles, nodes, or 3D.
-Documentation/PROJECT_PERSISTENCE_ARCHITECTURE.md:153:Phase 5 does not claim layers/compositions, continuous playback, timeline editing, video export, motion keyframes, retiming, masks, tracking, AI cutout, shape or text animation, professional color/audio, particles, node compositing, or 3D.
 Documentation/GPU_SOURCE_AUDIT.md:21:MetalPetal demonstrates mature separation between image descriptions, kernels, render context, and output. Its effect catalog and texture-management work remain important references for Phase 17 and later performance phases.
 Documentation/WORK_LOG.md:178:Media selection, inspection, thumbnail decoding, waveform extraction, branding, startup, and first-run Telegram behavior are real. The app does not yet provide playback, timeline editing, multilayer rendering, video export, effects, motion, retiming, masks, tracking, AI cutout, shape tools, text animation, color grading, audio effects, particles, node compositing, or 3D.
-Documentation/HANDOFF.md:87:- Do not claim continuous playback, video export, motion, tracking, AI, text/shape engines, professional color/audio, particles, nodes, or 3D until implemented and tested.
-Documentation/GPU_RENDER_GRAPH_ARCHITECTURE.md:128:Phase 4 does not implement continuous video playback, temporal effects, multilayer composition, video export, render caching, masks, motion blur, HDR grading, shape rasterization, text, tracking, AI, particles, node editing, or 3D.
-Documentation/PRODUCT_VISION.md:12:- Node Video's procedural power without forcing every user into a difficult node-only workflow.
-Documentation/ROADMAP_28_PHASES.md:26:| 17 | 17.0.0 | Particles and procedural graphics | Deterministic GPU particles, emitters, forces, turbulence, trails, procedural/noise generators |
-docs/superpowers/plans/2026-08-08-vertex2-11-ae-parity-time-engine.md:534:- **Truthfulness:** Unsupported future Color/Expression/Tracking/Paint/Particle/advanced 3D roadmap features are not represented as completed 11.0 functionality.
-docs/superpowers/specs/2026-08-05-phase-5-project-persistence-design.md:9:Phase 5 implements project persistence, command history, recovery, migration, and media relinking. It does not implement a timeline, layer compositor, continuous playback, video export, general effects, motion, tracking, AI cutout, shape or text animation, professional color or audio tools, particles, nodes, or 3D.
-docs/superpowers/specs/2026-08-05-phase-5-project-persistence-design.md:420:Phase 5 does not claim timeline editing, layers, compositions with rendered contents, continuous playback, video export, general effect stacks, animation channels, masks, tracking, AI segmentation, vector shapes, text motion, color grading, audio processing, particles, node compositing, or 3D.
 docs/superpowers/specs/2026-08-08-vertex2-11-ae-parity-time-engine-design.md:14:11.0 must not ship fake controls. A control is present only when its data path is real or when it is an explicitly informative state such as unavailable/unsupported. Future Color, Expression, Tracking, Paint, Particle, and later roadmap engines stay scheduled for later releases instead of being represented as working 11.0 functionality.
 docs/superpowers/specs/2026-08-08-vertex2-11-ae-parity-time-engine-design.md:359:- universal tracking, advanced matte/keying, content-aware paint/inpainting, particle/simulation systems
+docs/superpowers/specs/2026-08-05-phase-5-project-persistence-design.md:9:Phase 5 implements project persistence, command history, recovery, migration, and media relinking. It does not implement a timeline, layer compositor, continuous playback, video export, general effects, motion, tracking, AI cutout, shape or text animation, professional color or audio tools, particles, nodes, or 3D.
+docs/superpowers/specs/2026-08-05-phase-5-project-persistence-design.md:420:Phase 5 does not claim timeline editing, layers, compositions with rendered contents, continuous playback, video export, general effect stacks, animation channels, masks, tracking, AI segmentation, vector shapes, text motion, color grading, audio processing, particles, node compositing, or 3D.
+docs/superpowers/plans/2026-08-08-vertex2-11-ae-parity-time-engine.md:534:- **Truthfulness:** Unsupported future Color/Expression/Tracking/Paint/Particle/advanced 3D roadmap features are not represented as completed 11.0 functionality.
 Sources/VertexProject/EffectIndexedCatalogShard6.generated.swift:96:Boris FX workflow tools|Silhouette tools/nodes|Silhouette - Particle Illusion Integration
-Sources/VertexProject/EffectIndexedCatalogShard3.generated.swift:8:Boris FX Continuum|BCC Transitions|BCC Particle Illusion Dissolve
-Sources/VertexProject/EffectIndexedCatalogShard3.generated.swift:97:BCC obsolete / legacy|Legacy / obsolete|BCC Particle System
-Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:118:        descriptor(.vertexFilmGrain, "Vertex Film Grain", .stylize, keywords: ["vertex", "film", "grain", "noise"], summary: "Vertex-owned procedural film-grain treatment generated locally without bundled third-party assets.", parameters: [scalar(ExpandedEffectParameterID.amount, "Amount", 0.12, 0.0...1.0), scalar(ExpandedEffectParameterID.size, "Size", 1.0, 1.0...8.0), scalar(ExpandedEffectParameterID.chroma, "Chroma", 0.15, 0.0...1.0)]),
-Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:119:        descriptor(.vertexScanlines, "Vertex Scanlines", .stylize, keywords: ["vertex", "scanline", "crt", "retro"], summary: "Vertex-owned procedural scanline overlay for CRT and display treatments.", parameters: [scalar(ExpandedEffectParameterID.frequency, "Frequency", 2.0, 1.0...40.0), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.25, 0.0...1.0), scalar(ExpandedEffectParameterID.angle, "Angle", 0.0, -180.0...180.0)]),
-Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:122:        descriptor(.vertexLightLeak, "Vertex Light Leak", .stylize, keywords: ["vertex", "light leak", "film", "flare"], summary: "Vertex-owned procedural radial light leak generated from Core Image gradients.", parameters: [scalar(ExpandedEffectParameterID.centerX, "Center X", 0.2, 0.0...1.0), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.8, 0.0...1.0), scalar(ExpandedEffectParameterID.radius, "Radius", 500.0, 1.0...3000.0), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.7, 0.0...2.0)]),
-Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:123:        descriptor(.vertexSunRays, "Vertex Sun Rays", .stylize, keywords: ["vertex", "sun", "rays", "beams"], summary: "Vertex-owned light-ray composite using a procedural generator cropped to the source frame.", parameters: [scalar(ExpandedEffectParameterID.centerX, "Center X", 0.5, 0.0...1.0), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.5, 0.0...1.0), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.8, 0.0...2.0), scalar(ExpandedEffectParameterID.radius, "Radius", 120.0, 1.0...1000.0)]),
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:96:Maxon Red Giant + Universe|RG Particles and 3D|Form
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:97:Maxon Red Giant + Universe|RG Particles and 3D|Geo
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:98:Maxon Red Giant + Universe|RG Particles and 3D|Horizon
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:99:Maxon Red Giant + Universe|RG Particles and 3D|Lux
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:100:Maxon Red Giant + Universe|RG Particles and 3D|Mir 3
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:101:Maxon Red Giant + Universe|RG Particles and 3D|Tao
+Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:102:Maxon Red Giant + Universe|RG Particles and 3D|Trapcode Particular
+Sources/VertexProject/EffectIndexedCatalogShard1.generated.swift:28:Adobe After Effects|Simulation|CC Particle Systems II
+Sources/VertexProject/EffectIndexedCatalogShard1.generated.swift:29:Adobe After Effects|Simulation|CC Particle World
+Sources/VertexProject/EffectIndexedCatalogShard1.generated.swift:36:Adobe After Effects|Simulation|Particle Playground
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:96:Boris FX Continuum|BCC Particles|BCC 2D Particles
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:97:Boris FX Continuum|BCC Particles|BCC Organic Strands
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:98:Boris FX Continuum|BCC Particles|BCC Particle Array 3D
@@ -120,16 +124,12 @@ Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:101:Boris FX Co
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:102:Boris FX Continuum|BCC Particles|BCC Rain
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:103:Boris FX Continuum|BCC Particles|BCC Snow
 Sources/VertexProject/EffectIndexedCatalogShard2.generated.swift:104:Boris FX Continuum|BCC Particles|BCC Wild Cards
-Sources/VertexProject/EffectIndexedCatalogShard1.generated.swift:28:Adobe After Effects|Simulation|CC Particle Systems II
-Sources/VertexProject/EffectIndexedCatalogShard1.generated.swift:29:Adobe After Effects|Simulation|CC Particle World
-Sources/VertexProject/EffectIndexedCatalogShard1.generated.swift:36:Adobe After Effects|Simulation|Particle Playground
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:96:Maxon Red Giant + Universe|RG Particles and 3D|Form
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:97:Maxon Red Giant + Universe|RG Particles and 3D|Geo
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:98:Maxon Red Giant + Universe|RG Particles and 3D|Horizon
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:99:Maxon Red Giant + Universe|RG Particles and 3D|Lux
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:100:Maxon Red Giant + Universe|RG Particles and 3D|Mir 3
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:101:Maxon Red Giant + Universe|RG Particles and 3D|Tao
-Sources/VertexProject/EffectIndexedCatalogShard5.generated.swift:102:Maxon Red Giant + Universe|RG Particles and 3D|Trapcode Particular
+Sources/VertexProject/EffectIndexedCatalogShard3.generated.swift:8:Boris FX Continuum|BCC Transitions|BCC Particle Illusion Dissolve
+Sources/VertexProject/EffectIndexedCatalogShard3.generated.swift:97:BCC obsolete / legacy|Legacy / obsolete|BCC Particle System
+Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:118:        descriptor(.vertexFilmGrain, "Vertex Film Grain", .stylize, keywords: ["vertex", "film", "grain", "noise"], summary: "Vertex-owned procedural film-grain treatment generated locally without bundled third-party assets.", parameters: [scalar(ExpandedEffectParameterID.amount, "Amount", 0.12, 0.0...1.0), scalar(ExpandedEffectParameterID.size, "Size", 1.0, 1.0...8.0), scalar(ExpandedEffectParameterID.chroma, "Chroma", 0.15, 0.0...1.0)]),
+Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:119:        descriptor(.vertexScanlines, "Vertex Scanlines", .stylize, keywords: ["vertex", "scanline", "crt", "retro"], summary: "Vertex-owned procedural scanline overlay for CRT and display treatments.", parameters: [scalar(ExpandedEffectParameterID.frequency, "Frequency", 2.0, 1.0...40.0), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.25, 0.0...1.0), scalar(ExpandedEffectParameterID.angle, "Angle", 0.0, -180.0...180.0)]),
+Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:122:        descriptor(.vertexLightLeak, "Vertex Light Leak", .stylize, keywords: ["vertex", "light leak", "film", "flare"], summary: "Vertex-owned procedural radial light leak generated from Core Image gradients.", parameters: [scalar(ExpandedEffectParameterID.centerX, "Center X", 0.2, 0.0...1.0), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.8, 0.0...1.0), scalar(ExpandedEffectParameterID.radius, "Radius", 500.0, 1.0...3000.0), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.7, 0.0...2.0)]),
+Sources/VertexProject/ProjectEffectExpansionDescriptors.swift:123:        descriptor(.vertexSunRays, "Vertex Sun Rays", .stylize, keywords: ["vertex", "sun", "rays", "beams"], summary: "Vertex-owned light-ray composite using a procedural generator cropped to the source frame.", parameters: [scalar(ExpandedEffectParameterID.centerX, "Center X", 0.5, 0.0...1.0), scalar(ExpandedEffectParameterID.centerY, "Center Y", 0.5, 0.0...1.0), scalar(ExpandedEffectParameterID.intensity, "Intensity", 0.8, 0.0...2.0), scalar(ExpandedEffectParameterID.radius, "Radius", 120.0, 1.0...1000.0)]),
 
 ## Relevant filenames
 App/AIEffectBakeCoordinator.swift
