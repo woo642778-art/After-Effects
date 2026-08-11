@@ -8,8 +8,9 @@ func compatibilityAuditTotalsRemainTruthful() throws {
     #expect(EffectCompatibilityAudit.indexedEntryCount == 1_568)
     #expect(EffectCompatibilityAudit.families.reduce(0, { $0 + $1.indexedEntryCount }) == 1_568)
     #expect(EffectCompatibilityAudit.implementedCount == ProjectEffectType.allCases.count)
-    #expect(EffectCompatibilityAudit.implementedCount == 25)
-    #expect(EffectCompatibilityAudit.remainingIndexedCount == 1_543)
+    #expect(EffectCompatibilityAudit.implementedCount == 99)
+    #expect(EffectCompatibilityAudit.remainingIndexedCount == 1_469)
+    #expect(EffectCompatibilityAudit.implementedCount + EffectCompatibilityAudit.remainingIndexedCount == EffectCompatibilityAudit.indexedEntryCount)
 }
 
 @Test("Commercial plugin families are plans rather than fake native implementations")
