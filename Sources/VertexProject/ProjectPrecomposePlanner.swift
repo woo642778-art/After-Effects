@@ -32,19 +32,13 @@ public struct ProjectPrecomposePlan: Codable, Equatable, Sendable {
     }
 
     public var parentLayerOrderAfter: [VertexID] {
-        var result = parentLayerOrderBefore.filter { !Set(sourceLayerIDs).contains($0) }
+        let selected = Set(sourceLayerIDs)
+        var result = parentLayerOrderBefore.filter { !selected.contains($0) }
         result.insert(nestedLayer.id, at: min(insertionIndex, result.count))
         return result
     }
 }
 
-/// Builds the complete, deterministic payload required to pre-compose a set of layers.
-///
-/// The planner deliberately rejects dependencies that would cross the new composition
-/// boundary. Internal parent and track-matte references are remapped to the cloned
-/// layer IDs. All composition-time values are shifted by the earliest selected in-point,
-/// which preserves source-time evaluation and animation timing when the child is nested
-/// back into the parent at that exact time.
 public enum ProjectPrecomposePlanner {
     public static func plan(
         document: ProjectDocument,
@@ -120,11 +114,12 @@ public enum ProjectPrecomposePlanner {
             if let parentLayerID = source.parentLayerID {
                 clone.parentLayerID = idMap[parentLayerID]
             }
-            if let matte = source.trackMatte {
+            if var matte = source.trackMatte {
                 guard let mappedMatteID = idMap[matte.sourceLayerID] else {
                     throw ProjectError.invalidOperation("Pre-compose track-matte mapping is incomplete.")
                 }
-                clone.trackMatte = ProjectTrackMatte(sourceLayerID: mappedMatteID, mode: matte.mode)
+                matte.sourceLayerID = mappedMatteID
+                clone.trackMatte = matte
             }
             return clone
         }
@@ -159,11 +154,7 @@ public enum ProjectPrecomposePlanner {
             compositionID: compositionID,
             name: trimmedName,
             source: .composition(compositionID: newCompositionID, sourceStartTime: .zero),
-            timing: LayerTiming(
-                startTime: anchor,
-                inPoint: anchor,
-                outPoint: parentOutPoint
-            )
+            timing: LayerTiming(startTime: anchor, inPoint: anchor, outPoint: parentOutPoint)
         )
 
         _ = try childComposition.validated(layerByID: Dictionary(uniqueKeysWithValues: childLayers.map { ($0.id, $0) }))
@@ -193,10 +184,7 @@ public enum ProjectPrecomposePlanner {
         }
     }
 
-    private static func shiftedAnimationChannels(
-        _ channels: [ProjectAnimationChannel],
-        by anchor: RationalTime
-    ) throws -> [ProjectAnimationChannel] {
+    private static func shiftedAnimationChannels(_ channels: [ProjectAnimationChannel], by anchor: RationalTime) throws -> [ProjectAnimationChannel] {
         try channels.map { channel in
             var copy = channel
             copy.keyframes = try channel.keyframes.map { keyframe in
