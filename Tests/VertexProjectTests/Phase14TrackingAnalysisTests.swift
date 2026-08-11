@@ -1,4 +1,5 @@
 import Testing
+import VertexCore
 @testable import VertexProject
 
 @Test("Tracking request produces exact project frame sampling including requested end")
