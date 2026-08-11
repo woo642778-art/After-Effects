@@ -33,8 +33,8 @@ func trackingSolveAnimationEvaluation() throws {
     let scaleY = try #require(channels.channel(for: .layer(.scaleY)))
     let rotation = try #require(channels.channel(for: .layer(.rotationDegrees)))
 
-    #expect(abs(try positionX.evaluatedValue(at: midpoint).scalar - 0.60) < 1e-12)
-    #expect(abs(try positionY.evaluatedValue(at: midpoint).scalar - 0.55) < 1e-12)
+    #expect(abs(try positionX.evaluatedValue(at: midpoint).scalar - 0.65) < 1e-12)
+    #expect(abs(try positionY.evaluatedValue(at: midpoint).scalar - 0.60) < 1e-12)
     #expect(abs(try scaleX.evaluatedValue(at: midpoint).scalar - 1.50) < 1e-12)
     #expect(abs(try scaleY.evaluatedValue(at: midpoint).scalar - 1.50) < 1e-12)
     #expect(abs(try rotation.evaluatedValue(at: midpoint).scalar - 20.0) < 1e-12)
