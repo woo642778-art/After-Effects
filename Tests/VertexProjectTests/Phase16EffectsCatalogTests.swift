@@ -25,10 +25,18 @@ func phase16IndexedCatalogSearchAndStatus() {
 @Test("Preview update gate coalesces high-frequency slider events while preserving final commits")
 func phase16PreviewUpdateGate() {
     var gate = EffectPreviewUpdateGate(minimumInterval: 0.05)
-    #expect(gate.shouldCommit(at: 1.00))
-    #expect(!gate.shouldCommit(at: 1.01))
-    #expect(!gate.shouldCommit(at: 1.049))
-    #expect(gate.shouldCommit(at: 1.05))
-    #expect(gate.shouldCommitFinal(at: 1.051))
-    #expect(!gate.shouldCommit(at: 1.052))
+
+    let first = gate.shouldCommit(at: 1.00)
+    let early = gate.shouldCommit(at: 1.01)
+    let beforeBoundary = gate.shouldCommit(at: 1.049)
+    let boundary = gate.shouldCommit(at: 1.05)
+    let final = gate.shouldCommitFinal(at: 1.051)
+    let afterFinal = gate.shouldCommit(at: 1.052)
+
+    #expect(first)
+    #expect(!early)
+    #expect(!beforeBoundary)
+    #expect(boundary)
+    #expect(final)
+    #expect(!afterFinal)
 }
