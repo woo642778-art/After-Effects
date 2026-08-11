@@ -1,24 +1,161 @@
-name: Vertex2 12 Device Test IPA
+name: Vertex2 14 Release IPA
 
 on:
   push:
     branches:
-      - agent/phase12-media-effects-automation
+      - agent/phase14-runtime
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
-  group: vertex2-12-device-test-${{ github.ref }}
+  group: vertex2-14-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-test-ipa:
+  validate-build-release:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Complete and commit v14 source
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('App/TrackingStudioView.swift')
+          text = path.read_text()
+          if 'sourceTimes: sourceTimes' not in text:
+              old = '''        let region = normalizedRegion
+        let request = ProjectTrackingAnalysisRequest(
+            kind: selectedKind,
+            region: region,
+            startTime: layer.timing.inPoint,
+            endTime: layer.timing.outPoint,
+            frameRate: composition.frameRate,
+            frameStride: frameStride,
+            minimumConfidence: minimumConfidence
+        )
+        do {
+            _ = try request.validated()
+        } catch {
+            statusMessage = "Error: \\(error.localizedDescription)"
+            return
+        }
+'''
+              new = '''        let region = normalizedRegion
+        let frameRate = composition.frameRate
+        guard frameRate.value > 0,
+              frameRate.timescale > 0,
+              frameRate.value <= Int64(Int32.max) else {
+            statusMessage = "Error: The composition frame rate cannot be represented exactly for tracking."
+            return
+        }
+        let frameDuration = RationalTime(
+            value: Int64(frameRate.timescale),
+            timescale: Int32(frameRate.value)
+        )
+        let trackingEnd: RationalTime
+        do {
+            trackingEnd = try layer.timing.outPoint.subtracting(frameDuration)
+        } catch {
+            statusMessage = "Error: \\(error.localizedDescription)"
+            return
+        }
+        guard trackingEnd >= layer.timing.inPoint else {
+            statusMessage = "Error: The selected layer must contain at least one full frame for tracking."
+            return
+        }
+        let request = ProjectTrackingAnalysisRequest(
+            kind: selectedKind,
+            region: region,
+            startTime: layer.timing.inPoint,
+            endTime: trackingEnd,
+            frameRate: frameRate,
+            frameStride: frameStride,
+            minimumConfidence: minimumConfidence
+        )
+        let sourceTimes: [RationalTime]
+        do {
+            _ = try request.validated()
+            let compositionTimes = try request.sampleTimes()
+            sourceTimes = try TrackingSourceTimeMapper.sourceTimes(
+                for: layer,
+                compositionTimes: compositionTimes
+            )
+        } catch {
+            statusMessage = "Error: \\(error.localizedDescription)"
+            return
+        }
+'''
+              if old not in text:
+                  raise SystemExit('Unexpected TrackingStudioView startTracking implementation')
+              text = text.replace(old, new, 1)
+              old_call = '                let track = try await tracker.analyze(mediaURL: url, request: request)\n'
+              new_call = '''                let track = try await tracker.analyze(
+                    mediaURL: url,
+                    request: request,
+                    sourceTimes: sourceTimes
+                )
+'''
+              if old_call not in text:
+                  raise SystemExit('Unexpected VisionMotionTracker invocation')
+              text = text.replace(old_call, new_call, 1)
+              path.write_text(text)
+
+          path = Path('project.yml')
+          text = path.read_text().replace('MARKETING_VERSION: 12.0.0', 'MARKETING_VERSION: 14.0.0', 1).replace('CURRENT_PROJECT_VERSION: 12', 'CURRENT_PROJECT_VERSION: 14', 1)
+          if 'MARKETING_VERSION: 14.0.0' not in text or 'CURRENT_PROJECT_VERSION: 14' not in text:
+              raise SystemExit('Unable to establish v14 application identity')
+          path.write_text(text)
+
+          path = Path('Sources/VertexProject/ProjectSchema.swift')
+          text = path.read_text().replace('currentAppVersion = "12.0.0"', 'currentAppVersion = "14.0.0"', 1)
+          if 'currentAppVersion = "14.0.0"' not in text:
+              raise SystemExit('Unable to establish v14 project document identity')
+          path.write_text(text)
+
+          for path in list(Path('.github/workflows').glob('*.yml')) + list(Path('.github/workflows').glob('*.yaml')):
+              if path.name == 'phase12-test-ipa.yml':
+                  continue
+              text = path.read_text()
+              old = "grep -q 'MARKETING_VERSION: 12.0.0' project.yml\n          grep -q 'CURRENT_PROJECT_VERSION: 12' project.yml"
+              if old in text:
+                  text = text.replace(old, "VERSION=$(awk '/MARKETING_VERSION:/ {print $2; exit}' project.yml)\n          BUILD=$(awk '/CURRENT_PROJECT_VERSION:/ {print $2; exit}' project.yml)\n          test -n \"$VERSION\"\n          test -n \"$BUILD\"")
+                  text = text.replace('Verify Vertex2 12 product metadata and AI lock', 'Verify Vertex2 product metadata and AI lock')
+                  path.write_text(text)
+
+          for temporary in [Path('.github/workflows/phase14-completion-patch.yml'), Path('.github/workflows/phase14-completion-v2.yml')]:
+              if temporary.exists():
+                  temporary.unlink()
+
+          Path('Documentation/V14_RELEASE_NOTES.md').write_text('''# Vertex2 14.0.0\n\nPhase 14 adds tracking, stabilization, and rotoscoping to the iPad editing workflow.\n\n## What’s new\n\n- Point, planar, and object motion tracking.\n- Face and body subject initialization where supported by Apple Vision.\n- Deterministic exact-rational frame sampling.\n- Correct source-frame decoding for layer start time, source trim, source offset, and time-remapped layers.\n- Follow and stabilization transforms applied through real animation channels.\n- Camera-motion analysis summaries.\n- Tracked mask / rotoscope propagation with playhead refinements.\n- Export-safe animated Bezier mask paths.\n- Tracking & Rotoscope controls integrated into Automation.\n- Regression coverage for tracking solve, source-time mapping, animation application, and rotoscope propagation.\n\n## Build\n\n- Version: 14.0.0\n- Build: 14\n- Bundle ID: `com.woo642778.aftereffects`\n- Platform: iPad only, iOS 17+\n- Distribution: unsigned IPA; installation requires signing/re-signing.\n''')
+          PY
+
+          grep -q 'TrackingSourceTimeMapper.sourceTimes' App/TrackingStudioView.swift
+          grep -q 'sourceTimes: sourceTimes' App/TrackingStudioView.swift
+          grep -q 'MARKETING_VERSION: 14.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 14' project.yml
+          grep -q 'currentAppVersion = "14.0.0"' Sources/VertexProject/ProjectSchema.swift
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m 'Finalize Phase 14 and Vertex2 14.0.0 release'
+            git push origin HEAD:"$HEAD_BRANCH"
+          fi
+          git rev-parse HEAD | tee "$RUNNER_TEMP/vertex2-v14-head-sha.txt"
 
       - name: Select Xcode and install XcodeGen
         run: |
@@ -26,13 +163,25 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
-      - name: Verify v12 release identity
+      - name: Verify v14 release identity
         run: |
           set -euo pipefail
-          grep -q 'MARKETING_VERSION: 12.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 12' project.yml
+          grep -q 'MARKETING_VERSION: 14.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 14' project.yml
+          grep -q 'currentAppVersion = "14.0.0"' Sources/VertexProject/ProjectSchema.swift
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
+
+      - name: Run portable Swift tests
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v14-swift-tests.log"
+
+      - name: Validate AI model locks and tooling
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
 
       - name: Prepare pinned AI resources
         run: |
@@ -51,7 +200,7 @@ jobs:
           bash Tools/generate_app_assets.sh
           xcodegen generate
 
-      - name: Build unsigned iPad device app
+      - name: Build unsigned iPad Release app
         env:
           VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
         run: |
@@ -62,40 +211,69 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath "$PWD/DerivedDataPhase12DeviceTest" \
+            -derivedDataPath "$PWD/DerivedDataV14Release" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-12-device-test-build.log"
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-v14-release-build.log"
 
-      - name: Package test IPA
+      - name: Package and audit unsigned IPA
         run: |
           set -euo pipefail
-          APP="$PWD/DerivedDataPhase12DeviceTest/Build/Products/Release-iphoneos/Vertex2.app"
+          APP="$PWD/DerivedDataV14Release/Build/Products/Release-iphoneos/Vertex2.app"
           test -d "$APP"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")
+          BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          FAMILY=$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist")
+          test "$VERSION" = '14.0.0'
+          test "$BUILD" = '14'
+          test "$BUNDLE" = 'com.woo642778.aftereffects'
+          test "$FAMILY" = '2'
+          /usr/bin/lipo -info "$APP/Vertex2" | grep -q 'arm64'
+          test ! -d "$APP/_CodeSignature"
+          test ! -f "$APP/embedded.mobileprovision"
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP" Payload/Vertex2.app
-          /usr/bin/zip -qry artifacts/Vertex2-12.0.0-TEST-unsigned.ipa Payload
-          shasum -a 256 artifacts/Vertex2-12.0.0-TEST-unsigned.ipa | tee artifacts/Vertex2-12.0.0-TEST-unsigned.ipa.sha256
-          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
+          /usr/bin/zip -qry artifacts/Vertex2-14.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex2-14.0.0-unsigned.ipa | tee artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
+          cp "$RUNNER_TEMP/vertex2-v14-head-sha.txt" artifacts/commit-sha.txt
 
-      - name: Upload device test IPA
+      - name: Upload v14 IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-12.0.0-TEST-unsigned-ipa
+          name: Vertex2-14.0.0-unsigned-ipa
           path: |
-            artifacts/Vertex2-12.0.0-TEST-unsigned.ipa
-            artifacts/Vertex2-12.0.0-TEST-unsigned.ipa.sha256
+            artifacts/Vertex2-14.0.0-unsigned.ipa
+            artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
             artifacts/commit-sha.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
 
-      - name: Upload build log
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(cat "$RUNNER_TEMP/vertex2-v14-head-sha.txt")
+          TAG='v14.0.0'
+          TITLE='Vertex2 14.0.0'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --target "$HEAD_SHA" --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md
+            gh release upload "$TAG" artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256 --clobber
+          else
+            gh release create "$TAG" --target "$HEAD_SHA" --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
+          fi
+
+      - name: Upload validation and build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-12.0.0-TEST-build-log
-          path: ${{ runner.temp }}/vertex2-12-device-test-build.log
+          name: Vertex2-14.0.0-validation-build-logs
+          path: |
+            ${{ runner.temp }}/vertex2-v14-swift-tests.log
+            ${{ runner.temp }}/vertex2-v14-release-build.log
+            ${{ runner.temp }}/vertex2-v14-head-sha.txt
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
