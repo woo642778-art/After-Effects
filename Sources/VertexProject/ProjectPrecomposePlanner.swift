@@ -1,25 +1,40 @@
 import Foundation
 import VertexCore
 
-public struct ProjectPrecomposePlan: Equatable, Sendable {
+public struct ProjectPrecomposePlan: Codable, Equatable, Sendable {
     public let sourceLayerIDs: [VertexID]
+    public let sourceLayers: [ProjectLayer]
+    public let parentLayerOrderBefore: [VertexID]
     public let insertionIndex: Int
+    public let childRegistryIndex: Int
     public let childComposition: ProjectComposition
     public let childLayers: [ProjectLayer]
     public let nestedLayer: ProjectLayer
 
     public init(
         sourceLayerIDs: [VertexID],
+        sourceLayers: [ProjectLayer],
+        parentLayerOrderBefore: [VertexID],
         insertionIndex: Int,
+        childRegistryIndex: Int,
         childComposition: ProjectComposition,
         childLayers: [ProjectLayer],
         nestedLayer: ProjectLayer
     ) {
         self.sourceLayerIDs = sourceLayerIDs
+        self.sourceLayers = sourceLayers
+        self.parentLayerOrderBefore = parentLayerOrderBefore
         self.insertionIndex = insertionIndex
+        self.childRegistryIndex = childRegistryIndex
         self.childComposition = childComposition
         self.childLayers = childLayers
         self.nestedLayer = nestedLayer
+    }
+
+    public var parentLayerOrderAfter: [VertexID] {
+        var result = parentLayerOrderBefore.filter { !Set(sourceLayerIDs).contains($0) }
+        result.insert(nestedLayer.id, at: min(insertionIndex, result.count))
+        return result
     }
 }
 
@@ -157,7 +172,10 @@ public enum ProjectPrecomposePlanner {
 
         return ProjectPrecomposePlan(
             sourceLayerIDs: orderedIDs,
+            sourceLayers: orderedLayers,
+            parentLayerOrderBefore: parent.layerIDs,
             insertionIndex: insertionIndex,
+            childRegistryIndex: document.compositionRegistry.count,
             childComposition: childComposition,
             childLayers: childLayers,
             nestedLayer: nestedLayer
