@@ -19,6 +19,19 @@ import VertexProject
     #expect(Set(catalog.map(\.category)) == ["AI", "Blur & Sharpen", "Color Correction", "Channel"])
 }
 
+@Test func effectCatalogMetadataComesFromSharedDescriptors() {
+    let catalog = VertexEffectCatalog.entries
+    let descriptors = ProjectEffectDescriptorRegistry.all
+    #expect(catalog.count == descriptors.count)
+    #expect(catalog.map(\.descriptor) == descriptors)
+    for entry in catalog {
+        #expect(entry.name == entry.type.descriptor.displayName)
+        #expect(entry.category == entry.type.descriptor.category.displayName)
+        #expect(entry.keywords == entry.type.descriptor.keywords)
+        #expect(entry.description == entry.type.descriptor.summary)
+    }
+}
+
 @Test func effectCatalogSearchMatchesNamesKeywordsAndFuzzyAliases() {
     #expect(VertexEffectCatalog.search("depth").map(\.type) == [.depthMap])
     #expect(VertexEffectCatalog.search("denoise").map(\.type) == [.restore])
