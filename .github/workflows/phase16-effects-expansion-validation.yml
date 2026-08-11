@@ -1,0 +1,113 @@
+name: Vertex2 Effects Expansion Validation
+
+on:
+  push:
+    branches:
+      - agent/phase16-effects-expansion
+  pull_request:
+    branches:
+      - agent/phase16-precomp-effects-performance
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vertex2-effects-expansion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipad-render-contracts:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Verify expansion contract
+        run: |
+          set -euo pipefail
+          grep -q 'ProjectEffectType.allCases.count == 99' Tests/VertexProjectTests/Phase16ExecutableEffectsExpansionTests.swift
+          grep -q 'expandedTypes.count == 74' Tests/VertexAppTests/NativeExpandedEffectsRenderTests.swift
+          grep -q 'Vertex Aura Glow' Sources/VertexProject/ProjectEffectExpansionDescriptors.swift
+          grep -q 'Indexed reference' App/EffectsAndPresetsView.swift
+          git diff --check
+
+      - name: Validate and prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py \
+            --source-root .build/ai-source \
+            --output-root App/GeneratedAIResources \
+            --repository-root .
+
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+
+      - name: Boot newest iPad Simulator
+        run: |
+          set -euo pipefail
+          SIM_UDID="$(python3 - <<'PY'
+          import json, re, subprocess
+          payload = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))
+          candidates = []
+          for runtime, devices in payload.get('devices', {}).items():
+              match = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in devices:
+                  name = device.get('name', '')
+                  if device.get('isAvailable') and name.startswith('iPad'):
+                      candidates.append((version, 1 if 'Pro' in name else 0, name, device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPad Simulator found')
+          candidates.sort(reverse=True)
+          print(candidates[0][3])
+          PY
+          )"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Run all iPad app tests including 74-effect render smoke
+        env:
+          VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Vertex.xcodeproj \
+            -scheme Vertex \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$PWD/DerivedDataEffectsExpansion" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            test 2>&1 | tee "$RUNNER_TEMP/vertex2-effects-expansion-ipad.log"
+
+      - name: Upload iPad validation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-effects-expansion-ipad-log
+          path: ${{ runner.temp }}/vertex2-effects-expansion-ipad.log
+          if-no-files-found: warn
+          retention-days: 7
