@@ -1,0 +1,42 @@
+name: Apply effects expansion descriptors
+on:
+  push:
+    paths:
+      - .github/workflows/apply-effects-expansion-descriptors.yml
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase16-effects-expansion
+      - name: Write expansion descriptors and patch registry
+        env:
+          DESCRIPTORS_GZ_B64: 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
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, os, pathlib
+          root = pathlib.Path('.')
+          data = gzip.decompress(base64.b64decode(os.environ['DESCRIPTORS_GZ_B64']))
+          (root / 'Sources/VertexProject/ProjectEffectExpansionDescriptors.swift').write_bytes(data)
+          path = root / 'Sources/VertexProject/ProjectEffectDescriptor.swift'
+          text = path.read_text()
+          text = text.replace('    case distort\n    case ai\n', '    case distort\n    case tile\n    case keying\n    case ai\n')
+          text = text.replace('        case .distort: "Distort"\n        case .ai: "AI"\n', '        case .distort: "Distort"\n        case .tile: "Tile"\n        case .keying: "Keying"\n        case .ai: "AI"\n')
+          marker = '    ]\n\n    private static let byType:'
+          replacement = '    ] + ProjectEffectExpansionDescriptors.all\n\n    private static let byType:'
+          if marker not in text:
+              raise SystemExit('descriptor registry marker not found')
+          text = text.replace(marker, replacement, 1)
+          path.write_text(text)
+          PY
+      - name: Commit generated descriptor expansion
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Sources/VertexProject/ProjectEffectDescriptor.swift Sources/VertexProject/ProjectEffectExpansionDescriptors.swift
+          git commit -m 'feat: add descriptors for expanded native effects'
+          git push origin HEAD:agent/phase16-effects-expansion
