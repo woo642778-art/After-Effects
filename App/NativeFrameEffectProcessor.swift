@@ -2,6 +2,7 @@ import CoreGraphics
 import CoreImage
 import Foundation
 import VertexComposition
+import VertexCore
 import VertexMedia
 import VertexProject
 
@@ -28,7 +29,7 @@ struct NativeFrameEffectProcessor {
             throw CompositionError.graphCompilationFailed("Native effect input is not a decodable image.")
         }
 
-        let output = try filteredImage(effect: request.effect, input: input).cropped(to: input.extent)
+        let output = try filteredImage(effect: request.effect, input: input, time: request.exactCompositionTime).cropped(to: input.extent)
         guard let data = Self.context.pngRepresentation(
             of: output,
             format: .RGBA8,
@@ -40,7 +41,10 @@ struct NativeFrameEffectProcessor {
         return try PortableImage(data: data, format: .png, pixelSize: request.input.pixelSize)
     }
 
-    private func filteredImage(effect: ProjectEffect, input: CIImage) throws -> CIImage {
+    private func filteredImage(effect: ProjectEffect, input: CIImage, time: RationalTime) throws -> CIImage {
+        if let v17 = try NativeV17FrameEffectProcessor().filteredImage(effect: effect, input: input, time: time) {
+            return v17
+        }
         if let expanded = try NativeExpandedFrameEffectProcessor().filteredImage(effect: effect, input: input) {
             return expanded
         }
