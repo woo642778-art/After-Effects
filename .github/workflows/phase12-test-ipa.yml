@@ -41,7 +41,8 @@ jobs:
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
           grep -q 'EffectIndexedCatalog.entries.count == 1_568' Tests/VertexProjectTests/Phase16EffectsCatalogTests.swift
           grep -q 'EffectPreviewUpdateGate' App/AIEffectControlsView.swift
-          grep -q 'private static let context = CIContext' App/NativeFrameEffectProcessor.swift
+          grep -q 'contextThreadKey' App/NativeFrameEffectProcessor.swift
+          grep -q 'Thread.current.threadDictionary' App/NativeFrameEffectProcessor.swift
           grep -q 'ProjectPrecomposePlanner' Sources/VertexProject/ProjectPrecomposePlanner.swift
           grep -q 'case glow' Sources/VertexProject/ProjectEffect.swift
           grep -q 'case twirl' Sources/VertexProject/ProjectEffect.swift
