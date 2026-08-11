@@ -27,64 +27,64 @@ struct NativeExpandedFrameEffectProcessor {
         switch effect.type {
         // MARK: Blur & Sharpen
         case .discBlur:
-            return try apply("CIDiscBlur", input: input, values: ["inputRadius": scalar(effect, .radius)])
+            return try apply("CIDiscBlur", input: input, values: ["inputRadius": try scalar(effect, .radius)])
         case .zoomBlur:
             return try apply("CIZoomBlur", input: input, values: [
-                "inputCenter": center(effect, in: extent),
-                "inputAmount": scalar(effect, .amount)
+                "inputCenter": try center(effect, in: extent),
+                "inputAmount": try scalar(effect, .amount)
             ])
         case .bokehBlur:
             return try apply("CIBokehBlur", input: input, values: [
-                "inputRadius": scalar(effect, .radius),
-                "inputRingAmount": scalar(effect, .ringAmount),
-                "inputRingSize": scalar(effect, .ringSize),
-                "inputSoftness": scalar(effect, .softness)
+                "inputRadius": try scalar(effect, .radius),
+                "inputRingAmount": try scalar(effect, .ringAmount),
+                "inputRingSize": try scalar(effect, .ringSize),
+                "inputSoftness": try scalar(effect, .softness)
             ])
         case .unsharpMask:
             return try apply("CIUnsharpMask", input: input, values: [
-                "inputRadius": scalar(effect, .radius),
-                "inputIntensity": scalar(effect, .intensity)
+                "inputRadius": try scalar(effect, .radius),
+                "inputIntensity": try scalar(effect, .intensity)
             ])
         case .morphologyGradient:
-            return try apply("CIMorphologyGradient", input: input, values: ["inputRadius": scalar(effect, .radius)])
+            return try apply("CIMorphologyGradient", input: input, values: ["inputRadius": try scalar(effect, .radius)])
         case .morphologyMinimum:
-            return try apply("CIMorphologyMinimum", input: input, values: ["inputRadius": scalar(effect, .radius)])
+            return try apply("CIMorphologyMinimum", input: input, values: ["inputRadius": try scalar(effect, .radius)])
         case .morphologyMaximum:
-            return try apply("CIMorphologyMaximum", input: input, values: ["inputRadius": scalar(effect, .radius)])
+            return try apply("CIMorphologyMaximum", input: input, values: ["inputRadius": try scalar(effect, .radius)])
         case .morphologyRectangleMinimum:
             return try apply("CIMorphologyRectangleMinimum", input: input, values: [
-                "inputWidth": scalar(effect, .width), "inputHeight": scalar(effect, .height)
+                "inputWidth": try scalar(effect, .width), "inputHeight": try scalar(effect, .height)
             ])
         case .morphologyRectangleMaximum:
             return try apply("CIMorphologyRectangleMaximum", input: input, values: [
-                "inputWidth": scalar(effect, .width), "inputHeight": scalar(effect, .height)
+                "inputWidth": try scalar(effect, .width), "inputHeight": try scalar(effect, .height)
             ])
         case .depthOfField:
-            let y = extent.minY + extent.height * scalar(effect, .focusPosition)
-            let half = max(1, extent.height * scalar(effect, .focusWidth) * 0.5)
+            let y = extent.minY + extent.height * try scalar(effect, .focusPosition)
+            let half = max(1, extent.height * try scalar(effect, .focusWidth) * 0.5)
             return try apply("CIDepthOfField", input: input, values: [
                 "inputPoint0": CIVector(x: extent.minX, y: y - half),
                 "inputPoint1": CIVector(x: extent.maxX, y: y + half),
-                "inputSaturation": scalar(effect, .saturation),
+                "inputSaturation": try scalar(effect, .saturation),
                 "inputUnsharpMaskRadius": 2.0,
                 "inputUnsharpMaskIntensity": 0.4,
-                "inputRadius": scalar(effect, .radius)
+                "inputRadius": try scalar(effect, .radius)
             ])
 
         // MARK: Color / Channel
         case .temperatureTint:
             return try apply("CITemperatureAndTint", input: input, values: [
                 "inputNeutral": CIVector(x: 6500, y: 0),
-                "inputTargetNeutral": CIVector(x: scalar(effect, .temperature), y: scalar(effect, .tint))
+                "inputTargetNeutral": CIVector(x: try scalar(effect, .temperature), y: try scalar(effect, .tint))
             ])
         case .colorMonochrome:
             return try apply("CIColorMonochrome", input: input, values: [
                 "inputColor": CIColor(red: 0.76, green: 0.78, blue: 0.82),
-                "inputIntensity": scalar(effect, .intensity)
+                "inputIntensity": try scalar(effect, .intensity)
             ])
         case .colorClamp:
-            let lower = scalar(effect, .minimum)
-            let upper = max(lower, scalar(effect, .maximum))
+            let lower = try scalar(effect, .minimum)
+            let upper = max(lower, try scalar(effect, .maximum))
             return try apply("CIColorClamp", input: input, values: [
                 "inputMinComponents": CIVector(x: lower, y: lower, z: lower, w: 0),
                 "inputMaxComponents": CIVector(x: upper, y: upper, z: upper, w: 1)
@@ -100,36 +100,36 @@ struct NativeExpandedFrameEffectProcessor {
         case .linearToSRGB: return try apply("CILinearToSRGBToneCurve", input: input)
         case .sRGBToLinear: return try apply("CISRGBToneCurveToLinear", input: input)
         case .colorThreshold:
-            return try threshold(input, value: scalar(effect, .threshold))
+            return try threshold(input, value: try scalar(effect, .threshold))
         case .colorThresholdOtsu:
             return try apply("CIColorThresholdOtsu", input: input)
 
         // MARK: Stylize / Halftone
         case .crystallize:
             return try apply("CICrystallize", input: input, values: [
-                "inputRadius": scalar(effect, .radius), "inputCenter": center(effect, in: extent)
+                "inputRadius": try scalar(effect, .radius), "inputCenter": try center(effect, in: extent)
             ])
         case .edgeWork:
-            return try apply("CIEdgeWork", input: input, values: ["inputRadius": scalar(effect, .radius)])
+            return try apply("CIEdgeWork", input: input, values: ["inputRadius": try scalar(effect, .radius)])
         case .gloom:
             return try apply("CIGloom", input: input, values: [
-                "inputRadius": scalar(effect, .radius), "inputIntensity": scalar(effect, .intensity)
+                "inputRadius": try scalar(effect, .radius), "inputIntensity": try scalar(effect, .intensity)
             ])
         case .hexagonalPixelate:
             return try apply("CIHexagonalPixellate", input: input, values: [
-                "inputScale": scalar(effect, .scale), "inputCenter": center(effect, in: extent)
+                "inputScale": try scalar(effect, .scale), "inputCenter": try center(effect, in: extent)
             ])
         case .lineOverlay:
             return try apply("CILineOverlay", input: input, values: [
-                "inputNRNoiseLevel": scalar(effect, .noiseLevel),
-                "inputNRSharpness": scalar(effect, .sharpness),
-                "inputEdgeIntensity": scalar(effect, .edgeIntensity),
-                "inputThreshold": scalar(effect, .threshold),
-                "inputContrast": scalar(effect, .contrast)
+                "inputNRNoiseLevel": try scalar(effect, .noiseLevel),
+                "inputNRSharpness": try scalar(effect, .sharpness),
+                "inputEdgeIntensity": try scalar(effect, .edgeIntensity),
+                "inputThreshold": try scalar(effect, .threshold),
+                "inputContrast": try scalar(effect, .contrast)
             ])
         case .pointillize:
             return try apply("CIPointillize", input: input, values: [
-                "inputRadius": scalar(effect, .radius), "inputCenter": center(effect, in: extent)
+                "inputRadius": try scalar(effect, .radius), "inputCenter": try center(effect, in: extent)
             ])
         case .circularScreen:
             return try apply("CICircularScreen", input: input, values: screenValues(effect, extent: extent, includeAngle: false))
@@ -144,112 +144,112 @@ struct NativeExpandedFrameEffectProcessor {
 
         // MARK: Distort
         case .bumpDistortion:
-            return try apply("CIBumpDistortion", input: input, values: radialDistortionValues(effect, extent: extent, hasScale: true))
+            return try apply("CIBumpDistortion", input: input, values: try radialDistortionValues(effect, extent: extent, hasScale: true))
         case .bumpLinear:
-            var values = radialDistortionValues(effect, extent: extent, hasScale: true)
-            values["inputAngle"] = radians(scalar(effect, .angle))
+            var values = try radialDistortionValues(effect, extent: extent, hasScale: true)
+            values["inputAngle"] = radians(try scalar(effect, .angle))
             return try apply("CIBumpDistortionLinear", input: input, values: values)
         case .circleSplash:
-            return try apply("CICircleSplashDistortion", input: input, values: radialDistortionValues(effect, extent: extent, hasScale: false))
+            return try apply("CICircleSplashDistortion", input: input, values: try radialDistortionValues(effect, extent: extent, hasScale: false))
         case .circularWrap:
             return try apply("CICircularWrap", input: input, values: [
-                "inputCenter": center(effect, in: extent),
-                "inputRadius": scalar(effect, .radius),
-                "inputAngle": radians(scalar(effect, .angle))
+                "inputCenter": try center(effect, in: extent),
+                "inputRadius": try scalar(effect, .radius),
+                "inputAngle": radians(try scalar(effect, .angle))
             ])
         case .droste:
-            let inset = scalar(effect, .inset)
+            let inset = try scalar(effect, .inset)
             let p0 = CIVector(x: extent.minX + extent.width * inset, y: extent.minY + extent.height * inset)
             let p1 = CIVector(x: extent.maxX - extent.width * inset, y: extent.maxY - extent.height * inset)
             return try apply("CIDroste", input: input, values: [
                 "inputInsetPoint0": p0, "inputInsetPoint1": p1,
-                "inputStrands": scalar(effect, .strands),
-                "inputPeriodicity": scalar(effect, .periodicity),
-                "inputRotation": radians(scalar(effect, .rotation)),
-                "inputZoom": scalar(effect, .zoom)
+                "inputStrands": try scalar(effect, .strands),
+                "inputPeriodicity": try scalar(effect, .periodicity),
+                "inputRotation": radians(try scalar(effect, .rotation)),
+                "inputZoom": try scalar(effect, .zoom)
             ])
         case .holeDistortion:
-            return try apply("CIHoleDistortion", input: input, values: radialDistortionValues(effect, extent: extent, hasScale: false))
+            return try apply("CIHoleDistortion", input: input, values: try radialDistortionValues(effect, extent: extent, hasScale: false))
         case .lightTunnel:
             return try apply("CILightTunnel", input: input, values: [
-                "inputCenter": center(effect, in: extent),
-                "inputRotation": radians(scalar(effect, .rotation)),
-                "inputRadius": scalar(effect, .radius)
+                "inputCenter": try center(effect, in: extent),
+                "inputRotation": radians(try scalar(effect, .rotation)),
+                "inputRadius": try scalar(effect, .radius)
             ])
         case .pinchDistortion:
-            return try apply("CIPinchDistortion", input: input, values: radialDistortionValues(effect, extent: extent, hasScale: true))
+            return try apply("CIPinchDistortion", input: input, values: try radialDistortionValues(effect, extent: extent, hasScale: true))
         case .stretchCrop:
             return try apply("CIStretchCrop", input: input, values: [
                 "inputSize": CIVector(x: extent.width, y: extent.height),
-                "inputCropAmount": scalar(effect, .cropAmount),
-                "inputCenterStretchAmount": scalar(effect, .centerStretch)
+                "inputCropAmount": try scalar(effect, .cropAmount),
+                "inputCenterStretchAmount": try scalar(effect, .centerStretch)
             ])
         case .torusLens:
             return try apply("CITorusLensDistortion", input: input, values: [
-                "inputCenter": center(effect, in: extent),
-                "inputRadius": scalar(effect, .radius),
-                "inputWidth": scalar(effect, .width),
-                "inputRefraction": scalar(effect, .refraction)
+                "inputCenter": try center(effect, in: extent),
+                "inputRadius": try scalar(effect, .radius),
+                "inputWidth": try scalar(effect, .width),
+                "inputRefraction": try scalar(effect, .refraction)
             ])
         case .vortexDistortion:
             return try apply("CIVortexDistortion", input: input, values: [
-                "inputCenter": center(effect, in: extent),
-                "inputRadius": scalar(effect, .radius),
-                "inputAngle": radians(scalar(effect, .angle))
+                "inputCenter": try center(effect, in: extent),
+                "inputRadius": try scalar(effect, .radius),
+                "inputAngle": radians(try scalar(effect, .angle))
             ])
         case .glassLozenge:
-            let c = point(effect, in: extent)
-            let length = scalar(effect, .length)
-            let a = radians(scalar(effect, .angle))
+            let c = try point(effect, in: extent)
+            let length = try scalar(effect, .length)
+            let a = radians(try scalar(effect, .angle))
             let dx = cos(a) * length * 0.5
             let dy = sin(a) * length * 0.5
             return try apply("CIGlassLozenge", input: input, values: [
                 "inputPoint0": CIVector(x: c.x - dx, y: c.y - dy),
                 "inputPoint1": CIVector(x: c.x + dx, y: c.y + dy),
-                "inputRadius": scalar(effect, .radius),
-                "inputRefraction": scalar(effect, .refraction)
+                "inputRadius": try scalar(effect, .radius),
+                "inputRefraction": try scalar(effect, .refraction)
             ])
 
         // MARK: Tile
         case .kaleidoscope:
             return try apply("CIKaleidoscope", input: input, values: [
-                "inputCount": scalar(effect, .count),
-                "inputCenter": center(effect, in: extent),
-                "inputAngle": radians(scalar(effect, .angle))
+                "inputCount": try scalar(effect, .count),
+                "inputCenter": try center(effect, in: extent),
+                "inputAngle": radians(try scalar(effect, .angle))
             ])
         case .opTile:
-            var values = tileValues(effect, extent: extent)
+            var values = try tileValues(effect, extent: extent)
             values["inputScale"] = 2.8
             return try apply("CIOpTile", input: input, values: values)
         case .triangleKaleidoscope:
             return try apply("CITriangleKaleidoscope", input: input, values: [
-                "inputPoint": center(effect, in: extent),
-                "inputSize": scalar(effect, .width) * 7,
-                "inputRotation": radians(scalar(effect, .rotation)),
-                "inputDecay": scalar(effect, .decay)
+                "inputPoint": try center(effect, in: extent),
+                "inputSize": try scalar(effect, .width) * 7,
+                "inputRotation": radians(try scalar(effect, .rotation)),
+                "inputDecay": try scalar(effect, .decay)
             ])
         case .sixfoldReflectedTile:
-            return try apply("CISixfoldReflectedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CISixfoldReflectedTile", input: input, values: try tileValues(effect, extent: extent))
         case .twelvefoldReflectedTile:
-            return try apply("CITwelvefoldReflectedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CITwelvefoldReflectedTile", input: input, values: try tileValues(effect, extent: extent))
         case .parallelogramTile:
-            var values = tileValues(effect, extent: extent)
+            var values = try tileValues(effect, extent: extent)
             values["inputAcuteAngle"] = Double.pi / 2
             return try apply("CIParallelogramTile", input: input, values: values)
         case .triangleTile:
-            return try apply("CITriangleTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CITriangleTile", input: input, values: try tileValues(effect, extent: extent))
         case .fourfoldReflectedTile:
-            return try apply("CIFourfoldReflectedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CIFourfoldReflectedTile", input: input, values: try tileValues(effect, extent: extent))
         case .fourfoldRotatedTile:
-            return try apply("CIFourfoldRotatedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CIFourfoldRotatedTile", input: input, values: try tileValues(effect, extent: extent))
         case .fourfoldTranslatedTile:
-            return try apply("CIFourfoldTranslatedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CIFourfoldTranslatedTile", input: input, values: try tileValues(effect, extent: extent))
         case .eightfoldReflectedTile:
-            return try apply("CIEightfoldReflectedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CIEightfoldReflectedTile", input: input, values: try tileValues(effect, extent: extent))
         case .glideReflectedTile:
-            return try apply("CIGlideReflectedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CIGlideReflectedTile", input: input, values: try tileValues(effect, extent: extent))
         case .sixfoldRotatedTile:
-            return try apply("CISixfoldRotatedTile", input: input, values: tileValues(effect, extent: extent))
+            return try apply("CISixfoldRotatedTile", input: input, values: try tileValues(effect, extent: extent))
 
         // MARK: Vertex2 clean-room looks
         case .vertexAuraGlow:
@@ -268,7 +268,7 @@ struct NativeExpandedFrameEffectProcessor {
             return try rgbSplit(effect, input: input)
         case .vertexPrismBlur:
             return try apply("CIGaussianBlur", input: try rgbSplit(effect, input: input, amountID: .amount), values: [
-                "inputRadius": scalar(effect, .radius)
+                "inputRadius": try scalar(effect, .radius)
             ])
         case .vertexLightLeak:
             return try lightLeak(effect, input: input)
@@ -309,8 +309,8 @@ struct NativeExpandedFrameEffectProcessor {
 
     private func point(_ effect: ProjectEffect, in extent: CGRect) throws -> CGPoint {
         CGPoint(
-            x: extent.minX + extent.width * scalar(effect, .centerX),
-            y: extent.minY + extent.height * scalar(effect, .centerY)
+            x: extent.minX + extent.width * try scalar(effect, .centerX),
+            y: extent.minY + extent.height * try scalar(effect, .centerY)
         )
     }
 
@@ -397,7 +397,7 @@ struct NativeExpandedFrameEffectProcessor {
             "inputWidth": try scalar(effect, .width),
             "inputSharpness": try scalar(effect, .sharpness)
         ]
-        if includeAngle { values["inputAngle"] = try radians(scalar(effect, .angle)) }
+        if includeAngle { values["inputAngle"] = try radians(try scalar(effect, .angle)) }
         return values
     }
 
@@ -413,7 +413,7 @@ struct NativeExpandedFrameEffectProcessor {
     private func tileValues(_ effect: ProjectEffect, extent: CGRect) throws -> [String: Any] {
         [
             "inputCenter": try center(effect, in: extent),
-            "inputAngle": try radians(scalar(effect, .angle)),
+            "inputAngle": try radians(try scalar(effect, .angle)),
             "inputWidth": try scalar(effect, .width)
         ]
     }
@@ -421,33 +421,33 @@ struct NativeExpandedFrameEffectProcessor {
     // MARK: Vertex-owned composite looks
 
     private func auraGlow(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let mask = try lumaMask(input, threshold: scalar(effect, .threshold), softness: 0.01)
+        let mask = try lumaMask(input, threshold: try scalar(effect, .threshold), softness: 0.01)
         let selected = try maskedSource(input, mask: mask)
-        let r = scalar(effect, .radius)
+        let r = try scalar(effect, .radius)
         let near = try apply("CIGaussianBlur", input: selected, values: ["inputRadius": r])
         let far = try apply("CIGaussianBlur", input: selected, values: ["inputRadius": r * 2.25])
-        let bloom = try add(try scaleRGB(near, amount: scalar(effect, .intensity)), over: try scaleRGB(far, amount: scalar(effect, .intensity) * 0.45))
+        let bloom = try add(try scaleRGB(near, amount: try scalar(effect, .intensity)), over: try scaleRGB(far, amount: try scalar(effect, .intensity) * 0.45))
         return try screen(bloom, over: input)
     }
 
     private func darkBloom(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let mask = try lumaMask(input, threshold: 1 - scalar(effect, .threshold), softness: 0.02, invert: true)
-        let black = try apply("CIConstantColorGenerator", values: ["inputColor": CIColor(red: 0.02, green: 0.03, blue: 0.05, alpha: scalar(effect, .intensity) * 0.45)]).cropped(to: input.extent)
+        let mask = try lumaMask(input, threshold: 1 - try scalar(effect, .threshold), softness: 0.02, invert: true)
+        let black = try apply("CIConstantColorGenerator", values: ["inputColor": CIColor(red: 0.02, green: 0.03, blue: 0.05, alpha: try scalar(effect, .intensity) * 0.45)]).cropped(to: input.extent)
         let darkContribution = try maskedSource(black, mask: mask)
-        let blurred = try apply("CIGaussianBlur", input: darkContribution, values: ["inputRadius": scalar(effect, .radius)])
+        let blurred = try apply("CIGaussianBlur", input: darkContribution, values: ["inputRadius": try scalar(effect, .radius)])
         return try multiply(blurred, over: input)
     }
 
     private func edgeRadiance(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let edges = try apply("CIEdges", input: input, values: ["inputIntensity": scalar(effect, .intensity)])
+        let edges = try apply("CIEdges", input: input, values: ["inputIntensity": try scalar(effect, .intensity)])
         let bloom = try apply("CIBloom", input: edges, values: [
-            "inputRadius": scalar(effect, .radius), "inputIntensity": scalar(effect, .intensity)
+            "inputRadius": try scalar(effect, .radius), "inputIntensity": try scalar(effect, .intensity)
         ])
         return try screen(bloom, over: input)
     }
 
     private func halation(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let mask = try lumaMask(input, threshold: scalar(effect, .threshold), softness: 0.025)
+        let mask = try lumaMask(input, threshold: try scalar(effect, .threshold), softness: 0.025)
         var selected = try maskedSource(input, mask: mask)
         selected = try apply("CIColorMatrix", input: selected, values: [
             "inputRVector": CIVector(x: 1.15, y: 0, z: 0, w: 0),
@@ -455,27 +455,27 @@ struct NativeExpandedFrameEffectProcessor {
             "inputBVector": CIVector(x: 0, y: 0, z: 0.15, w: 0),
             "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1)
         ])
-        selected = try apply("CIGaussianBlur", input: selected, values: ["inputRadius": scalar(effect, .radius)])
-        return try screen(try scaleRGB(selected, amount: scalar(effect, .intensity)), over: input)
+        selected = try apply("CIGaussianBlur", input: selected, values: ["inputRadius": try scalar(effect, .radius)])
+        return try screen(try scaleRGB(selected, amount: try scalar(effect, .intensity)), over: input)
     }
 
     private func filmGrain(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
         var noise = try apply("CIRandomGenerator").cropped(to: input.extent)
-        let size = max(1, scalar(effect, .size))
+        let size = max(1, try scalar(effect, .size))
         if size > 1 {
             noise = noise.transformed(by: CGAffineTransform(scaleX: size, y: size)).cropped(to: input.extent)
         }
         noise = try apply("CIColorControls", input: noise, values: [
-            kCIInputSaturationKey: scalar(effect, .chroma),
-            kCIInputContrastKey: max(0.01, scalar(effect, .amount) * 2),
+            kCIInputSaturationKey: try scalar(effect, .chroma),
+            kCIInputContrastKey: max(0.01, try scalar(effect, .amount) * 2),
             kCIInputBrightnessKey: -0.05
         ])
         return try apply("CISoftLightBlendMode", input: noise, values: [kCIInputBackgroundImageKey: input])
     }
 
     private func scanlines(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let spacing = max(1, scalar(effect, .frequency))
-        let intensity = scalar(effect, .intensity)
+        let spacing = max(1, try scalar(effect, .frequency))
+        let intensity = try scalar(effect, .intensity)
         var lines = try apply("CIStripesGenerator", values: [
             "inputCenter": CIVector(x: input.extent.midX, y: input.extent.midY),
             "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1),
@@ -483,14 +483,14 @@ struct NativeExpandedFrameEffectProcessor {
             "inputWidth": spacing,
             "inputSharpness": 1.0
         ])
-        let a = radians(scalar(effect, .angle) + 90)
+        let a = radians(try scalar(effect, .angle) + 90)
         lines = lines.transformed(by: CGAffineTransform(rotationAngle: a)).cropped(to: input.extent)
         return try multiply(lines, over: input)
     }
 
     private func rgbSplit(_ effect: ProjectEffect, input: CIImage, amountID: Parameter = .amount) throws -> CIImage {
-        let amount = scalar(effect, amountID)
-        let a = radians(scalar(effect, .angle))
+        let amount = try scalar(effect, amountID)
+        let a = radians(try scalar(effect, .angle))
         let dx = cos(a) * amount
         let dy = sin(a) * amount
         let r = try channel(input, vector: CIVector(x: 1, y: 0, z: 0, w: 0)).transformed(by: CGAffineTransform(translationX: dx, y: dy))
@@ -514,11 +514,11 @@ struct NativeExpandedFrameEffectProcessor {
 
     private func lightLeak(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
         let p = try center(effect, in: input.extent)
-        let intensity = scalar(effect, .intensity)
+        let intensity = try scalar(effect, .intensity)
         let gradient = try apply("CIRadialGradient", values: [
             "inputCenter": p,
             "inputRadius0": 0,
-            "inputRadius1": scalar(effect, .radius),
+            "inputRadius1": try scalar(effect, .radius),
             "inputColor0": CIColor(red: 1, green: 0.24, blue: 0.04, alpha: min(1, intensity)),
             "inputColor1": CIColor(red: 0.35, green: 0.02, blue: 0.12, alpha: 0)
         ]).cropped(to: input.extent)
@@ -526,12 +526,12 @@ struct NativeExpandedFrameEffectProcessor {
     }
 
     private func sunRays(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let intensity = scalar(effect, .intensity)
+        let intensity = try scalar(effect, .intensity)
         let rays = try apply("CISunbeamsGenerator", values: [
             "inputCenter": try center(effect, in: input.extent),
             "inputColor": CIColor(red: 1, green: 0.84, blue: 0.56, alpha: min(1, intensity)),
-            "inputSunRadius": scalar(effect, .radius) * 0.24,
-            "inputMaxStriationRadius": scalar(effect, .radius),
+            "inputSunRadius": try scalar(effect, .radius) * 0.24,
+            "inputMaxStriationRadius": try scalar(effect, .radius),
             "inputStriationStrength": 0.55,
             "inputStriationContrast": 1.25,
             "inputTime": 0
@@ -542,12 +542,12 @@ struct NativeExpandedFrameEffectProcessor {
     // MARK: Mattes
 
     private func lumaKey(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let mask = try lumaMask(input, threshold: scalar(effect, .threshold), softness: scalar(effect, .softness))
+        let mask = try lumaMask(input, threshold: try scalar(effect, .threshold), softness: try scalar(effect, .softness))
         return try maskedSource(input, mask: mask)
     }
 
     private func matte(_ effect: ProjectEffect, input: CIImage, invert: Bool) throws -> CIImage {
-        var mask = try lumaMask(input, threshold: scalar(effect, .threshold), softness: scalar(effect, .softness), invert: invert)
+        var mask = try lumaMask(input, threshold: try scalar(effect, .threshold), softness: try scalar(effect, .softness), invert: invert)
         mask = try apply("CIColorControls", input: mask, values: [kCIInputSaturationKey: 0, kCIInputContrastKey: 1.35])
         return mask
     }
