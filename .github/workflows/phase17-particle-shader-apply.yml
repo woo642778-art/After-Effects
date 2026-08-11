@@ -1,0 +1,78 @@
+name: Apply V17 Particle Shader
+on:
+  push:
+    branches: [agent/phase17-particles-music-effects]
+    paths: [.github/workflows/phase17-particle-shader-apply.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase17-particles-music-effects
+      - name: Append particle shader
+        run: |
+          set -euo pipefail
+          cat >> Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal <<'METAL'
+
+// MARK: - V17 deterministic particle renderer
+struct VertexParticleInstance {
+    float2 position;
+    float size;
+    float opacity;
+};
+
+struct VertexParticleUniforms {
+    float4 color;
+};
+
+struct VertexParticleVarying {
+    float4 position [[position]];
+    float2 local;
+    float opacity;
+};
+
+vertex VertexParticleVarying vertexParticleVertex(
+    uint vertexID [[vertex_id]],
+    uint instanceID [[instance_id]],
+    device const VertexParticleInstance* instances [[buffer(0)]]
+) {
+    const VertexParticleInstance instance = instances[instanceID];
+    float2 corner;
+    switch (vertexID) {
+        case 0: corner = float2(-1.0, -1.0); break;
+        case 1: corner = float2( 1.0, -1.0); break;
+        case 2: corner = float2(-1.0,  1.0); break;
+        default: corner = float2(1.0, 1.0); break;
+    }
+    const float2 centerNDC = float2(instance.position.x * 2.0 - 1.0, 1.0 - instance.position.y * 2.0);
+    VertexParticleVarying out;
+    out.position = float4(centerNDC + corner * instance.size * 2.0, 0.0, 1.0);
+    out.local = corner;
+    out.opacity = instance.opacity;
+    return out;
+}
+
+fragment float4 vertexParticleFragment(
+    VertexParticleVarying in [[stage_in]],
+    constant VertexParticleUniforms& uniforms [[buffer(0)]]
+) {
+    const float radius = length(in.local);
+    const float coverage = 1.0 - smoothstep(0.72, 1.0, radius);
+    const float alpha = clamp(uniforms.color.a * in.opacity * coverage, 0.0, 1.0);
+    return float4(clamp(uniforms.color.rgb, 0.0, 1.0) * alpha, alpha);
+}
+METAL
+          git diff --check
+      - name: Commit and remove applicator
+        run: |
+          set -euo pipefail
+          rm .github/workflows/phase17-particle-shader-apply.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Sources/VertexRenderMetal/Shaders/VertexRenderKernels.metal .github/workflows/phase17-particle-shader-apply.yml
+          git commit -m 'feat: add V17 Metal particle shaders'
+          git push origin HEAD:agent/phase17-particles-music-effects
+# trigger

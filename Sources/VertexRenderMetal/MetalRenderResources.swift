@@ -12,6 +12,8 @@ internal final class MetalRenderResources: @unchecked Sendable {
     let mattePipeline: any MTLComputePipelineState
     let compositePipeline: any MTLComputePipelineState
     let adjustmentPipeline: any MTLComputePipelineState
+    let particleNormalPipeline: any MTLRenderPipelineState
+    let particleAdditivePipeline: any MTLRenderPipelineState
 
     init() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -27,6 +29,8 @@ internal final class MetalRenderResources: @unchecked Sendable {
         mattePipeline = try Self.makePipeline(named: "vertexMatteKernel", library: library, device: device)
         compositePipeline = try Self.makePipeline(named: "vertexCompositeKernel", library: library, device: device)
         adjustmentPipeline = try Self.makePipeline(named: "vertexAdjustmentKernel", library: library, device: device)
+        particleNormalPipeline = try Self.makeParticlePipeline(additive: false, library: library, device: device)
+        particleAdditivePipeline = try Self.makeParticlePipeline(additive: true, library: library, device: device)
         self.device = device
         self.commandQueue = commandQueue
     }
@@ -46,6 +50,21 @@ internal final class MetalRenderResources: @unchecked Sendable {
         return texture
     }
 
+    func makeParticleTexture(width: Int, height: Int) throws -> any MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            throw RenderError.textureAllocationFailure("Unable to allocate a \(width) × \(height) particle texture.")
+        }
+        return texture
+    }
+
     private static func makePipeline(
         named name: String,
         library: any MTLLibrary,
@@ -58,6 +77,34 @@ internal final class MetalRenderResources: @unchecked Sendable {
             return try device.makeComputePipelineState(function: function)
         } catch {
             throw RenderError.shaderFailure("\(name): \(error.localizedDescription)")
+        }
+    }
+
+    private static func makeParticlePipeline(
+        additive: Bool,
+        library: any MTLLibrary,
+        device: any MTLDevice
+    ) throws -> any MTLRenderPipelineState {
+        guard let vertex = library.makeFunction(name: "vertexParticleVertex"),
+              let fragment = library.makeFunction(name: "vertexParticleFragment") else {
+            throw RenderError.shaderFailure("The V17 particle shader functions are missing.")
+        }
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.vertexFunction = vertex
+        descriptor.fragmentFunction = fragment
+        descriptor.colorAttachments[0].pixelFormat = .rgba8Unorm
+        let attachment = descriptor.colorAttachments[0]!
+        attachment.isBlendingEnabled = true
+        attachment.rgbBlendOperation = .add
+        attachment.alphaBlendOperation = .add
+        attachment.sourceRGBBlendFactor = .one
+        attachment.sourceAlphaBlendFactor = .one
+        attachment.destinationRGBBlendFactor = additive ? .one : .oneMinusSourceAlpha
+        attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        do {
+            return try device.makeRenderPipelineState(descriptor: descriptor)
+        } catch {
+            throw RenderError.shaderFailure("V17 particle render pipeline: \(error.localizedDescription)")
         }
     }
 

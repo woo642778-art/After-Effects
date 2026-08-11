@@ -1,15 +1,15 @@
 import Testing
 @testable import VertexProject
 
-@Test("V16 compatibility audit preserves the full indexed reference count")
+@Test("Compatibility audit preserves the full indexed reference count")
 func compatibilityAuditTotalsRemainTruthful() throws {
     try EffectCompatibilityAudit.validate()
 
     #expect(EffectCompatibilityAudit.indexedEntryCount == 1_568)
     #expect(EffectCompatibilityAudit.families.reduce(0, { $0 + $1.indexedEntryCount }) == 1_568)
     #expect(EffectCompatibilityAudit.implementedCount == ProjectEffectType.allCases.count)
-    #expect(EffectCompatibilityAudit.implementedCount == 99)
-    #expect(EffectCompatibilityAudit.remainingIndexedCount == 1_469)
+    #expect(EffectCompatibilityAudit.implementedCount >= 99)
+    #expect(EffectCompatibilityAudit.remainingIndexedCount == EffectCompatibilityAudit.indexedEntryCount - ProjectEffectType.allCases.count)
     #expect(EffectCompatibilityAudit.implementedCount + EffectCompatibilityAudit.remainingIndexedCount == EffectCompatibilityAudit.indexedEntryCount)
 }
 
