@@ -1,4 +1,5 @@
 import Testing
+import VertexCore
 @testable import VertexProject
 
 private func sample(_ seconds: Int64, x: Double, y: Double, width: Double = 0.2, rotation: Double = 0, confidence: Double = 1) -> ProjectTrackingSample {
