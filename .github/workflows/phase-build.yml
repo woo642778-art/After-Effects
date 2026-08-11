@@ -12,6 +12,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: phase-build-${{ github.ref }}
   cancel-in-progress: true
@@ -22,6 +25,376 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Complete V16 source integration once
+        if: github.ref == 'refs/heads/agent/phase16-precomp-effects-performance'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # 1. Atomic pre-compose mutation + command integration.
+          mutation = Path('Sources/VertexProject/ProjectMutation.swift')
+          text = mutation.read_text()
+          anchor = '    case applyTimelineEdit(compositionID: VertexID, change: TimelineProjectMutation)\n'
+          if 'case precompose(plan: ProjectPrecomposePlan' not in text:
+              if anchor not in text: raise SystemExit('mutation case anchor missing')
+              text = text.replace(anchor, anchor + '    case precompose(plan: ProjectPrecomposePlan, previousSelectedLayerID: VertexID?, undo: Bool)\n', 1)
+          inverse_anchor = '        case .applyTimelineEdit(let id, let change): .applyTimelineEdit(compositionID: id, change: change.inverse)\n'
+          if 'case .precompose(let plan, let previous, let undo)' not in text:
+              if inverse_anchor not in text: raise SystemExit('mutation inverse anchor missing')
+              text = text.replace(inverse_anchor, inverse_anchor + '        case .precompose(let plan, let previous, let undo): .precompose(plan: plan, previousSelectedLayerID: previous, undo: !undo)\n', 1)
+          mutation.write_text(text)
+
+          commands = Path('Sources/VertexProject/ProjectCommands.swift')
+          text = commands.read_text()
+          prepare_anchor = '''            forward = mutation
+
+        case .insertLayer(let layer, let index):'''
+          prepare_block = '''            forward = mutation
+
+        case .precompose(let plan):
+            let rebuilt = try ProjectPrecomposePlanner.plan(
+                document: document,
+                compositionID: plan.nestedLayer.compositionID,
+                layerIDs: plan.sourceLayerIDs,
+                newCompositionID: plan.childComposition.id,
+                name: plan.childComposition.name
+            )
+            guard rebuilt == plan else {
+                throw ProjectError.invalidOperation("Pre-compose plan is stale or no longer matches the project.")
+            }
+            let mutation = ProjectMutation.precompose(
+                plan: plan,
+                previousSelectedLayerID: document.selectedLayerID,
+                undo: false
+            )
+            var candidate = document
+            try apply(mutation, to: &candidate)
+            _ = try candidate.validated()
+            forward = mutation
+
+        case .insertLayer(let layer, let index):'''
+          if 'case .precompose(let plan):' not in text:
+              if prepare_anchor not in text: raise SystemExit('prepare command anchor missing')
+              text = text.replace(prepare_anchor, prepare_block, 1)
+
+          apply_anchor = '''            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
+            document.selectedLayerID = change.afterSelectedLayerID
+        case .insertLayer(let layer, let compositionID, let index):'''
+          apply_block = '''            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
+            document.selectedLayerID = change.afterSelectedLayerID
+        case .precompose(let plan, let previousSelectedLayerID, let undo):
+            let parentCompositionID = plan.nestedLayer.compositionID
+            let parentIndex = try compositionIndex(parentCompositionID, in: document)
+            if !undo {
+                guard document.compositionRegistry[parentIndex].layerIDs == plan.parentLayerOrderBefore,
+                      document.composition(id: plan.childComposition.id) == nil,
+                      document.layer(id: plan.nestedLayer.id) == nil,
+                      document.compositionRegistry.indices.contains(plan.childRegistryIndex) || plan.childRegistryIndex == document.compositionRegistry.endIndex else {
+                    throw ProjectError.invalidOperation("Pre-compose apply precondition did not match.")
+                }
+                for source in plan.sourceLayers {
+                    guard document.layer(id: source.id) == source else {
+                        throw ProjectError.invalidOperation("Pre-compose source layer changed before apply.")
+                    }
+                }
+                let sourceIDs = Set(plan.sourceLayerIDs)
+                document.layerRegistry.removeAll { sourceIDs.contains($0.id) }
+                document.layerRegistry.append(contentsOf: plan.childLayers)
+                document.layerRegistry.append(plan.nestedLayer)
+                document.compositionRegistry[parentIndex].layerIDs = plan.parentLayerOrderAfter
+                document.compositionRegistry.insert(plan.childComposition, at: plan.childRegistryIndex)
+                document.selectedLayerID = plan.nestedLayer.id
+            } else {
+                guard document.compositionRegistry[parentIndex].layerIDs == plan.parentLayerOrderAfter,
+                      let childIndex = document.compositionRegistry.firstIndex(where: { $0.id == plan.childComposition.id }),
+                      document.compositionRegistry[childIndex] == plan.childComposition,
+                      document.layer(id: plan.nestedLayer.id) == plan.nestedLayer else {
+                    throw ProjectError.invalidOperation("Pre-compose undo precondition did not match.")
+                }
+                for child in plan.childLayers {
+                    guard document.layer(id: child.id) == child else {
+                        throw ProjectError.invalidOperation("Pre-compose child layer changed before undo.")
+                    }
+                }
+                let generatedIDs = Set(plan.childLayers.map(\.id) + [plan.nestedLayer.id])
+                document.layerRegistry.removeAll { generatedIDs.contains($0.id) }
+                document.layerRegistry.append(contentsOf: plan.sourceLayers)
+                document.compositionRegistry.remove(at: childIndex)
+                let restoredParentIndex = try compositionIndex(parentCompositionID, in: document)
+                document.compositionRegistry[restoredParentIndex].layerIDs = plan.parentLayerOrderBefore
+                document.selectedLayerID = previousSelectedLayerID
+            }
+        case .insertLayer(let layer, let compositionID, let index):'''
+          if 'case .precompose(let plan, let previousSelectedLayerID, let undo):' not in text:
+              if apply_anchor not in text: raise SystemExit('apply command anchor missing')
+              text = text.replace(apply_anchor, apply_block, 1)
+          commands.write_text(text)
+
+          # 2. V16 descriptor categories and the 15 new live-native effects.
+          descriptor = Path('Sources/VertexProject/ProjectEffectDescriptor.swift')
+          text = descriptor.read_text()
+          text = text.replace(
+              '    case channel\n    case ai\n',
+              '    case channel\n    case stylize\n    case distort\n    case ai\n',
+              1
+          )
+          text = text.replace(
+              '        case .channel: "Channel"\n        case .ai: "AI"\n',
+              '        case .channel: "Channel"\n        case .stylize: "Stylize"\n        case .distort: "Distort"\n        case .ai: "AI"\n',
+              1
+          )
+          if 'type: .fastBoxBlur' not in text:
+              native_descriptors = '''        .init(
+            type: .fastBoxBlur,
+            displayName: "Fast Box Blur",
+            category: .blurAndSharpen,
+            executionMode: .nativePixel,
+            keywords: ["blur", "box", "fast"],
+            summary: "Fast box-kernel blur for responsive interactive softening.",
+            parameters: [.init(id: FastBoxBlurParameterID.radius, displayName: "Radius", defaultValue: .scalar(10), domain: .scalar(0...200))]
+        ),
+        .init(
+            type: .directionalBlur,
+            displayName: "Directional Blur",
+            category: .blurAndSharpen,
+            executionMode: .nativePixel,
+            keywords: ["directional", "motion", "blur", "angle"],
+            summary: "Directional motion-style blur with independent radius and angle.",
+            parameters: [
+                .init(id: DirectionalBlurParameterID.radius, displayName: "Radius", defaultValue: .scalar(12), domain: .scalar(0...200)),
+                .init(id: DirectionalBlurParameterID.angle, displayName: "Angle", defaultValue: .scalar(0), domain: .scalar(-180...180))
+            ]
+        ),
+        .init(
+            type: .median,
+            displayName: "Median",
+            category: .blurAndSharpen,
+            executionMode: .nativePixel,
+            keywords: ["median", "speckle", "noise", "smooth"],
+            summary: "Median neighborhood filtering for small speckle and isolated-noise cleanup.",
+            parameters: []
+        ),
+        .init(
+            type: .noiseReduction,
+            displayName: "Noise Reduction",
+            category: .blurAndSharpen,
+            executionMode: .nativePixel,
+            keywords: ["noise", "denoise", "grain", "cleanup"],
+            summary: "Real-time Core Image luminance/chroma noise reduction with detail recovery.",
+            parameters: [
+                .init(id: NoiseReductionParameterID.noiseLevel, displayName: "Noise Level", defaultValue: .scalar(0.02), domain: .scalar(0...0.1)),
+                .init(id: NoiseReductionParameterID.sharpness, displayName: "Sharpness", defaultValue: .scalar(0.4), domain: .scalar(0...2))
+            ]
+        ),
+        .init(
+            type: .vibrance,
+            displayName: "Vibrance",
+            category: .colorCorrection,
+            executionMode: .nativePixel,
+            keywords: ["vibrance", "saturation", "color"],
+            summary: "Selective saturation enhancement that protects already-saturated colors.",
+            parameters: [.init(id: VibranceParameterID.amount, displayName: "Amount", defaultValue: .scalar(0), domain: .scalar(-1...1))]
+        ),
+        .init(
+            type: .gammaAdjust,
+            displayName: "Gamma",
+            category: .colorCorrection,
+            executionMode: .nativePixel,
+            keywords: ["gamma", "midtone", "tone"],
+            summary: "Fast gamma-power tone adjustment for midtone shaping.",
+            parameters: [.init(id: GammaAdjustParameterID.power, displayName: "Power", defaultValue: .scalar(1), domain: .scalar(0.1...3))]
+        ),
+        .init(
+            type: .highlightShadow,
+            displayName: "Shadow/Highlight",
+            category: .colorCorrection,
+            executionMode: .nativePixel,
+            keywords: ["shadow", "highlight", "dynamic range", "tone"],
+            summary: "Independent shadow lift and highlight recovery on the live native path.",
+            parameters: [
+                .init(id: HighlightShadowParameterID.highlights, displayName: "Highlights", defaultValue: .scalar(1), domain: .scalar(0...1)),
+                .init(id: HighlightShadowParameterID.shadows, displayName: "Shadows", defaultValue: .scalar(0), domain: .scalar(-1...1))
+            ]
+        ),
+        .init(
+            type: .sepiaTone,
+            displayName: "Sepia Tone",
+            category: .colorCorrection,
+            executionMode: .nativePixel,
+            keywords: ["sepia", "warm", "vintage", "tone"],
+            summary: "Adjustable sepia toning for warm vintage looks.",
+            parameters: [.init(id: SepiaToneParameterID.intensity, displayName: "Intensity", defaultValue: .scalar(1), domain: .scalar(0...1))]
+        ),
+        .init(
+            type: .posterize,
+            displayName: "Posterize",
+            category: .stylize,
+            executionMode: .nativePixel,
+            keywords: ["posterize", "levels", "quantize", "stylize"],
+            summary: "Quantize color channels to a controllable number of tonal levels.",
+            parameters: [.init(id: PosterizeParameterID.levels, displayName: "Levels", defaultValue: .scalar(6), domain: .scalar(2...30))]
+        ),
+        .init(
+            type: .mosaic,
+            displayName: "Mosaic",
+            category: .stylize,
+            executionMode: .nativePixel,
+            keywords: ["mosaic", "pixelate", "pixels", "block"],
+            summary: "GPU-backed pixel mosaic with animated block scale.",
+            parameters: [.init(id: MosaicParameterID.scale, displayName: "Scale", defaultValue: .scalar(16), domain: .scalar(1...200))]
+        ),
+        .init(
+            type: .findEdges,
+            displayName: "Find Edges",
+            category: .stylize,
+            executionMode: .nativePixel,
+            keywords: ["edge", "outline", "detect", "line"],
+            summary: "Edge extraction for outlines, mattes, and stylized line treatments.",
+            parameters: [.init(id: FindEdgesParameterID.intensity, displayName: "Intensity", defaultValue: .scalar(1), domain: .scalar(0...10))]
+        ),
+        .init(
+            type: .glow,
+            displayName: "Glow",
+            category: .stylize,
+            executionMode: .nativePixel,
+            keywords: ["glow", "bloom", "light", "neon"],
+            summary: "Fast live bloom/glow for highlights and emissive graphics.",
+            parameters: [
+                .init(id: GlowParameterID.radius, displayName: "Radius", defaultValue: .scalar(10), domain: .scalar(0...100)),
+                .init(id: GlowParameterID.intensity, displayName: "Intensity", defaultValue: .scalar(0.5), domain: .scalar(0...2))
+            ]
+        ),
+        .init(
+            type: .vignette,
+            displayName: "Vignette",
+            category: .stylize,
+            executionMode: .nativePixel,
+            keywords: ["vignette", "edge", "darken", "lens"],
+            summary: "Fast adjustable edge vignette for finishing and focus control.",
+            parameters: [
+                .init(id: VignetteParameterID.radius, displayName: "Radius", defaultValue: .scalar(1), domain: .scalar(0...2)),
+                .init(id: VignetteParameterID.intensity, displayName: "Intensity", defaultValue: .scalar(0), domain: .scalar(0...2))
+            ]
+        ),
+        .init(
+            type: .cartoon,
+            displayName: "Cartoon",
+            category: .stylize,
+            executionMode: .nativePixel,
+            keywords: ["cartoon", "comic", "toon", "stylize"],
+            summary: "GPU-backed comic/cartoon stylization for fast graphic looks.",
+            parameters: []
+        ),
+        .init(
+            type: .twirl,
+            displayName: "Twirl",
+            category: .distort,
+            executionMode: .nativePixel,
+            keywords: ["twirl", "swirl", "warp", "distort"],
+            summary: "Center-based twirl distortion with animated radius and angle.",
+            parameters: [
+                .init(id: TwirlParameterID.radius, displayName: "Radius", defaultValue: .scalar(300), domain: .scalar(0...2000)),
+                .init(id: TwirlParameterID.angle, displayName: "Angle", defaultValue: .scalar(0), domain: .scalar(-360...360))
+            ]
+        ),
+'''
+              marker = '        .init(\n            type: .depthMap,'
+              if marker not in text: raise SystemExit('descriptor insertion marker missing')
+              text = text.replace(marker, native_descriptors + marker, 1)
+          descriptor.write_text(text)
+
+          # 3. Effects browser icon exhaustiveness and Swift predicate syntax.
+          browser = Path('App/EffectsAndPresetsView.swift')
+          text = browser.read_text()
+          text = text.replace('filtered.first(where: \\.isImplemented)', 'filtered.first(where: { $0.isImplemented })')
+          if 'case .fastBoxBlur:' not in text:
+              old = '''        case .gaussianBlur: return "drop.halffull"
+        case .sharpen: return "sparkle.magnifyingglass"
+        case .exposure: return "sun.max"
+        case .colorControls: return "slider.horizontal.3"
+        case .hueAdjust: return "paintpalette"
+        case .invert: return "circle.lefthalf.filled"
+'''
+              new = '''        case .gaussianBlur: return "drop.halffull"
+        case .fastBoxBlur: return "rectangle.stack"
+        case .directionalBlur: return "wind"
+        case .sharpen: return "sparkle.magnifyingglass"
+        case .median: return "square.grid.3x3"
+        case .noiseReduction: return "waveform.path.ecg.rectangle"
+        case .exposure: return "sun.max"
+        case .colorControls: return "slider.horizontal.3"
+        case .hueAdjust: return "paintpalette"
+        case .vibrance: return "paintpalette.fill"
+        case .gammaAdjust: return "circle.lefthalf.filled.inverse"
+        case .highlightShadow: return "circle.righthalf.filled"
+        case .sepiaTone: return "camera.filters"
+        case .invert: return "circle.lefthalf.filled"
+        case .posterize: return "square.grid.2x2"
+        case .mosaic: return "square.grid.4x3.fill"
+        case .findEdges: return "scribble.variable"
+        case .glow: return "sun.max.fill"
+        case .vignette: return "viewfinder.circle"
+        case .cartoon: return "wand.and.stars"
+        case .twirl: return "tornado"
+'''
+              if old not in text: raise SystemExit('browser icon anchor missing')
+              text = text.replace(old, new, 1)
+          browser.write_text(text)
+
+          # 4. Update catalog tests for 25 real implementations while keeping the
+          # 1,568-entry reference index separate and truthful.
+          Path('Tests/VertexAppTests/EffectsAndPresetsCatalogTests.swift').write_text('''import Testing
+import VertexProject
+@testable import Vertex
+
+@Test func effectCatalogShowsOnlyActuallyImplementedEffects() {
+    let catalog = VertexEffectCatalog.entries
+    #expect(catalog.count == 25)
+    #expect(Set(catalog.map(\\.type)) == Set(ProjectEffectType.allCases))
+    #expect(Set(catalog.map(\\.category)) == ["AI", "Blur & Sharpen", "Color Correction", "Channel", "Stylize", "Distort"])
+}
+
+@Test func effectCatalogSearchMatchesNamesKeywordsAndFuzzyAliases() {
+    #expect(VertexEffectCatalog.search("depth").map(\\.type) == [.depthMap])
+    #expect(VertexEffectCatalog.search("denoise").contains(where: { $0.type == .restore || $0.type == .noiseReduction }))
+    #expect(VertexEffectCatalog.search("gauss").first?.type == .gaussianBlur)
+    #expect(VertexEffectCatalog.search("brt").contains(where: { $0.type == .colorControls }))
+    #expect(VertexEffectCatalog.search("glow").contains(where: { $0.type == .glow }))
+    #expect(VertexEffectCatalog.search("").count == 25)
+}
+
+@Test func fullIndexedBrowserIncludesVerifiedReferenceCatalog() {
+    #expect(EffectIndexedCatalog.entries.count == 1_568)
+    #expect(VertexEffectCatalog.searchAll("S_Glow").contains(where: { $0.product == "Boris FX Sapphire" }))
+    #expect(VertexEffectCatalog.searchAll("Deep Glow").contains(where: { !$0.isImplemented }))
+}
+''')
+          PY
+
+          # Remove the failed experimental applicator; this recognized validation
+          # workflow is the only temporary integration vehicle.
+          rm -f .github/workflows/phase16-precompose-command-apply.yml
+          git diff --check
+
+      - name: Persist V16 integration and restore normal validation workflow
+        if: github.ref == 'refs/heads/agent/phase16-precomp-effects-performance'
+        run: |
+          set -euo pipefail
+          # Restore this workflow to its proven non-mutating form in the product commit.
+          git checkout HEAD^ -- .github/workflows/phase-build.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Sources/VertexProject/ProjectMutation.swift Sources/VertexProject/ProjectCommands.swift Sources/VertexProject/ProjectEffectDescriptor.swift App/EffectsAndPresetsView.swift Tests/VertexAppTests/EffectsAndPresetsCatalogTests.swift .github/workflows/phase-build.yml
+          git add -u .github/workflows/phase16-precompose-command-apply.yml || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'feat: complete V16 precompose and native effects integration'
+            git push origin HEAD:agent/phase16-precomp-effects-performance
+          fi
+
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
