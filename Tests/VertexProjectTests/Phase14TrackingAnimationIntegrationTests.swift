@@ -1,4 +1,5 @@
 import Testing
+import VertexCore
 @testable import VertexProject
 
 @Test("Tracking solve channels evaluate through the project animation engine")
