@@ -60,8 +60,8 @@ struct NativeExpandedFrameEffectProcessor {
                 "inputWidth": try scalar(effect, .width), "inputHeight": try scalar(effect, .height)
             ])
         case .depthOfField:
-            let y = extent.minY + extent.height * try scalar(effect, .focusPosition)
-            let half = max(1, extent.height * try scalar(effect, .focusWidth) * 0.5)
+            let y = extent.minY + extent.height * (try scalar(effect, .focusPosition))
+            let half = max(1, extent.height * (try scalar(effect, .focusWidth)) * 0.5)
             return try apply("CIDepthOfField", input: input, values: [
                 "inputPoint0": CIVector(x: extent.minX, y: y - half),
                 "inputPoint1": CIVector(x: extent.maxX, y: y + half),
@@ -309,8 +309,8 @@ struct NativeExpandedFrameEffectProcessor {
 
     private func point(_ effect: ProjectEffect, in extent: CGRect) throws -> CGPoint {
         CGPoint(
-            x: extent.minX + extent.width * try scalar(effect, .centerX),
-            y: extent.minY + extent.height * try scalar(effect, .centerY)
+            x: extent.minX + extent.width * (try scalar(effect, .centerX)),
+            y: extent.minY + extent.height * (try scalar(effect, .centerY))
         )
     }
 
@@ -397,7 +397,7 @@ struct NativeExpandedFrameEffectProcessor {
             "inputWidth": try scalar(effect, .width),
             "inputSharpness": try scalar(effect, .sharpness)
         ]
-        if includeAngle { values["inputAngle"] = try radians(try scalar(effect, .angle)) }
+        if includeAngle { values["inputAngle"] = radians(try scalar(effect, .angle)) }
         return values
     }
 
@@ -413,7 +413,7 @@ struct NativeExpandedFrameEffectProcessor {
     private func tileValues(_ effect: ProjectEffect, extent: CGRect) throws -> [String: Any] {
         [
             "inputCenter": try center(effect, in: extent),
-            "inputAngle": try radians(try scalar(effect, .angle)),
+            "inputAngle": radians(try scalar(effect, .angle)),
             "inputWidth": try scalar(effect, .width)
         ]
     }
@@ -431,7 +431,7 @@ struct NativeExpandedFrameEffectProcessor {
     }
 
     private func darkBloom(_ effect: ProjectEffect, input: CIImage) throws -> CIImage {
-        let mask = try lumaMask(input, threshold: 1 - try scalar(effect, .threshold), softness: 0.02, invert: true)
+        let mask = try lumaMask(input, threshold: 1 - (try scalar(effect, .threshold)), softness: 0.02, invert: true)
         let black = try apply("CIConstantColorGenerator", values: ["inputColor": CIColor(red: 0.02, green: 0.03, blue: 0.05, alpha: try scalar(effect, .intensity) * 0.45)]).cropped(to: input.extent)
         let darkContribution = try maskedSource(black, mask: mask)
         let blurred = try apply("CIGaussianBlur", input: darkContribution, values: ["inputRadius": try scalar(effect, .radius)])
