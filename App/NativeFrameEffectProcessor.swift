@@ -6,6 +6,12 @@ import VertexMedia
 import VertexProject
 
 struct NativeFrameEffectProcessor {
+    /// CIContext is intentionally long-lived. Creating one for every slider sample/frame
+    /// repeatedly rebuilds Core Image/Metal state and was the dominant interactive cost
+    /// in the V15 native-effect path. CIContext is designed to be reused across renders.
+    private static let context = CIContext(options: [.cacheIntermediates: true])
+    private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
     func process(_ request: CompositionEffectRequest) throws -> PortableImage {
         guard request.effect.type.isNativePixelEffect else {
             throw CompositionError.graphCompilationFailed("Native processor received a non-native effect: \(request.effect.type.rawValue).")
@@ -15,12 +21,10 @@ struct NativeFrameEffectProcessor {
         }
 
         let output = try filteredImage(effect: request.effect, input: input).cropped(to: input.extent)
-        let context = CIContext(options: [.cacheIntermediates: false])
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        guard let data = context.pngRepresentation(
+        guard let data = Self.context.pngRepresentation(
             of: output,
             format: .RGBA8,
-            colorSpace: colorSpace,
+            colorSpace: Self.colorSpace,
             options: [:]
         ) else {
             throw CompositionError.graphCompilationFailed("Native effect output could not be encoded as PNG.")
