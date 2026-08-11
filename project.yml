@@ -47,6 +47,8 @@ targets:
       - package: Vertex
         product: VertexComposition
       - package: Vertex
+        product: VertexProcedural
+      - package: Vertex
         product: VertexAI
       - package: Vertex
         product: VertexAICoreML
@@ -110,6 +112,8 @@ targets:
         product: VertexProjectPersistence
       - package: Vertex
         product: VertexComposition
+      - package: Vertex
+        product: VertexProcedural
       - package: Vertex
         product: VertexAI
       - package: Vertex
