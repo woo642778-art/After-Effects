@@ -1,0 +1,266 @@
+name: Phase 14 Completion V2
+
+on:
+  push:
+    branches:
+      - agent/phase14-runtime
+    paths:
+      - .github/workflows/phase14-completion-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  complete:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase14-runtime
+          fetch-depth: 0
+      - name: Complete source and release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('App/TrackingStudioView.swift')
+          s = p.read_text()
+          if 'sourceTimes: sourceTimes' not in s:
+              old = '''        let region = normalizedRegion
+        let request = ProjectTrackingAnalysisRequest(
+            kind: selectedKind,
+            region: region,
+            startTime: layer.timing.inPoint,
+            endTime: layer.timing.outPoint,
+            frameRate: composition.frameRate,
+            frameStride: frameStride,
+            minimumConfidence: minimumConfidence
+        )
+        do {
+            _ = try request.validated()
+        } catch {
+            statusMessage = "Error: \\(error.localizedDescription)"
+            return
+        }
+'''
+              new = '''        let region = normalizedRegion
+        let frameRate = composition.frameRate
+        guard frameRate.value > 0,
+              frameRate.timescale > 0,
+              frameRate.value <= Int64(Int32.max) else {
+            statusMessage = "Error: The composition frame rate cannot be represented exactly for tracking."
+            return
+        }
+        let frameDuration = RationalTime(
+            value: Int64(frameRate.timescale),
+            timescale: Int32(frameRate.value)
+        )
+        let trackingEnd: RationalTime
+        do {
+            trackingEnd = try layer.timing.outPoint.subtracting(frameDuration)
+        } catch {
+            statusMessage = "Error: \\(error.localizedDescription)"
+            return
+        }
+        guard trackingEnd >= layer.timing.inPoint else {
+            statusMessage = "Error: The selected layer must contain at least one full frame for tracking."
+            return
+        }
+        let request = ProjectTrackingAnalysisRequest(
+            kind: selectedKind,
+            region: region,
+            startTime: layer.timing.inPoint,
+            endTime: trackingEnd,
+            frameRate: frameRate,
+            frameStride: frameStride,
+            minimumConfidence: minimumConfidence
+        )
+        let sourceTimes: [RationalTime]
+        do {
+            _ = try request.validated()
+            let compositionTimes = try request.sampleTimes()
+            sourceTimes = try TrackingSourceTimeMapper.sourceTimes(
+                for: layer,
+                compositionTimes: compositionTimes
+            )
+        } catch {
+            statusMessage = "Error: \\(error.localizedDescription)"
+            return
+        }
+'''
+              if old not in s:
+                  raise SystemExit('Expected startTracking source was not found')
+              s = s.replace(old, new, 1)
+              call = '                let track = try await tracker.analyze(mediaURL: url, request: request)\n'
+              repl = '''                let track = try await tracker.analyze(
+                    mediaURL: url,
+                    request: request,
+                    sourceTimes: sourceTimes
+                )
+'''
+              if call not in s:
+                  raise SystemExit('Expected tracker call was not found')
+              s = s.replace(call, repl, 1)
+              p.write_text(s)
+
+          p = Path('project.yml')
+          s = p.read_text().replace('MARKETING_VERSION: 12.0.0', 'MARKETING_VERSION: 14.0.0', 1).replace('CURRENT_PROJECT_VERSION: 12', 'CURRENT_PROJECT_VERSION: 14', 1)
+          if 'MARKETING_VERSION: 14.0.0' not in s or 'CURRENT_PROJECT_VERSION: 14' not in s:
+              raise SystemExit('v14 project version was not established')
+          p.write_text(s)
+
+          p = Path('Sources/VertexProject/ProjectSchema.swift')
+          s = p.read_text().replace('currentAppVersion = "12.0.0"', 'currentAppVersion = "14.0.0"', 1)
+          if 'currentAppVersion = "14.0.0"' not in s:
+              raise SystemExit('v14 project document version was not established')
+          p.write_text(s)
+
+          for p in list(Path('.github/workflows').glob('*.yml')) + list(Path('.github/workflows').glob('*.yaml')):
+              if p.name.startswith('phase14-completion'):
+                  continue
+              s = p.read_text()
+              old = "grep -q 'MARKETING_VERSION: 12.0.0' project.yml\n          grep -q 'CURRENT_PROJECT_VERSION: 12' project.yml"
+              if old in s:
+                  new = "VERSION=$(awk '/MARKETING_VERSION:/ {print $2; exit}' project.yml)\n          BUILD=$(awk '/CURRENT_PROJECT_VERSION:/ {print $2; exit}' project.yml)\n          test -n \"$VERSION\"\n          test -n \"$BUILD\""
+                  s = s.replace(old, new)
+                  s = s.replace('Verify Vertex2 12 product metadata and AI lock', 'Verify Vertex2 product metadata and AI lock')
+                  p.write_text(s)
+
+          Path('Documentation/V14_RELEASE_NOTES.md').write_text('''# Vertex2 14.0.0\n\nPhase 14 adds tracking, stabilization, and rotoscoping to the iPad editing workflow.\n\n## What’s new\n\n- Point, planar, and object motion tracking.\n- Face and body subject initialization where supported by Apple Vision.\n- Deterministic exact-rational frame sampling.\n- Correct source-frame mapping for layer start time, source trim, source offset, and time remapping.\n- Follow and stabilization transforms applied through real animation channels.\n- Camera-motion analysis summary.\n- Tracked mask / rotoscope propagation and playhead refinement.\n- Export-safe animated Bezier mask paths.\n- Tracking & Rotoscope controls integrated into Automation.\n- Regression tests for tracking, timeline mapping, animation application, and mask propagation.\n\n## Build\n\n- Version: 14.0.0\n- Build: 14\n- Bundle ID: `com.woo642778.aftereffects`\n- iPad only, iOS 17+\n- Unsigned IPA; installation requires signing/re-signing.\n''')
+
+          d = chr(36)
+          release = '''name: Vertex2 14 Release
+
+on:
+  push:
+    branches:
+      - agent/phase14-runtime
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vertex2-14-release-__REF__
+  cancel-in-progress: true
+
+jobs:
+  validate-build-release:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: __SHA__
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Verify v14 identity and tracking integration
+        run: |
+          set -euo pipefail
+          grep -q 'MARKETING_VERSION: 14.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 14' project.yml
+          grep -q 'currentAppVersion = "14.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
+          grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
+          grep -q 'TrackingSourceTimeMapper.sourceTimes' App/TrackingStudioView.swift
+          grep -q 'sourceTimes: sourceTimes' App/TrackingStudioView.swift
+          git diff --check
+      - name: Portable Swift tests
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v14-swift-tests.log"
+      - name: Validate AI tooling
+        run: |
+          set -euo pipefail
+          python3 Tools/ai/audit_models.py
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
+      - name: Prepare pinned AI resources
+        run: |
+          set -euo pipefail
+          rm -rf .build/ai-source App/GeneratedAIResources
+          python3 Tools/ai/fetch_models.py --destination .build/ai-source
+          python3 Tools/ai/audit_models.py --source-root .build/ai-source
+          python3 Tools/ai/prepare_coreml_models.py --source-root .build/ai-source --output-root App/GeneratedAIResources --repository-root .
+      - name: Generate assets and Xcode project
+        run: |
+          set -euo pipefail
+          bash Tools/generate_app_assets.sh
+          xcodegen generate
+      - name: Build unsigned iPad Release app
+        env:
+          VERTEX_AI_MODEL_ROOT: __WORKSPACE__/App/GeneratedAIResources
+        run: |
+          set -o pipefail
+          xcodebuild -project Vertex.xcodeproj -scheme Vertex -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$PWD/DerivedDataV14Release" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-v14-release-build.log"
+      - name: Package and audit unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$PWD/DerivedDataV14Release/Build/Products/Release-iphoneos/Vertex2.app"
+          test -d "$APP"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")
+          BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          FAMILY=$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist")
+          test "$VERSION" = '14.0.0'
+          test "$BUILD" = '14'
+          test "$BUNDLE" = 'com.woo642778.aftereffects'
+          test "$FAMILY" = '2'
+          /usr/bin/lipo -info "$APP/Vertex2" | grep -q arm64
+          test ! -d "$APP/_CodeSignature"
+          test ! -f "$APP/embedded.mobileprovision"
+          rm -rf Payload artifacts
+          mkdir -p Payload artifacts
+          cp -R "$APP" Payload/Vertex2.app
+          /usr/bin/zip -qry artifacts/Vertex2-14.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex2-14.0.0-unsigned.ipa | tee artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
+          printf '%s\n' '__SHA__' > artifacts/commit-sha.txt
+      - name: Upload Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-14.0.0-unsigned-ipa
+          path: |
+            artifacts/Vertex2-14.0.0-unsigned.ipa
+            artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
+            artifacts/commit-sha.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: __TOKEN__
+        run: |
+          set -euo pipefail
+          TAG='v14.0.0'
+          TITLE='Vertex2 14.0.0'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --target '__SHA__' --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md
+            gh release upload "$TAG" artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256 --clobber
+          else
+            gh release create "$TAG" --target '__SHA__' --title "$TITLE" --notes-file Documentation/V14_RELEASE_NOTES.md artifacts/Vertex2-14.0.0-unsigned.ipa artifacts/Vertex2-14.0.0-unsigned.ipa.sha256
+          fi
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-14.0.0-validation-build-logs
+          path: |
+            __TEMP__/vertex2-v14-swift-tests.log
+            __TEMP__/vertex2-v14-release-build.log
+          if-no-files-found: warn
+          retention-days: 14
+'''
+          release = release.replace('__REF__', d + '{{ github.ref }}').replace('__SHA__', d + '{{ github.sha }}').replace('__WORKSPACE__', d + '{{ github.workspace }}').replace('__TOKEN__', d + '{{ github.token }}').replace('__TEMP__', d + '{{ runner.temp }}')
+          Path('.github/workflows/vertex2-v14-release.yml').write_text(release)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add App/TrackingStudioView.swift project.yml Sources/VertexProject/ProjectSchema.swift Documentation/V14_RELEASE_NOTES.md .github/workflows
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'Complete Phase 14 runtime and prepare v14 release'
+            git push origin HEAD:agent/phase14-runtime
+          fi
