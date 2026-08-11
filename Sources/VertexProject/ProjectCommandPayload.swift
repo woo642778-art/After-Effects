@@ -30,6 +30,7 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setCompositionWorkArea(id: VertexID, workArea: ProjectWorkArea?)
     case setCompositionMarkers(id: VertexID, markers: [ProjectMarker])
     case applyTimelineEdit(compositionID: VertexID, result: TimelineProjectMutation)
+    case precompose(ProjectPrecomposePlan)
 
     case insertLayer(ProjectLayer, index: Int)
     case removeLayer(id: VertexID)
