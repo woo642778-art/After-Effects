@@ -1,0 +1,71 @@
+name: Prepare Vertex2 13 Release
+
+on:
+  push:
+    branches:
+      - agent/v13-release
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/v13-release
+          fetch-depth: 0
+
+      - name: Patch v13 release identity and IPA workflow
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"expected text not found in {path}: {old!r}")
+              p.write_text(text.replace(old, new))
+
+          replace("project.yml", "MARKETING_VERSION: 12.0.0", "MARKETING_VERSION: 13.0.0")
+          replace("project.yml", "CURRENT_PROJECT_VERSION: 12", "CURRENT_PROJECT_VERSION: 13")
+          replace("Sources/VertexProject/ProjectSchema.swift", 'public static let currentAppVersion = "12.0.0"', 'public static let currentAppVersion = "13.0.0"')
+
+          workflow = Path(".github/workflows/phase12-test-ipa.yml")
+          text = workflow.read_text()
+          replacements = {
+              "name: Vertex2 12 Device Test IPA": "name: Vertex2 13 Device Test IPA",
+              "agent/phase12-media-effects-automation": "agent/v13-release",
+              "vertex2-12-device-test-": "vertex2-13-device-test-",
+              "Verify v12 release identity": "Verify v13 release identity",
+              "MARKETING_VERSION: 12.0.0": "MARKETING_VERSION: 13.0.0",
+              "CURRENT_PROJECT_VERSION: 12": "CURRENT_PROJECT_VERSION: 13",
+              "DerivedDataPhase12DeviceTest": "DerivedDataPhase13DeviceTest",
+              "vertex2-12-device-test-build.log": "vertex2-13-device-test-build.log",
+              "Vertex2-12.0.0-TEST-unsigned.ipa": "Vertex2-13.0.0-unsigned.ipa",
+              "Vertex2-12.0.0-TEST-unsigned-ipa": "Vertex2-13.0.0-unsigned-ipa",
+              "Vertex2-12.0.0-TEST-build-log": "Vertex2-13.0.0-build-log",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"expected workflow text not found: {old!r}")
+              text = text.replace(old, new)
+          workflow.write_text(text)
+          PY
+
+      - name: Commit prepared release metadata
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Release metadata already prepared."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add project.yml Sources/VertexProject/ProjectSchema.swift .github/workflows/phase12-test-ipa.yml
+          git commit -m "chore: prepare Vertex2 13.0.0 release"
+          git push origin HEAD:agent/v13-release
