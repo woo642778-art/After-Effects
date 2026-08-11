@@ -31,7 +31,7 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
-      - name: Verify v16 identity, effects scale, pre-compose, and performance gates
+      - name: Verify v16 identity, effects scale, pre-compose, performance, and Focus Music gates
         run: |
           set -euo pipefail
           grep -q 'MARKETING_VERSION: 16.0.0' project.yml
@@ -41,11 +41,16 @@ jobs:
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
           grep -q 'EffectIndexedCatalog.entries.count == 1_568' Tests/VertexProjectTests/Phase16EffectsCatalogTests.swift
           grep -q 'EffectPreviewUpdateGate' App/AIEffectControlsView.swift
-          grep -q 'contextThreadKey' App/NativeFrameEffectProcessor.swift
           grep -q 'Thread.current.threadDictionary' App/NativeFrameEffectProcessor.swift
           grep -q 'ProjectPrecomposePlanner' Sources/VertexProject/ProjectPrecomposePlanner.swift
           grep -q 'case glow' Sources/VertexProject/ProjectEffect.swift
           grep -q 'case twirl' Sources/VertexProject/ProjectEffect.swift
+          grep -q 'final class FocusMusicPlayer' App/FocusMusicPlayer.swift
+          grep -q 'numberOfLoops = -1' App/FocusMusicPlayer.swift
+          grep -q 'FocusMusicSynthesizer.render' App/FocusMusicPlayer.swift
+          grep -q 'environmentObject(focusMusic)' App/VertexApp.swift
+          grep -q 'FocusMusicView()' App/AEWorkspaceChrome.swift
+          grep -q 'separate from project/timeline audio' App/FocusMusicPlayer.swift
           git diff --check
 
       - name: Run portable Swift tests
