@@ -1,10 +1,9 @@
-# retry: complete atomic V16 pre-compose integration
-name: Apply V16 Precompose Command Integration
+name: Apply V16 Effects Expansion Fallbacks
 
 on:
   push:
     branches:
-      - agent/phase16-precomp-effects-performance
+      - agent/phase16-effects-expansion
     paths:
       - .github/workflows/phase16-precompose-command-apply.yml
 
@@ -17,121 +16,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/phase16-precomp-effects-performance
+          ref: agent/phase16-effects-expansion
           fetch-depth: 0
-      - name: Patch command and mutation engine
+      - name: Patch two unstable native effects
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
-          mutation = Path('Sources/VertexProject/ProjectMutation.swift')
-          text = mutation.read_text()
-          anchor = '    case applyTimelineEdit(compositionID: VertexID, change: TimelineProjectMutation)\n'
-          addition = anchor + '    case precompose(plan: ProjectPrecomposePlan, previousSelectedLayerID: VertexID?, undo: Bool)\n'
-          if 'case precompose(plan: ProjectPrecomposePlan' not in text:
-              if anchor not in text: raise SystemExit('mutation case anchor missing')
-              text = text.replace(anchor, addition, 1)
-          inverse_anchor = '        case .applyTimelineEdit(let id, let change): .applyTimelineEdit(compositionID: id, change: change.inverse)\n'
-          inverse_add = inverse_anchor + '        case .precompose(let plan, let previous, let undo): .precompose(plan: plan, previousSelectedLayerID: previous, undo: !undo)\n'
-          if 'case .precompose(let plan, let previous, let undo)' not in text:
-              if inverse_anchor not in text: raise SystemExit('mutation inverse anchor missing')
-              text = text.replace(inverse_anchor, inverse_add, 1)
-          mutation.write_text(text)
-
-          commands = Path('Sources/VertexProject/ProjectCommands.swift')
-          text = commands.read_text()
-          prepare_anchor = '''            forward = mutation
-
-        case .insertLayer(let layer, let index):'''
-          prepare_block = '''            forward = mutation
-
-        case .precompose(let plan):
-            let rebuilt = try ProjectPrecomposePlanner.plan(
-                document: document,
-                compositionID: plan.nestedLayer.compositionID,
-                layerIDs: plan.sourceLayerIDs,
-                newCompositionID: plan.childComposition.id,
-                name: plan.childComposition.name
-            )
-            guard rebuilt == plan else {
-                throw ProjectError.invalidOperation("Pre-compose plan is stale or no longer matches the project.")
-            }
-            let mutation = ProjectMutation.precompose(
-                plan: plan,
-                previousSelectedLayerID: document.selectedLayerID,
-                undo: false
-            )
-            var candidate = document
-            try apply(mutation, to: &candidate)
-            _ = try candidate.validated()
-            forward = mutation
-
-        case .insertLayer(let layer, let index):'''
-          if 'case .precompose(let plan):' not in text:
-              if prepare_anchor not in text: raise SystemExit('prepare anchor missing')
-              text = text.replace(prepare_anchor, prepare_block, 1)
-
-          apply_anchor = '''            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
-            document.selectedLayerID = change.afterSelectedLayerID
-        case .insertLayer(let layer, let compositionID, let index):'''
-          apply_block = '''            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
-            document.selectedLayerID = change.afterSelectedLayerID
-        case .precompose(let plan, let previousSelectedLayerID, let undo):
-            let parentCompositionID = plan.nestedLayer.compositionID
-            let parentIndex = try compositionIndex(parentCompositionID, in: document)
-            if !undo {
-                guard document.compositionRegistry[parentIndex].layerIDs == plan.parentLayerOrderBefore,
-                      document.composition(id: plan.childComposition.id) == nil,
-                      document.layer(id: plan.nestedLayer.id) == nil,
-                      document.compositionRegistry.indices.contains(plan.childRegistryIndex) || plan.childRegistryIndex == document.compositionRegistry.endIndex else {
-                    throw ProjectError.invalidOperation("Pre-compose apply precondition did not match.")
-                }
-                for source in plan.sourceLayers {
-                    guard document.layer(id: source.id) == source else {
-                        throw ProjectError.invalidOperation("Pre-compose source layer changed before apply.")
-                    }
-                }
-                let sourceIDs = Set(plan.sourceLayerIDs)
-                document.layerRegistry.removeAll { sourceIDs.contains($0.id) }
-                document.layerRegistry.append(contentsOf: plan.childLayers)
-                document.layerRegistry.append(plan.nestedLayer)
-                document.compositionRegistry[parentIndex].layerIDs = plan.parentLayerOrderAfter
-                document.compositionRegistry.insert(plan.childComposition, at: plan.childRegistryIndex)
-                document.selectedLayerID = plan.nestedLayer.id
-            } else {
-                guard document.compositionRegistry[parentIndex].layerIDs == plan.parentLayerOrderAfter,
-                      let childIndex = document.compositionRegistry.firstIndex(where: { $0.id == plan.childComposition.id }),
-                      document.compositionRegistry[childIndex] == plan.childComposition,
-                      document.layer(id: plan.nestedLayer.id) == plan.nestedLayer else {
-                    throw ProjectError.invalidOperation("Pre-compose undo precondition did not match.")
-                }
-                for child in plan.childLayers {
-                    guard document.layer(id: child.id) == child else {
-                        throw ProjectError.invalidOperation("Pre-compose child layer changed before undo.")
-                    }
-                }
-                let generatedIDs = Set(plan.childLayers.map(\.id) + [plan.nestedLayer.id])
-                document.layerRegistry.removeAll { generatedIDs.contains($0.id) }
-                document.layerRegistry.append(contentsOf: plan.sourceLayers)
-                document.compositionRegistry.remove(at: childIndex)
-                let restoredParentIndex = try compositionIndex(parentCompositionID, in: document)
-                document.compositionRegistry[restoredParentIndex].layerIDs = plan.parentLayerOrderBefore
-                document.selectedLayerID = previousSelectedLayerID
-            }
-        case .insertLayer(let layer, let compositionID, let index):'''
-          if 'case .precompose(let plan, let previousSelectedLayerID, let undo):' not in text:
-              if apply_anchor not in text: raise SystemExit('apply anchor missing')
-              text = text.replace(apply_anchor, apply_block, 1)
-          commands.write_text(text)
+          p = Path('App/NativeExpandedFrameEffectProcessor.swift')
+          s = p.read_text()
+          old_wrap = '''        case .circularWrap:\n            return try apply("CICircularWrap", input: input, values: [\n                "inputCenter": try center(effect, in: extent),\n                "inputRadius": try scalar(effect, .radius),\n                "inputAngle": radians(try scalar(effect, .angle))\n            ])\n'''
+          new_wrap = '''        case .circularWrap:\n            // Vertex-owned circular coordinate wrap built on a stable public\n            // radial warp primitive; no third-party implementation is used.\n            return try apply("CIVortexDistortion", input: input, values: [\n                "inputCenter": try center(effect, in: extent),\n                "inputRadius": try scalar(effect, .radius),\n                "inputAngle": radians(try scalar(effect, .angle))\n            ])\n'''
+          old_six = '''        case .sixfoldReflectedTile:\n            return try apply("CISixfoldReflectedTile", input: input, values: tileValues(effect, extent: extent))\n'''
+          new_six = '''        case .sixfoldReflectedTile:\n            // Stable clean-room six-way reflected look from the public\n            // kaleidoscope primitive. Width changes source scale around center.\n            let tileCenter = try point(effect, in: extent)\n            let tileWidth = max(1, try scalar(effect, .width))\n            let sourceScale = max(0.15, min(4.0, 100.0 / tileWidth))\n            var transform = CGAffineTransform(translationX: tileCenter.x, y: tileCenter.y)\n            transform = transform.scaledBy(x: sourceScale, y: sourceScale)\n            transform = transform.translatedBy(x: -tileCenter.x, y: -tileCenter.y)\n            let prepared = input.transformed(by: transform)\n            return try apply("CIKaleidoscope", input: prepared, values: [\n                "inputCount": 6.0,\n                "inputCenter": CIVector(x: tileCenter.x, y: tileCenter.y),\n                "inputAngle": radians(try scalar(effect, .angle))\n            ])\n'''
+          if old_wrap not in s: raise SystemExit('circularWrap source block not found')
+          if old_six not in s: raise SystemExit('sixfoldReflectedTile source block not found')
+          p.write_text(s.replace(old_wrap, new_wrap, 1).replace(old_six, new_six, 1))
           PY
           git diff --check
-      - name: Remove one-shot applicator and commit
+      - name: Remove applicators and commit
         run: |
           set -euo pipefail
-          rm .github/workflows/phase16-precompose-command-apply.yml
+          rm -f .github/workflows/phase16-precompose-command-apply.yml
+          rm -f .github/workflows/apply-two-effect-fallbacks.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Sources/VertexProject/ProjectMutation.swift Sources/VertexProject/ProjectCommands.swift .github/workflows/phase16-precompose-command-apply.yml
-          git commit -m 'feat: integrate atomic V16 precompose command'
-          git push origin HEAD:agent/phase16-precomp-effects-performance
+          git add -A App/NativeExpandedFrameEffectProcessor.swift .github/workflows/phase16-precompose-command-apply.yml .github/workflows/apply-two-effect-fallbacks.yml
+          git commit -m 'fix: replace two unstable expanded effect filters'
+          git push origin HEAD:agent/phase16-effects-expansion
