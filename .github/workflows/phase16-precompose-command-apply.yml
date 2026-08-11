@@ -44,3 +44,4 @@ jobs:
           git add -A App/NativeExpandedFrameEffectProcessor.swift .github/workflows/phase16-precompose-command-apply.yml .github/workflows/apply-two-effect-fallbacks.yml
           git commit -m 'fix: replace two unstable expanded effect filters'
           git push origin HEAD:agent/phase16-effects-expansion
+# registered trigger
