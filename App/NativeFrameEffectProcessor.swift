@@ -41,6 +41,10 @@ struct NativeFrameEffectProcessor {
     }
 
     private func filteredImage(effect: ProjectEffect, input: CIImage) throws -> CIImage {
+        if let expanded = try NativeExpandedFrameEffectProcessor().filteredImage(effect: effect, input: input) {
+            return expanded
+        }
+
         let filterName: String
         switch effect.type {
         case .gaussianBlur: filterName = "CIGaussianBlur"
@@ -66,6 +70,8 @@ struct NativeFrameEffectProcessor {
         case .twirl: filterName = "CITwirlDistortion"
         case .depthMap, .cutout, .upscale, .restore:
             throw CompositionError.graphCompilationFailed("AI effects must use the AI effect backend.")
+        default:
+            throw CompositionError.graphCompilationFailed("Expanded native effect was not handled: \(effect.type.rawValue).")
         }
 
         guard let filter = CIFilter(name: filterName) else {
@@ -127,6 +133,8 @@ struct NativeFrameEffectProcessor {
             filter.setValue(try scalar(effect, TwirlParameterID.radius), forKey: kCIInputRadiusKey)
             filter.setValue(try scalar(effect, TwirlParameterID.angle) * .pi / 180, forKey: kCIInputAngleKey)
         case .depthMap, .cutout, .upscale, .restore:
+            break
+        default:
             break
         }
 
