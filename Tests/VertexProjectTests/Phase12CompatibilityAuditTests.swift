@@ -1,15 +1,15 @@
 import Testing
 @testable import VertexProject
 
-@Test("Vertex2 12 compatibility audit preserves the full indexed reference count")
+@Test("V16 compatibility audit preserves the full indexed reference count")
 func compatibilityAuditTotalsRemainTruthful() throws {
     try EffectCompatibilityAudit.validate()
 
     #expect(EffectCompatibilityAudit.indexedEntryCount == 1_568)
     #expect(EffectCompatibilityAudit.families.reduce(0, { $0 + $1.indexedEntryCount }) == 1_568)
     #expect(EffectCompatibilityAudit.implementedCount == ProjectEffectType.allCases.count)
-    #expect(EffectCompatibilityAudit.implementedCount == 10)
-    #expect(EffectCompatibilityAudit.remainingIndexedCount == 1_558)
+    #expect(EffectCompatibilityAudit.implementedCount == 25)
+    #expect(EffectCompatibilityAudit.remainingIndexedCount == 1_543)
 }
 
 @Test("Commercial plugin families are plans rather than fake native implementations")

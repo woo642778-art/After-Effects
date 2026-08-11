@@ -67,18 +67,17 @@ public enum EffectCompatibilityAudit {
         .init(family: .otherIndexed, indexedEntryCount: 426, defaultStatus: .legacyReference)
     ]
 
-    public static let implementedEffects: [VertexImplementedEffectSummary] = [
-        .init(type: .depthMap, status: .aiImplemented, displayName: "Depth Map"),
-        .init(type: .cutout, status: .aiImplemented, displayName: "Cutout"),
-        .init(type: .upscale, status: .aiImplemented, displayName: "Upscale"),
-        .init(type: .restore, status: .aiImplemented, displayName: "Restore"),
-        .init(type: .gaussianBlur, status: .nativeImplemented, displayName: "Gaussian Blur"),
-        .init(type: .sharpen, status: .nativeImplemented, displayName: "Sharpen"),
-        .init(type: .exposure, status: .nativeImplemented, displayName: "Exposure"),
-        .init(type: .colorControls, status: .nativeImplemented, displayName: "Color Controls"),
-        .init(type: .hueAdjust, status: .nativeImplemented, displayName: "Hue Adjust"),
-        .init(type: .invert, status: .nativeImplemented, displayName: "Invert")
-    ]
+    /// The implemented-effect table is derived from the authoritative executable
+    /// ProjectEffectType enum so adding a real effect cannot silently leave the
+    /// compatibility audit stale. The large 1,568-entry reference catalog remains
+    /// separate and is never treated as executable merely because it is indexed.
+    public static let implementedEffects: [VertexImplementedEffectSummary] = ProjectEffectType.allCases.map { type in
+        VertexImplementedEffectSummary(
+            type: type,
+            status: type.isNativePixelEffect ? .nativeImplemented : .aiImplemented,
+            displayName: type.rawValue
+        )
+    }
 
     public static var implementedCount: Int { implementedEffects.count }
     public static var remainingIndexedCount: Int { indexedEntryCount - implementedCount }

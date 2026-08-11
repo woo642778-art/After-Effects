@@ -59,5 +59,13 @@ jobs:
           git diff --check
       - name: Run portable Swift tests
         run: |
-          set -euo pipefail
-          swift test
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-portable-swift-tests.log"
+      - name: Upload portable Swift log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertex2-portable-swift-tests-${{ github.sha }}
+          path: ${{ runner.temp }}/vertex2-portable-swift-tests.log
+          if-no-files-found: warn
+          retention-days: 3

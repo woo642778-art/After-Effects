@@ -3,11 +3,13 @@ import SwiftUI
 @main
 struct AfterEffectsApp: App {
     @StateObject private var startup: VertexStartupCoordinator
+    @StateObject private var focusMusic: FocusMusicPlayer
 
     init() {
         _startup = StateObject(
             wrappedValue: VertexStartupCoordinator(services: .live())
         )
+        _focusMusic = StateObject(wrappedValue: FocusMusicPlayer())
     }
 
     var body: some Scene {
@@ -27,6 +29,7 @@ struct AfterEffectsApp: App {
                         .transition(.opacity)
                 }
             }
+            .environmentObject(focusMusic)
             .background(AfterEffectsTheme.background.ignoresSafeArea())
             .animation(.easeInOut(duration: 0.18), value: startup.phase)
             .task {

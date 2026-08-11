@@ -1,19 +1,19 @@
-name: Vertex2 15 Release IPA
+name: Vertex2 16 Release IPA
 
 on:
   push:
     branches:
-      - agent/phase15-effects-architecture
+      - agent/phase16-precomp-effects-performance
   pull_request:
     branches:
-      - agent/phase14-runtime
+      - agent/phase15-effects-architecture
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: vertex2-15-release-${{ github.ref }}
+  group: vertex2-16-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,23 +31,32 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
-      - name: Verify v15 identity and effects architecture
+      - name: Verify v16 identity, effects scale, pre-compose, performance, and Focus Music gates
         run: |
           set -euo pipefail
-          grep -q 'MARKETING_VERSION: 15.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 15' project.yml
-          grep -q 'currentAppVersion = "15.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'MARKETING_VERSION: 16.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 16' project.yml
+          grep -q 'currentAppVersion = "16.0.0"' Sources/VertexProject/ProjectSchema.swift
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
-          grep -q 'ProjectEffectDescriptorRegistry' Sources/VertexProject/ProjectEffectDescriptor.swift
-          grep -q 'currentSchemaVersion = 2' Sources/VertexProject/ProjectEffectDescriptor.swift
-          grep -q 'ProjectEffectDescriptorRegistry.all.map' App/EffectsAndPresetsView.swift
+          grep -q 'EffectIndexedCatalog.entries.count == 1_568' Tests/VertexProjectTests/Phase16EffectsCatalogTests.swift
+          grep -q 'EffectPreviewUpdateGate' App/AIEffectControlsView.swift
+          grep -q 'Thread.current.threadDictionary' App/NativeFrameEffectProcessor.swift
+          grep -q 'ProjectPrecomposePlanner' Sources/VertexProject/ProjectPrecomposePlanner.swift
+          grep -q 'case glow' Sources/VertexProject/ProjectEffect.swift
+          grep -q 'case twirl' Sources/VertexProject/ProjectEffect.swift
+          grep -q 'final class FocusMusicPlayer' App/FocusMusicPlayer.swift
+          grep -q 'numberOfLoops = -1' App/FocusMusicPlayer.swift
+          grep -q 'FocusMusicSynthesizer.render' App/FocusMusicPlayer.swift
+          grep -q 'environmentObject(focusMusic)' App/VertexApp.swift
+          grep -q 'FocusMusicView()' App/AEWorkspaceChrome.swift
+          grep -q 'independent from project/timeline audio' App/FocusMusicPlayer.swift
           git diff --check
 
       - name: Run portable Swift tests
         run: |
           set -o pipefail
-          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v15-swift-tests.log"
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v16-swift-tests.log"
 
       - name: Validate AI model locks and tooling
         run: |
@@ -110,11 +119,11 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination "id=$SIM_UDID" \
-            -derivedDataPath "$PWD/DerivedDataV15Tests" \
+            -derivedDataPath "$PWD/DerivedDataV16Tests" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            test 2>&1 | tee "$RUNNER_TEMP/vertex2-v15-ipad-tests.log"
+            test 2>&1 | tee "$RUNNER_TEMP/vertex2-v16-ipad-tests.log"
 
       - name: Build unsigned iPad Release app
         env:
@@ -127,24 +136,24 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath "$PWD/DerivedDataV15Release" \
+            -derivedDataPath "$PWD/DerivedDataV16Release" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-v15-release-build.log"
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-v16-release-build.log"
 
       - name: Package and audit unsigned IPA
         run: |
           set -euo pipefail
-          APP="$PWD/DerivedDataV15Release/Build/Products/Release-iphoneos/Vertex2.app"
+          APP="$PWD/DerivedDataV16Release/Build/Products/Release-iphoneos/Vertex2.app"
           test -d "$APP"
           VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
           BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")
           BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
           FAMILY=$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist")
           MINIMUM_OS=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")
-          test "$VERSION" = '15.0.0'
-          test "$BUILD" = '15'
+          test "$VERSION" = '16.0.0'
+          test "$BUILD" = '16'
           test "$BUNDLE" = 'com.woo642778.aftereffects'
           test "$FAMILY" = '2'
           test "$MINIMUM_OS" = '17.0'
@@ -157,18 +166,18 @@ jobs:
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP" Payload/Vertex2.app
-          /usr/bin/zip -qry artifacts/Vertex2-15.0.0-unsigned.ipa Payload
-          unzip -tq artifacts/Vertex2-15.0.0-unsigned.ipa
-          shasum -a 256 artifacts/Vertex2-15.0.0-unsigned.ipa | tee artifacts/Vertex2-15.0.0-unsigned.ipa.sha256
+          /usr/bin/zip -qry artifacts/Vertex2-16.0.0-unsigned.ipa Payload
+          unzip -tq artifacts/Vertex2-16.0.0-unsigned.ipa
+          shasum -a 256 artifacts/Vertex2-16.0.0-unsigned.ipa | tee artifacts/Vertex2-16.0.0-unsigned.ipa.sha256
           printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
 
-      - name: Upload v15 IPA artifact
+      - name: Upload v16 IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-15.0.0-unsigned-ipa
+          name: Vertex2-16.0.0-unsigned-ipa
           path: |
-            artifacts/Vertex2-15.0.0-unsigned.ipa
-            artifacts/Vertex2-15.0.0-unsigned.ipa.sha256
+            artifacts/Vertex2-16.0.0-unsigned.ipa
+            artifacts/Vertex2-16.0.0-unsigned.ipa.sha256
             artifacts/commit-sha.txt
           if-no-files-found: error
           retention-days: 14
@@ -178,24 +187,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG='v15.0.0'
-          TITLE='Vertex2 15.0.0'
+          TAG='v16.0.0'
+          TITLE='Vertex2 16.0.0'
           TARGET='${{ github.event.pull_request.head.sha || github.sha }}'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V15_RELEASE_NOTES.md
-            gh release upload "$TAG" artifacts/Vertex2-15.0.0-unsigned.ipa artifacts/Vertex2-15.0.0-unsigned.ipa.sha256 --clobber
+            gh release edit "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V16_RELEASE_NOTES.md
+            gh release upload "$TAG" artifacts/Vertex2-16.0.0-unsigned.ipa artifacts/Vertex2-16.0.0-unsigned.ipa.sha256 --clobber
           else
-            gh release create "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V15_RELEASE_NOTES.md artifacts/Vertex2-15.0.0-unsigned.ipa artifacts/Vertex2-15.0.0-unsigned.ipa.sha256
+            gh release create "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V16_RELEASE_NOTES.md artifacts/Vertex2-16.0.0-unsigned.ipa artifacts/Vertex2-16.0.0-unsigned.ipa.sha256
           fi
 
       - name: Upload validation and build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-15.0.0-validation-build-logs
+          name: Vertex2-16.0.0-validation-build-logs
           path: |
-            ${{ runner.temp }}/vertex2-v15-swift-tests.log
-            ${{ runner.temp }}/vertex2-v15-ipad-tests.log
-            ${{ runner.temp }}/vertex2-v15-release-build.log
+            ${{ runner.temp }}/vertex2-v16-swift-tests.log
+            ${{ runner.temp }}/vertex2-v16-ipad-tests.log
+            ${{ runner.temp }}/vertex2-v16-release-build.log
           if-no-files-found: warn
           retention-days: 14

@@ -36,6 +36,8 @@ struct AIEffectControlsView: View {
     @State private var isExpanded = true
     @State private var bakeTask: Task<Void, Never>?
     @State private var state: AIEffectPresentationState = .ready
+    @State private var scalarDrafts: [String: Double] = [:]
+    @State private var previewGates: [String: EffectPreviewUpdateGate] = [:]
 
     private var descriptor: ProjectEffectDescriptor { effect.type.descriptor }
 
@@ -44,7 +46,7 @@ struct AIEffectControlsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 parameterControls
                 HStack {
-                    Text(effect.type.isNativePixelEffect ? "Live · shared preview/export processor" : state.label)
+                    Text(effect.type.isNativePixelEffect ? "Live · adaptive preview / full-quality export" : state.label)
                         .font(.caption2.monospaced())
                         .foregroundStyle(effect.type.isNativePixelEffect ? AfterEffectsTheme.secondaryText : (state.usesSourcePixels ? .orange : AfterEffectsTheme.secondaryText))
                     Spacer()
@@ -100,7 +102,10 @@ struct AIEffectControlsView: View {
         }
         .padding(9)
         .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
-        .onDisappear { bakeTask?.cancel() }
+        .onDisappear {
+            bakeTask?.cancel()
+            commitAllScalarDrafts()
+        }
     }
 
     @ViewBuilder
@@ -119,11 +124,18 @@ struct AIEffectControlsView: View {
                     ))
                     .labelsHidden()
                 case .scalar(let value):
+                    let displayValue = scalarDrafts[parameter.id] ?? value
                     Slider(
-                        value: Binding(get: { value }, set: { setParameter(parameter.id, .scalar($0)) }),
-                        in: metadata?.domain.scalarRange ?? 0...1
+                        value: Binding(
+                            get: { scalarDrafts[parameter.id] ?? value },
+                            set: { updateScalarDraft(parameter.id, value: $0) }
+                        ),
+                        in: metadata?.domain.scalarRange ?? 0...1,
+                        onEditingChanged: { editing in
+                            if !editing { commitScalarDraft(parameter.id) }
+                        }
                     )
-                    Text(String(format: "%.2f", value))
+                    Text(String(format: "%.2f", displayValue))
                         .font(.caption2.monospacedDigit())
                         .frame(width: 44)
                 case .integer(let value):
@@ -144,6 +156,45 @@ struct AIEffectControlsView: View {
                 }
             }
         }
+    }
+
+    private func updateScalarDraft(_ id: String, value: Double) {
+        // The local draft changes on every touch sample so the slider itself remains responsive.
+        // Project mutations (and therefore expensive preview renders) are intentionally coalesced.
+        scalarDrafts[id] = value
+        var gate = previewGates[id] ?? EffectPreviewUpdateGate(minimumInterval: interactivePreviewInterval)
+        if gate.shouldCommit(at: ProcessInfo.processInfo.systemUptime) {
+            setParameter(id, .scalar(value))
+        }
+        previewGates[id] = gate
+    }
+
+    private var interactivePreviewInterval: TimeInterval {
+        // Spatially expensive filters can easily exceed a frame budget on full-resolution iPad media.
+        // Keep their controls responsive by asking for fewer intermediate renders; the final slider
+        // value is always committed below and export remains full quality.
+        switch effect.type {
+        case .gaussianBlur, .fastBoxBlur, .directionalBlur, .median, .noiseReduction,
+             .mosaic, .findEdges, .glow, .cartoon, .twirl:
+            return 1.0 / 8.0
+        case .depthMap, .cutout, .upscale, .restore:
+            return 1.0 / 6.0
+        default:
+            return 1.0 / 15.0
+        }
+    }
+
+    private func commitScalarDraft(_ id: String) {
+        guard let value = scalarDrafts[id] else { return }
+        var gate = previewGates[id] ?? EffectPreviewUpdateGate(minimumInterval: interactivePreviewInterval)
+        _ = gate.shouldCommitFinal(at: ProcessInfo.processInfo.systemUptime)
+        previewGates[id] = gate
+        setParameter(id, .scalar(value))
+        scalarDrafts[id] = nil
+    }
+
+    private func commitAllScalarDrafts() {
+        for id in Array(scalarDrafts.keys) { commitScalarDraft(id) }
     }
 
     private func setEnabled(_ enabled: Bool) {

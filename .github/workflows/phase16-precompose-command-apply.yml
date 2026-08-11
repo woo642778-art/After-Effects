@@ -1,0 +1,137 @@
+# retry: complete atomic V16 pre-compose integration
+name: Apply V16 Precompose Command Integration
+
+on:
+  push:
+    branches:
+      - agent/phase16-precomp-effects-performance
+    paths:
+      - .github/workflows/phase16-precompose-command-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase16-precomp-effects-performance
+          fetch-depth: 0
+      - name: Patch command and mutation engine
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          mutation = Path('Sources/VertexProject/ProjectMutation.swift')
+          text = mutation.read_text()
+          anchor = '    case applyTimelineEdit(compositionID: VertexID, change: TimelineProjectMutation)\n'
+          addition = anchor + '    case precompose(plan: ProjectPrecomposePlan, previousSelectedLayerID: VertexID?, undo: Bool)\n'
+          if 'case precompose(plan: ProjectPrecomposePlan' not in text:
+              if anchor not in text: raise SystemExit('mutation case anchor missing')
+              text = text.replace(anchor, addition, 1)
+          inverse_anchor = '        case .applyTimelineEdit(let id, let change): .applyTimelineEdit(compositionID: id, change: change.inverse)\n'
+          inverse_add = inverse_anchor + '        case .precompose(let plan, let previous, let undo): .precompose(plan: plan, previousSelectedLayerID: previous, undo: !undo)\n'
+          if 'case .precompose(let plan, let previous, let undo)' not in text:
+              if inverse_anchor not in text: raise SystemExit('mutation inverse anchor missing')
+              text = text.replace(inverse_anchor, inverse_add, 1)
+          mutation.write_text(text)
+
+          commands = Path('Sources/VertexProject/ProjectCommands.swift')
+          text = commands.read_text()
+          prepare_anchor = '''            forward = mutation
+
+        case .insertLayer(let layer, let index):'''
+          prepare_block = '''            forward = mutation
+
+        case .precompose(let plan):
+            let rebuilt = try ProjectPrecomposePlanner.plan(
+                document: document,
+                compositionID: plan.nestedLayer.compositionID,
+                layerIDs: plan.sourceLayerIDs,
+                newCompositionID: plan.childComposition.id,
+                name: plan.childComposition.name
+            )
+            guard rebuilt == plan else {
+                throw ProjectError.invalidOperation("Pre-compose plan is stale or no longer matches the project.")
+            }
+            let mutation = ProjectMutation.precompose(
+                plan: plan,
+                previousSelectedLayerID: document.selectedLayerID,
+                undo: false
+            )
+            var candidate = document
+            try apply(mutation, to: &candidate)
+            _ = try candidate.validated()
+            forward = mutation
+
+        case .insertLayer(let layer, let index):'''
+          if 'case .precompose(let plan):' not in text:
+              if prepare_anchor not in text: raise SystemExit('prepare anchor missing')
+              text = text.replace(prepare_anchor, prepare_block, 1)
+
+          apply_anchor = '''            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
+            document.selectedLayerID = change.afterSelectedLayerID
+        case .insertLayer(let layer, let compositionID, let index):'''
+          apply_block = '''            document.compositionRegistry[compIndex].layerIDs = change.afterLayerOrder
+            document.selectedLayerID = change.afterSelectedLayerID
+        case .precompose(let plan, let previousSelectedLayerID, let undo):
+            let parentCompositionID = plan.nestedLayer.compositionID
+            let parentIndex = try compositionIndex(parentCompositionID, in: document)
+            if !undo {
+                guard document.compositionRegistry[parentIndex].layerIDs == plan.parentLayerOrderBefore,
+                      document.composition(id: plan.childComposition.id) == nil,
+                      document.layer(id: plan.nestedLayer.id) == nil,
+                      document.compositionRegistry.indices.contains(plan.childRegistryIndex) || plan.childRegistryIndex == document.compositionRegistry.endIndex else {
+                    throw ProjectError.invalidOperation("Pre-compose apply precondition did not match.")
+                }
+                for source in plan.sourceLayers {
+                    guard document.layer(id: source.id) == source else {
+                        throw ProjectError.invalidOperation("Pre-compose source layer changed before apply.")
+                    }
+                }
+                let sourceIDs = Set(plan.sourceLayerIDs)
+                document.layerRegistry.removeAll { sourceIDs.contains($0.id) }
+                document.layerRegistry.append(contentsOf: plan.childLayers)
+                document.layerRegistry.append(plan.nestedLayer)
+                document.compositionRegistry[parentIndex].layerIDs = plan.parentLayerOrderAfter
+                document.compositionRegistry.insert(plan.childComposition, at: plan.childRegistryIndex)
+                document.selectedLayerID = plan.nestedLayer.id
+            } else {
+                guard document.compositionRegistry[parentIndex].layerIDs == plan.parentLayerOrderAfter,
+                      let childIndex = document.compositionRegistry.firstIndex(where: { $0.id == plan.childComposition.id }),
+                      document.compositionRegistry[childIndex] == plan.childComposition,
+                      document.layer(id: plan.nestedLayer.id) == plan.nestedLayer else {
+                    throw ProjectError.invalidOperation("Pre-compose undo precondition did not match.")
+                }
+                for child in plan.childLayers {
+                    guard document.layer(id: child.id) == child else {
+                        throw ProjectError.invalidOperation("Pre-compose child layer changed before undo.")
+                    }
+                }
+                let generatedIDs = Set(plan.childLayers.map(\.id) + [plan.nestedLayer.id])
+                document.layerRegistry.removeAll { generatedIDs.contains($0.id) }
+                document.layerRegistry.append(contentsOf: plan.sourceLayers)
+                document.compositionRegistry.remove(at: childIndex)
+                let restoredParentIndex = try compositionIndex(parentCompositionID, in: document)
+                document.compositionRegistry[restoredParentIndex].layerIDs = plan.parentLayerOrderBefore
+                document.selectedLayerID = previousSelectedLayerID
+            }
+        case .insertLayer(let layer, let compositionID, let index):'''
+          if 'case .precompose(let plan, let previousSelectedLayerID, let undo):' not in text:
+              if apply_anchor not in text: raise SystemExit('apply anchor missing')
+              text = text.replace(apply_anchor, apply_block, 1)
+          commands.write_text(text)
+          PY
+          git diff --check
+      - name: Remove one-shot applicator and commit
+        run: |
+          set -euo pipefail
+          rm .github/workflows/phase16-precompose-command-apply.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Sources/VertexProject/ProjectMutation.swift Sources/VertexProject/ProjectCommands.swift .github/workflows/phase16-precompose-command-apply.yml
+          git commit -m 'feat: integrate atomic V16 precompose command'
+          git push origin HEAD:agent/phase16-precomp-effects-performance

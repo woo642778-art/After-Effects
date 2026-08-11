@@ -7,16 +7,35 @@ public enum ProjectEffectType: String, Codable, CaseIterable, Sendable {
     case upscale
     case restore
     case gaussianBlur
+    case fastBoxBlur
+    case directionalBlur
     case sharpen
+    case median
+    case noiseReduction
     case exposure
     case colorControls
     case hueAdjust
+    case vibrance
+    case gammaAdjust
+    case highlightShadow
+    case sepiaTone
     case invert
+    case posterize
+    case mosaic
+    case findEdges
+    case glow
+    case vignette
+    case cartoon
+    case twirl
 
     public var isNativePixelEffect: Bool {
         switch self {
-        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert: true
-        case .depthMap, .cutout, .upscale, .restore: false
+        case .gaussianBlur, .fastBoxBlur, .directionalBlur, .sharpen, .median, .noiseReduction,
+             .exposure, .colorControls, .hueAdjust, .vibrance, .gammaAdjust, .highlightShadow,
+             .sepiaTone, .invert, .posterize, .mosaic, .findEdges, .glow, .vignette, .cartoon, .twirl:
+            true
+        case .depthMap, .cutout, .upscale, .restore:
+            false
         }
     }
 }
@@ -91,26 +110,45 @@ public enum RestorationParameterID {
     public static let faceRestoration = "faceRestoration"
 }
 
-public enum GaussianBlurParameterID {
+public enum GaussianBlurParameterID { public static let radius = "radius" }
+public enum FastBoxBlurParameterID { public static let radius = "radius" }
+public enum DirectionalBlurParameterID {
     public static let radius = "radius"
+    public static let angle = "angle"
 }
-
-public enum SharpenParameterID {
+public enum SharpenParameterID { public static let sharpness = "sharpness" }
+public enum NoiseReductionParameterID {
+    public static let noiseLevel = "noiseLevel"
     public static let sharpness = "sharpness"
 }
-
-public enum ExposureEffectParameterID {
-    public static let stops = "stops"
-}
-
+public enum ExposureEffectParameterID { public static let stops = "stops" }
 public enum ColorControlsParameterID {
     public static let brightness = "brightness"
     public static let contrast = "contrast"
     public static let saturation = "saturation"
 }
-
-public enum HueAdjustParameterID {
-    public static let degrees = "degrees"
+public enum HueAdjustParameterID { public static let degrees = "degrees" }
+public enum VibranceParameterID { public static let amount = "amount" }
+public enum GammaAdjustParameterID { public static let power = "power" }
+public enum HighlightShadowParameterID {
+    public static let highlights = "highlights"
+    public static let shadows = "shadows"
+}
+public enum SepiaToneParameterID { public static let intensity = "intensity" }
+public enum PosterizeParameterID { public static let levels = "levels" }
+public enum MosaicParameterID { public static let scale = "scale" }
+public enum FindEdgesParameterID { public static let intensity = "intensity" }
+public enum GlowParameterID {
+    public static let radius = "radius"
+    public static let intensity = "intensity"
+}
+public enum VignetteParameterID {
+    public static let radius = "radius"
+    public static let intensity = "intensity"
+}
+public enum TwirlParameterID {
+    public static let radius = "radius"
+    public static let angle = "angle"
 }
 
 public struct ProjectEffect: Codable, Equatable, Sendable, Identifiable {
@@ -136,11 +174,7 @@ public struct ProjectEffect: Codable, Equatable, Sendable, Identifiable {
 
     public static func makeDefault(_ type: ProjectEffectType) -> Self {
         let descriptor = ProjectEffectDescriptorRegistry.descriptor(for: type)
-        return Self(
-            type: type,
-            version: descriptor.effectVersion,
-            parameters: descriptor.defaultParameters
-        )
+        return Self(type: type, version: descriptor.effectVersion, parameters: descriptor.defaultParameters)
     }
 
     public func parameter(id: String) -> ProjectEffectParameter? {
@@ -185,9 +219,7 @@ public struct ProjectEffect: Codable, Equatable, Sendable, Identifiable {
 
 public extension Array where Element == ProjectEffect {
     func validatedEffects() throws -> [ProjectEffect] {
-        guard Set(map(\.id)).count == count else {
-            throw ProjectError.duplicateIdentity("effect")
-        }
+        guard Set(map(\.id)).count == count else { throw ProjectError.duplicateIdentity("effect") }
         for effect in self { _ = try effect.validated() }
         return self
     }

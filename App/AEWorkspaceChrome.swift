@@ -50,7 +50,9 @@ struct AEPanel<Content: View>: View {
 }
 
 struct AEWorkspaceToolbar: View {
+    @EnvironmentObject private var focusMusic: FocusMusicPlayer
     @ObservedObject var editorState: EditorWorkspaceState
+    @State private var isFocusMusicPresented = false
     let widthBand: AEWorkspaceWidthBand
     let onToggleLeftDrawer: () -> Void
     let onToggleRightDrawer: () -> Void
@@ -81,6 +83,15 @@ struct AEWorkspaceToolbar: View {
                 Button(action: onToggleLeftDrawer) { Image(systemName: "sidebar.left") }
                     .buttonStyle(AEToolButtonStyle(isActive: editorState.isLeftDrawerPresented))
                     .help("Project and Effects")
+            }
+
+            Button { isFocusMusicPresented.toggle() } label: {
+                Image(systemName: focusMusic.isPlaying ? "music.note.list" : "music.note")
+            }
+            .buttonStyle(AEToolButtonStyle(isActive: focusMusic.isPlaying))
+            .help("Focus Music")
+            .popover(isPresented: $isFocusMusicPresented, arrowEdge: .top) {
+                FocusMusicView()
             }
 
             Menu {
