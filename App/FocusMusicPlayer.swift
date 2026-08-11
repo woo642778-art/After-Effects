@@ -11,48 +11,118 @@ enum FocusMusicTrack: String, CaseIterable, Identifiable, Sendable {
     case warmKeyframes
     case softCircuit
     case deepFocus
+    case silverMorning
+    case afterglowNotes
+    case cloudRoom
+    case blueHour
+    case paperLantern
+    case lowOrbit
+    case neonRain
+    case velvetKeys
+    case moonlitCode
+    case glassGarden
+    case slowComet
+    case cocoaLoop
+    case tapeWindow
+    case softStatic
+    case dawnTerminal
+    case lucidSteps
+    case amberSpace
+    case stillWater
+    case nightBus
+    case paleCircuit
+    case snowfallStudio
+    case violetDesk
+    case oceanMemory
+    case pixelCafe
+    case calmMachine
+    case distantPiano
 
     var id: String { rawValue }
+    var title: String { profile.title }
+    var subtitle: String { profile.subtitle }
+    var bpm: Int { Int(profile.configuration.bpm.rounded()) }
+    fileprivate var configuration: FocusMusicConfiguration { profile.configuration }
 
-    var title: String {
-        switch self {
-        case .quietDesk: "Quiet Desk"
-        case .midnightRender: "Midnight Render"
-        case .rainyTimeline: "Rainy Timeline"
-        case .warmKeyframes: "Warm Keyframes"
-        case .softCircuit: "Soft Circuit"
-        case .deepFocus: "Deep Focus"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .quietDesk: "soft keys • calm lo-fi"
-        case .midnightRender: "dark pad • slow pulse"
-        case .rainyTimeline: "air texture • gentle keys"
-        case .warmKeyframes: "warm chords • mellow plucks"
-        case .softCircuit: "clean synth • light motion"
-        case .deepFocus: "minimal pad • low distraction"
-        }
-    }
-
-    var bpm: Int { Int(configuration.bpm.rounded()) }
-
-    fileprivate var configuration: FocusMusicConfiguration {
+    private var profile: FocusMusicProfile {
         switch self {
         case .quietDesk:
-            FocusMusicConfiguration(rootMIDI: 50, progression: [0, 5, 3, 7], chordIntervals: [0, 3, 7, 10], bpm: 72, brightness: 0.16, air: 0.0018, pluck: 0.050, phase: 0.1)
+            .init("Quiet Desk", "soft keys • calm lo-fi", .init(rootMIDI: 50, progression: [0, 5, 3, 7], chordIntervals: [0, 3, 7, 10], bpm: 72, pad: 0.42, harmonic: 0.16, bass: 0.12, pluck: 0.050, bell: 0.00, pulse: 0.02, air: 0.0018, stereo: 0.12, echo: 0.12, subdivision: 1, phase: 0.1))
         case .midnightRender:
-            FocusMusicConfiguration(rootMIDI: 45, progression: [0, 3, 7, 5], chordIntervals: [0, 3, 7, 10], bpm: 64, brightness: 0.08, air: 0.0010, pluck: 0.032, phase: 1.3)
+            .init("Midnight Render", "dark pad • slow pulse", .init(rootMIDI: 45, progression: [0, 3, 7, 5], chordIntervals: [0, 3, 7, 10], bpm: 64, pad: 0.48, harmonic: 0.08, bass: 0.20, pluck: 0.025, bell: 0.00, pulse: 0.09, air: 0.0010, stereo: 0.08, echo: 0.18, subdivision: 1, phase: 1.3))
         case .rainyTimeline:
-            FocusMusicConfiguration(rootMIDI: 48, progression: [0, 7, 5, 3], chordIntervals: [0, 4, 7, 11], bpm: 68, brightness: 0.13, air: 0.0042, pluck: 0.040, phase: 2.4)
+            .init("Rainy Timeline", "rain air • gentle keys", .init(rootMIDI: 48, progression: [0, 7, 5, 3], chordIntervals: [0, 4, 7, 11], bpm: 68, pad: 0.38, harmonic: 0.13, bass: 0.08, pluck: 0.040, bell: 0.02, pulse: 0.00, air: 0.0048, stereo: 0.16, echo: 0.22, subdivision: 1, phase: 2.4))
         case .warmKeyframes:
-            FocusMusicConfiguration(rootMIDI: 53, progression: [0, 4, 9, 5], chordIntervals: [0, 4, 7, 11], bpm: 76, brightness: 0.20, air: 0.0015, pluck: 0.057, phase: 0.7)
+            .init("Warm Keyframes", "warm chords • mellow plucks", .init(rootMIDI: 53, progression: [0, 4, 9, 5], chordIntervals: [0, 4, 7, 11], bpm: 76, pad: 0.35, harmonic: 0.20, bass: 0.10, pluck: 0.060, bell: 0.01, pulse: 0.03, air: 0.0015, stereo: 0.13, echo: 0.16, subdivision: 1, phase: 0.7))
         case .softCircuit:
-            FocusMusicConfiguration(rootMIDI: 47, progression: [0, 5, 8, 3], chordIntervals: [0, 3, 7, 10], bpm: 80, brightness: 0.24, air: 0.0012, pluck: 0.060, phase: 1.9)
+            .init("Soft Circuit", "clean synth • light motion", .init(rootMIDI: 47, progression: [0, 5, 8, 3], chordIntervals: [0, 3, 7, 10], bpm: 80, pad: 0.30, harmonic: 0.25, bass: 0.12, pluck: 0.055, bell: 0.02, pulse: 0.10, air: 0.0012, stereo: 0.20, echo: 0.12, subdivision: 2, phase: 1.9))
         case .deepFocus:
-            FocusMusicConfiguration(rootMIDI: 43, progression: [0, 5, 2, 7], chordIntervals: [0, 3, 7, 10], bpm: 60, brightness: 0.05, air: 0.0007, pluck: 0.020, phase: 2.9)
+            .init("Deep Focus", "minimal pad • low distraction", .init(rootMIDI: 43, progression: [0, 5, 2, 7], chordIntervals: [0, 3, 7, 10], bpm: 60, pad: 0.54, harmonic: 0.05, bass: 0.14, pluck: 0.015, bell: 0.00, pulse: 0.01, air: 0.0007, stereo: 0.07, echo: 0.10, subdivision: 1, phase: 2.9))
+        case .silverMorning:
+            .init("Silver Morning", "bright air • soft piano", .init(rootMIDI: 55, progression: [0, 7, 9, 5], chordIntervals: [0, 4, 7, 11], bpm: 74, pad: 0.30, harmonic: 0.18, bass: 0.06, pluck: 0.035, bell: 0.045, pulse: 0.01, air: 0.0020, stereo: 0.15, echo: 0.20, subdivision: 1, phase: 0.4))
+        case .afterglowNotes:
+            .init("Afterglow Notes", "amber pad • echo keys", .init(rootMIDI: 52, progression: [0, 5, 7, 3], chordIntervals: [0, 4, 7, 9], bpm: 70, pad: 0.40, harmonic: 0.14, bass: 0.09, pluck: 0.040, bell: 0.025, pulse: 0.01, air: 0.0013, stereo: 0.17, echo: 0.34, subdivision: 1, phase: 1.1))
+        case .cloudRoom:
+            .init("Cloud Room", "wide ambient • no rush", .init(rootMIDI: 46, progression: [0, 5, 10, 3], chordIntervals: [0, 5, 7, 12], bpm: 56, pad: 0.58, harmonic: 0.07, bass: 0.07, pluck: 0.006, bell: 0.008, pulse: 0.00, air: 0.0017, stereo: 0.25, echo: 0.28, subdivision: 1, phase: 2.1))
+        case .blueHour:
+            .init("Blue Hour", "cool chords • soft bass", .init(rootMIDI: 49, progression: [0, 3, 8, 5], chordIntervals: [0, 3, 7, 10], bpm: 66, pad: 0.42, harmonic: 0.10, bass: 0.18, pluck: 0.025, bell: 0.01, pulse: 0.025, air: 0.0011, stereo: 0.12, echo: 0.16, subdivision: 1, phase: 2.7))
+        case .paperLantern:
+            .init("Paper Lantern", "gentle bell • warm room", .init(rootMIDI: 57, progression: [0, 5, 9, 7], chordIntervals: [0, 4, 7, 11], bpm: 78, pad: 0.27, harmonic: 0.15, bass: 0.05, pluck: 0.025, bell: 0.075, pulse: 0.01, air: 0.0014, stereo: 0.18, echo: 0.26, subdivision: 2, phase: 0.9))
+        case .lowOrbit:
+            .init("Low Orbit", "space pad • sub pulse", .init(rootMIDI: 40, progression: [0, 7, 2, 5], chordIntervals: [0, 5, 7, 10], bpm: 58, pad: 0.49, harmonic: 0.11, bass: 0.25, pluck: 0.008, bell: 0.00, pulse: 0.09, air: 0.0008, stereo: 0.22, echo: 0.18, subdivision: 1, phase: 3.0))
+        case .neonRain:
+            .init("Neon Rain", "wet synth • neon pulse", .init(rootMIDI: 51, progression: [0, 8, 5, 10], chordIntervals: [0, 3, 7, 10], bpm: 84, pad: 0.28, harmonic: 0.28, bass: 0.10, pluck: 0.045, bell: 0.015, pulse: 0.12, air: 0.0042, stereo: 0.24, echo: 0.25, subdivision: 2, phase: 1.6))
+        case .velvetKeys:
+            .init("Velvet Keys", "soft piano • velvet pad", .init(rootMIDI: 54, progression: [0, 4, 7, 5], chordIntervals: [0, 4, 7, 12], bpm: 69, pad: 0.36, harmonic: 0.09, bass: 0.07, pluck: 0.035, bell: 0.055, pulse: 0.00, air: 0.0010, stereo: 0.13, echo: 0.30, subdivision: 1, phase: 0.3))
+        case .moonlitCode:
+            .init("Moonlit Code", "night synth • steady flow", .init(rootMIDI: 44, progression: [0, 5, 7, 10], chordIntervals: [0, 3, 7, 12], bpm: 75, pad: 0.43, harmonic: 0.12, bass: 0.17, pluck: 0.020, bell: 0.008, pulse: 0.06, air: 0.0009, stereo: 0.15, echo: 0.14, subdivision: 1, phase: 2.2))
+        case .glassGarden:
+            .init("Glass Garden", "glass bell • airy chords", .init(rootMIDI: 59, progression: [0, 7, 4, 9], chordIntervals: [0, 4, 7, 11], bpm: 82, pad: 0.25, harmonic: 0.20, bass: 0.04, pluck: 0.020, bell: 0.085, pulse: 0.00, air: 0.0022, stereo: 0.26, echo: 0.32, subdivision: 2, phase: 1.4))
+        case .slowComet:
+            .init("Slow Comet", "long pad • distant spark", .init(rootMIDI: 42, progression: [0, 2, 7, 5], chordIntervals: [0, 5, 9, 12], bpm: 54, pad: 0.60, harmonic: 0.08, bass: 0.11, pluck: 0.004, bell: 0.020, pulse: 0.00, air: 0.0012, stereo: 0.28, echo: 0.36, subdivision: 1, phase: 2.5))
+        case .cocoaLoop:
+            .init("Cocoa Loop", "cozy lo-fi • round bass", .init(rootMIDI: 50, progression: [0, 9, 5, 7], chordIntervals: [0, 3, 7, 10], bpm: 73, pad: 0.34, harmonic: 0.10, bass: 0.20, pluck: 0.045, bell: 0.00, pulse: 0.035, air: 0.0024, stereo: 0.10, echo: 0.13, subdivision: 1, phase: 0.6))
+        case .tapeWindow:
+            .init("Tape Window", "dusty tape • muted keys", .init(rootMIDI: 48, progression: [0, 5, 3, 8], chordIntervals: [0, 4, 7, 10], bpm: 71, pad: 0.36, harmonic: 0.07, bass: 0.13, pluck: 0.035, bell: 0.00, pulse: 0.02, air: 0.0034, stereo: 0.09, echo: 0.12, subdivision: 1, phase: 1.8))
+        case .softStatic:
+            .init("Soft Static", "noise bed • minimal tone", .init(rootMIDI: 41, progression: [0, 5, 0, 7], chordIntervals: [0, 7, 12], bpm: 52, pad: 0.37, harmonic: 0.03, bass: 0.10, pluck: 0.002, bell: 0.00, pulse: 0.00, air: 0.0060, stereo: 0.05, echo: 0.08, subdivision: 1, phase: 3.1))
+        case .dawnTerminal:
+            .init("Dawn Terminal", "clean dawn • gentle pulse", .init(rootMIDI: 56, progression: [0, 5, 7, 9], chordIntervals: [0, 4, 7, 11], bpm: 79, pad: 0.31, harmonic: 0.19, bass: 0.07, pluck: 0.030, bell: 0.035, pulse: 0.05, air: 0.0015, stereo: 0.16, echo: 0.18, subdivision: 2, phase: 0.2))
+        case .lucidSteps:
+            .init("Lucid Steps", "light arp • lucid synth", .init(rootMIDI: 58, progression: [0, 7, 5, 9], chordIntervals: [0, 4, 7, 12], bpm: 90, pad: 0.22, harmonic: 0.23, bass: 0.06, pluck: 0.065, bell: 0.030, pulse: 0.08, air: 0.0010, stereo: 0.21, echo: 0.17, subdivision: 2, phase: 1.2))
+        case .amberSpace:
+            .init("Amber Space", "warm space • slow shimmer", .init(rootMIDI: 47, progression: [0, 5, 10, 7], chordIntervals: [0, 4, 9, 12], bpm: 62, pad: 0.50, harmonic: 0.13, bass: 0.10, pluck: 0.008, bell: 0.028, pulse: 0.00, air: 0.0015, stereo: 0.30, echo: 0.38, subdivision: 1, phase: 2.6))
+        case .stillWater:
+            .init("Still Water", "near-silent pad • water air", .init(rootMIDI: 45, progression: [0, 5, 3, 5], chordIntervals: [0, 5, 7, 12], bpm: 50, pad: 0.55, harmonic: 0.04, bass: 0.06, pluck: 0.002, bell: 0.006, pulse: 0.00, air: 0.0028, stereo: 0.11, echo: 0.24, subdivision: 1, phase: 0.8))
+        case .nightBus:
+            .init("Night Bus", "city hum • rolling chords", .init(rootMIDI: 46, progression: [0, 3, 8, 7], chordIntervals: [0, 3, 7, 10], bpm: 77, pad: 0.37, harmonic: 0.11, bass: 0.19, pluck: 0.026, bell: 0.00, pulse: 0.055, air: 0.0028, stereo: 0.14, echo: 0.15, subdivision: 1, phase: 1.7))
+        case .paleCircuit:
+            .init("Pale Circuit", "digital hush • thin pulse", .init(rootMIDI: 52, progression: [0, 7, 2, 9], chordIntervals: [0, 4, 7, 14], bpm: 86, pad: 0.24, harmonic: 0.29, bass: 0.07, pluck: 0.040, bell: 0.015, pulse: 0.11, air: 0.0008, stereo: 0.24, echo: 0.10, subdivision: 2, phase: 2.0))
+        case .snowfallStudio:
+            .init("Snowfall Studio", "soft bell • white air", .init(rootMIDI: 60, progression: [0, 5, 9, 4], chordIntervals: [0, 4, 7, 12], bpm: 67, pad: 0.30, harmonic: 0.11, bass: 0.04, pluck: 0.012, bell: 0.080, pulse: 0.00, air: 0.0038, stereo: 0.20, echo: 0.34, subdivision: 1, phase: 0.5))
+        case .violetDesk:
+            .init("Violet Desk", "violet chords • soft tick", .init(rootMIDI: 49, progression: [0, 8, 3, 5], chordIntervals: [0, 3, 7, 11], bpm: 74, pad: 0.39, harmonic: 0.16, bass: 0.12, pluck: 0.035, bell: 0.010, pulse: 0.025, air: 0.0015, stereo: 0.17, echo: 0.19, subdivision: 1, phase: 2.8))
+        case .oceanMemory:
+            .init("Ocean Memory", "wide wash • distant notes", .init(rootMIDI: 44, progression: [0, 7, 5, 10], chordIntervals: [0, 5, 9, 12], bpm: 57, pad: 0.57, harmonic: 0.08, bass: 0.08, pluck: 0.004, bell: 0.018, pulse: 0.00, air: 0.0031, stereo: 0.31, echo: 0.40, subdivision: 1, phase: 1.5))
+        case .pixelCafe:
+            .init("Pixel Cafe", "bright lo-fi • tiny arp", .init(rootMIDI: 55, progression: [0, 9, 5, 7], chordIntervals: [0, 4, 7, 11], bpm: 92, pad: 0.24, harmonic: 0.22, bass: 0.10, pluck: 0.070, bell: 0.025, pulse: 0.07, air: 0.0018, stereo: 0.19, echo: 0.12, subdivision: 2, phase: 0.0))
+        case .calmMachine:
+            .init("Calm Machine", "steady synth • low motion", .init(rootMIDI: 43, progression: [0, 5, 7, 2], chordIntervals: [0, 3, 7, 12], bpm: 65, pad: 0.47, harmonic: 0.09, bass: 0.16, pluck: 0.012, bell: 0.00, pulse: 0.045, air: 0.0008, stereo: 0.08, echo: 0.10, subdivision: 1, phase: 2.3))
+        case .distantPiano:
+            .init("Distant Piano", "distant bell-piano • room air", .init(rootMIDI: 57, progression: [0, 4, 5, 9], chordIntervals: [0, 4, 7, 12], bpm: 63, pad: 0.25, harmonic: 0.06, bass: 0.04, pluck: 0.022, bell: 0.095, pulse: 0.00, air: 0.0017, stereo: 0.18, echo: 0.46, subdivision: 1, phase: 1.0))
         }
+    }
+}
+
+private struct FocusMusicProfile: Sendable {
+    let title: String
+    let subtitle: String
+    let configuration: FocusMusicConfiguration
+
+    init(_ title: String, _ subtitle: String, _ configuration: FocusMusicConfiguration) {
+        self.title = title
+        self.subtitle = subtitle
+        self.configuration = configuration
     }
 }
 
@@ -61,9 +131,16 @@ private struct FocusMusicConfiguration: Sendable {
     let progression: [Int]
     let chordIntervals: [Int]
     let bpm: Double
-    let brightness: Double
-    let air: Double
+    let pad: Double
+    let harmonic: Double
+    let bass: Double
     let pluck: Double
+    let bell: Double
+    let pulse: Double
+    let air: Double
+    let stereo: Double
+    let echo: Double
+    let subdivision: Int
     let phase: Double
 }
 
@@ -90,6 +167,7 @@ enum FocusMusicSynthesizer {
         var noiseSeed = initialSeed | 1
         var smoothedNoise = 0.0
         let beatDuration = 60.0 / config.bpm
+        let subBeatDuration = beatDuration / Double(max(1, config.subdivision))
         let twoPi = Double.pi * 2
 
         for frame in 0..<frameCount {
@@ -103,24 +181,41 @@ enum FocusMusicSynthesizer {
             var padLeft = 0.0
             var padRight = 0.0
             for (index, frequency) in frequencies.enumerated() {
-                let weight = index == 0 ? 0.42 : 0.24
+                let weight = index == 0 ? config.pad : config.pad * 0.58
                 let octave = index == 0 ? frequency * 0.5 : frequency
                 padLeft += sin(twoPi * octave * time + Double(index) * 0.17) * weight
                 padRight += sin(twoPi * octave * time + Double(index) * 0.17 + 0.035 + config.phase * 0.01) * weight
-                if config.brightness > 0 {
-                    padLeft += sin(twoPi * octave * 2 * time + 0.3) * weight * config.brightness
-                    padRight += sin(twoPi * octave * 2 * time + 0.36) * weight * config.brightness
-                }
+                padLeft += sin(twoPi * octave * 2 * time + 0.3) * weight * config.harmonic
+                padRight += sin(twoPi * octave * 2 * time + 0.36) * weight * config.harmonic
             }
             padLeft *= edgeFade * slowBreath
             padRight *= edgeFade * slowBreath
 
-            let beatIndex = Int(time / beatDuration)
-            let beatTime = time - Double(beatIndex) * beatDuration
+            let beatIndex = Int(time / subBeatDuration)
+            let beatTime = time - Double(beatIndex) * subBeatDuration
             let pluckFrequency = frequencies[beatIndex % frequencies.count] * 2.0
             let pluckAttack = min(1.0, beatTime / 0.012)
             let pluckEnvelope = pluckAttack * exp(-5.2 * beatTime)
             let pluck = (sin(twoPi * pluckFrequency * beatTime) + 0.22 * sin(twoPi * pluckFrequency * 2 * beatTime)) * pluckEnvelope * config.pluck
+
+            let bellEnvelope = min(1.0, beatTime / 0.006) * exp(-3.4 * beatTime)
+            let bell = (sin(twoPi * pluckFrequency * 1.5 * beatTime) + 0.42 * sin(twoPi * pluckFrequency * 3.01 * beatTime)) * bellEnvelope * config.bell
+
+            let echoDelay = min(0.33, subBeatDuration * 0.5)
+            let echoTime = beatTime - echoDelay
+            let echo: Double
+            if echoTime > 0 {
+                let envelope = exp(-5.2 * echoTime)
+                echo = sin(twoPi * pluckFrequency * echoTime) * envelope * config.pluck * config.echo
+            } else {
+                echo = 0
+            }
+
+            let rootFrequency = frequencies[0] * 0.25
+            let bass = sin(twoPi * rootFrequency * time) * config.bass * (0.80 + 0.20 * sin(twoPi * time / max(beatDuration, 0.1)))
+            let pulsePhase = (time.truncatingRemainder(dividingBy: max(subBeatDuration, 0.05))) / max(subBeatDuration, 0.05)
+            let pulseEnvelope = exp(-8.0 * pulsePhase)
+            let pulse = sin(twoPi * rootFrequency * 2.0 * time) * pulseEnvelope * config.pulse
 
             noiseSeed = noiseSeed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
             let rawNoise = Double(Int32(bitPattern: UInt32(truncatingIfNeeded: noiseSeed >> 32))) / Double(Int32.max)
@@ -129,12 +224,13 @@ enum FocusMusicSynthesizer {
 
             let loopFadeFrames = Double(sampleRate) * 0.10
             let loopFade = min(1.0, min(Double(frame), Double(frameCount - 1 - frame)) / loopFadeFrames)
-            let pan = 0.5 + 0.12 * sin(twoPi * time / 11.0 + config.phase)
+            let pan = 0.5 + config.stereo * sin(twoPi * time / 11.0 + config.phase)
             let leftGain = sqrt(max(0.0, 1.0 - pan))
             let rightGain = sqrt(max(0.0, pan))
-            let master = 0.23 * loopFade
-            let left = (padLeft * leftGain + pluck * 0.82 + air) * master
-            let right = (padRight * rightGain + pluck + air * 0.94) * master
+            let master = 0.20 * loopFade
+            let tonal = pluck + bell + echo + bass + pulse
+            let left = (padLeft * leftGain + tonal * 0.82 + air) * master
+            let right = (padRight * rightGain + tonal + air * 0.94) * master
             samples[frame * 2] = pcm16(left)
             samples[frame * 2 + 1] = pcm16(right)
         }
@@ -159,9 +255,7 @@ enum FocusMusicSynthesizer {
         var result = Data()
         result.reserveCapacity(Int(44 + dataByteCount))
 
-        func ascii(_ string: String) {
-            result.append(contentsOf: string.utf8)
-        }
+        func ascii(_ string: String) { result.append(contentsOf: string.utf8) }
         func u16(_ value: UInt16) {
             var little = value.littleEndian
             withUnsafeBytes(of: &little) { result.append(contentsOf: $0) }
@@ -192,8 +286,27 @@ enum FocusMusicSynthesizer {
     }
 }
 
+protocol FocusMusicPlaybackStarting: AnyObject {
+    func play() -> Bool
+}
+
+extension AVAudioPlayer: FocusMusicPlaybackStarting {}
+
+enum FocusMusicError: LocalizedError {
+    case playbackDidNotStart
+
+    var errorDescription: String? {
+        switch self {
+        case .playbackDidNotStart: "Focus Music could not start audio playback."
+        }
+    }
+}
+
 @MainActor
 final class FocusMusicPlayer: ObservableObject {
+    static let audioSessionCategory: AVAudioSession.Category = .playback
+    static let audioSessionOptions: AVAudioSession.CategoryOptions = [.mixWithOthers]
+
     private enum DefaultsKey {
         static let track = "vertex.focusMusic.track.v1"
         static let volume = "vertex.focusMusic.volume.v1"
@@ -230,10 +343,9 @@ final class FocusMusicPlayer: ObservableObject {
             do {
                 try activateSession()
                 audioPlayer.volume = Float(volume)
-                audioPlayer.play()
-                isPlaying = true
-                errorMessage = nil
+                _ = startPlaybackForTesting(audioPlayer)
             } catch {
+                isPlaying = false
                 errorMessage = error.localizedDescription
             }
             return
@@ -271,6 +383,18 @@ final class FocusMusicPlayer: ObservableObject {
         defaults.set(volume, forKey: DefaultsKey.volume)
     }
 
+    @discardableResult
+    func startPlaybackForTesting(_ engine: any FocusMusicPlaybackStarting) -> Bool {
+        errorMessage = nil
+        guard engine.play() else {
+            isPlaying = false
+            errorMessage = FocusMusicError.playbackDidNotStart.localizedDescription
+            return false
+        }
+        isPlaying = true
+        return true
+    }
+
     private func prepare(track: FocusMusicTrack, autoPlay: Bool) {
         renderGeneration += 1
         let generation = renderGeneration
@@ -293,8 +417,7 @@ final class FocusMusicPlayer: ObservableObject {
                 self.isPreparing = false
                 if autoPlay {
                     try self.activateSession()
-                    player.play()
-                    self.isPlaying = true
+                    _ = self.startPlaybackForTesting(player)
                 }
             } catch {
                 self.isPreparing = false
@@ -306,7 +429,7 @@ final class FocusMusicPlayer: ObservableObject {
 
     private func activateSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+        try session.setCategory(Self.audioSessionCategory, mode: .default, options: Self.audioSessionOptions)
         try session.setActive(true)
     }
 }
