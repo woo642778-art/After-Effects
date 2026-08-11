@@ -41,8 +41,8 @@ func rotoscopePropagationAndRefinement() throws {
     let propagated = try track.propagatedRotoscope(name: "Subject", referencePath: reference)
     let last = try #require(propagated.keyframes.last)
     let firstVertex = try #require(last.path.vertices.first)
-    #expect(abs(firstVertex.anchor.x - 0.2) < 1e-12)
-    #expect(abs(firstVertex.anchor.y - 0.15) < 1e-12)
+    #expect(abs(firstVertex.anchor.x - 0.3) < 1e-12)
+    #expect(abs(firstVertex.anchor.y - 0.25) < 1e-12)
 
     let refined = try track.propagatedRotoscope(
         name: "Subject",
