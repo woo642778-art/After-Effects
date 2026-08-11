@@ -1,14 +1,14 @@
-name: Vertex2 12 Device Test IPA
+name: Vertex2 13 Device Test IPA
 
 on:
   push:
     branches:
-      - agent/phase12-media-effects-automation
+      - agent/v13-release
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: vertex2-12-device-test-${{ github.ref }}
+  group: vertex2-13-device-test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,11 +26,11 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
-      - name: Verify v12 release identity
+      - name: Verify v13 release identity
         run: |
           set -euo pipefail
-          grep -q 'MARKETING_VERSION: 12.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 12' project.yml
+          grep -q 'MARKETING_VERSION: 13.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 13' project.yml
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
 
@@ -62,32 +62,42 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath "$PWD/DerivedDataPhase12DeviceTest" \
+            -derivedDataPath "$PWD/DerivedDataPhase13DeviceTest" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-12-device-test-build.log"
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-13-device-test-build.log"
 
-      - name: Package test IPA
+      - name: Package unsigned IPA
         run: |
           set -euo pipefail
-          APP="$PWD/DerivedDataPhase12DeviceTest/Build/Products/Release-iphoneos/Vertex2.app"
+          APP="$PWD/DerivedDataPhase13DeviceTest/Build/Products/Release-iphoneos/Vertex2.app"
           test -d "$APP"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")
+          BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          FAMILY=$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist")
+          test "$VERSION" = "13.0.0"
+          test "$BUILD" = "13"
+          test "$BUNDLE" = "com.woo642778.aftereffects"
+          test "$FAMILY" = "2"
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP" Payload/Vertex2.app
-          /usr/bin/zip -qry artifacts/Vertex2-12.0.0-TEST-unsigned.ipa Payload
-          shasum -a 256 artifacts/Vertex2-12.0.0-TEST-unsigned.ipa | tee artifacts/Vertex2-12.0.0-TEST-unsigned.ipa.sha256
+          /usr/bin/zip -qry artifacts/Vertex2-13.0.0-unsigned.ipa Payload
+          shasum -a 256 artifacts/Vertex2-13.0.0-unsigned.ipa | tee artifacts/Vertex2-13.0.0-unsigned.ipa.sha256
           printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
+          printf 'bundle=%s\nversion=%s\nbuild=%s\ndevice_family=%s\n' "$BUNDLE" "$VERSION" "$BUILD" "$FAMILY" > artifacts/identity.txt
 
       - name: Upload device test IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-12.0.0-TEST-unsigned-ipa
+          name: Vertex2-13.0.0-unsigned-ipa
           path: |
-            artifacts/Vertex2-12.0.0-TEST-unsigned.ipa
-            artifacts/Vertex2-12.0.0-TEST-unsigned.ipa.sha256
+            artifacts/Vertex2-13.0.0-unsigned.ipa
+            artifacts/Vertex2-13.0.0-unsigned.ipa.sha256
             artifacts/commit-sha.txt
+            artifacts/identity.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -95,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-12.0.0-TEST-build-log
-          path: ${{ runner.temp }}/vertex2-12-device-test-build.log
+          name: Vertex2-13.0.0-build-log
+          path: ${{ runner.temp }}/vertex2-13-device-test-build.log
           if-no-files-found: warn
           retention-days: 7
