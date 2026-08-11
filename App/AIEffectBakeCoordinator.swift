@@ -136,8 +136,8 @@ final class AIEffectBakeCoordinator {
         case .cutout: suffix = "Cutout"; kind = .matte
         case .upscale: suffix = "Upscale"; kind = .derivedVideo
         case .restore: suffix = "Restore"; kind = .derivedVideo
-        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert:
-            throw ProjectError.invalidOperation("Native live effects cannot enter the AI bake registration path.")
+        default:
+            throw ProjectError.invalidOperation("Only AI effects can enter the AI bake registration path.")
         }
         let filename = "\(layer.name)-\(suffix).mov"
         let draftMedia = MediaReference(
