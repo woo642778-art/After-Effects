@@ -1,0 +1,52 @@
+name: Apply Vertex2 15 Version
+
+on:
+  push:
+    branches:
+      - agent/phase15-effects-architecture
+    paths:
+      - .github/workflows/phase15-version-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase15-effects-architecture
+          fetch-depth: 0
+      - name: Update V15 identity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          project = Path('project.yml')
+          text = project.read_text()
+          text = text.replace('MARKETING_VERSION: 14.0.0', 'MARKETING_VERSION: 15.0.0', 1)
+          text = text.replace('CURRENT_PROJECT_VERSION: 14', 'CURRENT_PROJECT_VERSION: 15', 1)
+          if 'MARKETING_VERSION: 15.0.0' not in text or 'CURRENT_PROJECT_VERSION: 15' not in text:
+              raise SystemExit('Unable to establish Vertex2 15 project identity')
+          project.write_text(text)
+
+          schema = Path('Sources/VertexProject/ProjectSchema.swift')
+          text = schema.read_text()
+          text = text.replace('currentAppVersion = "14.0.0"', 'currentAppVersion = "15.0.0"', 1)
+          if 'currentAppVersion = "15.0.0"' not in text:
+              raise SystemExit('Unable to establish Vertex2 15 app contract')
+          schema.write_text(text)
+          PY
+          git diff --check
+      - name: Commit V15 identity
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project.yml Sources/VertexProject/ProjectSchema.swift
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore: set Vertex2 version to 15.0.0'
+            git push origin HEAD:agent/phase15-effects-architecture
+          fi

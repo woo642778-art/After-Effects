@@ -15,8 +15,8 @@ struct EffectControlsView: View {
                 Spacer()
                 if let layer = workspace.selectedLayer {
                     Menu {
-                        ForEach(ProjectEffectType.allCases, id: \.self) { type in
-                            Button(type.displayName) { add(type, to: layer.id) }
+                        ForEach(ProjectEffectDescriptorRegistry.all) { descriptor in
+                            Button(descriptor.displayName) { add(descriptor.type, to: layer.id) }
                         }
                     } label: {
                         Label("Add", systemImage: "plus")
@@ -69,22 +69,5 @@ private extension ProjectLayer {
     var isEffectEligible: Bool {
         if case .media = source { return true }
         return false
-    }
-}
-
-extension ProjectEffectType {
-    var displayName: String {
-        switch self {
-        case .depthMap: "Depth Map"
-        case .cutout: "Cutout"
-        case .upscale: "Upscale"
-        case .restore: "Restore"
-        case .gaussianBlur: "Gaussian Blur"
-        case .sharpen: "Sharpen"
-        case .exposure: "Exposure"
-        case .colorControls: "Color Controls"
-        case .hueAdjust: "Hue Adjust"
-        case .invert: "Invert"
-        }
     }
 }
