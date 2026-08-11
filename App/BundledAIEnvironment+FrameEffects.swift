@@ -35,7 +35,7 @@ extension ProjectEffect {
         case .cutout: qualityText = try text(CutoutParameterID.quality)
         case .upscale: qualityText = try text(UpscaleParameterID.quality)
         case .restore: qualityText = try text(RestorationParameterID.quality)
-        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert:
+        default:
             throw AIError.invalidRecipe("Native pixel effects do not use the AI inference backend.")
         }
         let tier: AIQualityTier = qualityText == "preview" ? .preview : (qualityText == "quality" ? .maxQuality : .balanced)
@@ -69,7 +69,7 @@ extension ProjectEffect {
                 detailRecovery: Float(try scalar(RestorationParameterID.detailRecovery)),
                 faceRestoration: try boolean(RestorationParameterID.faceRestoration)
             )), tier)
-        case .gaussianBlur, .sharpen, .exposure, .colorControls, .hueAdjust, .invert:
+        default:
             throw AIError.invalidRecipe("Native pixel effects do not use the AI inference backend.")
         }
     }
