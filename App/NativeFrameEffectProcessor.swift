@@ -6,10 +6,18 @@ import VertexMedia
 import VertexProject
 
 struct NativeFrameEffectProcessor {
-    /// Long-lived context: avoids rebuilding Core Image / Metal state for each
-    /// slider sample and frame. Full-resolution export still uses the same filter
-    /// definitions; only the interactive update cadence is throttled by the UI.
-    private static let context = CIContext(options: [.cacheIntermediates: true])
+    /// Keep one Core Image context per worker thread. This preserves the expensive
+    /// context/Metal state across frames without sharing a non-Sendable CIContext
+    /// across Swift concurrency domains.
+    private static let contextThreadKey = "com.vertex2.native-effects.ci-context"
+    private static var context: CIContext {
+        if let cached = Thread.current.threadDictionary[contextThreadKey] as? CIContext {
+            return cached
+        }
+        let created = CIContext(options: [.cacheIntermediates: true])
+        Thread.current.threadDictionary[contextThreadKey] = created
+        return created
+    }
     private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
 
     func process(_ request: CompositionEffectRequest) throws -> PortableImage {
