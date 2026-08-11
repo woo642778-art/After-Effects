@@ -1,0 +1,31 @@
+name: Phase17 Render Time Inspection
+on:
+  push:
+    branches: [agent/phase17-particles-focus-audio]
+    paths: [.github/workflows/phase17-inspect-render-time.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase17-particles-focus-audio
+      - run: |
+          set -euo pipefail
+          {
+            echo '# Render time inspection'
+            grep -Rni 'CompositionEffectRequest' Sources App Tests | head -n 300 || true
+            echo '## Effect backend protocols'
+            grep -RniE 'EffectBackend|effect.*request|request.*effect' Sources/VertexComposition App | head -n 500 || true
+            echo '## RationalTime composition render references'
+            grep -RniE 'RationalTime|renderTime|compositionTime|time:' Sources/VertexComposition App | head -n 600 || true
+          } > phase17-render-time-inspection.md
+      - run: |
+          rm .github/workflows/phase17-inspect-render-time.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add phase17-render-time-inspection.md .github/workflows/phase17-inspect-render-time.yml
+          git commit -m 'chore: inspect effect render time path'
+          git push origin HEAD:agent/phase17-particles-focus-audio
