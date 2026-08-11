@@ -124,7 +124,8 @@ public actor VisionMotionTracker {
             let tracking = VNTrackObjectRequest(detectedObjectObservation: previous)
             tracking.trackingLevel = .accurate
             try sequence.perform([tracking], on: image)
-            guard let result = tracking.results?.first else {
+            guard let observation = tracking.results?.first,
+                  let result = observation as? VNDetectedObjectObservation else {
                 throw VisionMotionTrackingError.trackingLost(kind, compositionTimes[index])
             }
             let confidence = Double(result.confidence)
@@ -160,7 +161,8 @@ public actor VisionMotionTracker {
             let tracking = VNTrackRectangleRequest(rectangleObservation: previous)
             tracking.trackingLevel = .accurate
             try sequence.perform([tracking], on: image)
-            guard let result = tracking.results?.first else {
+            guard let observation = tracking.results?.first,
+                  let result = observation as? VNRectangleObservation else {
                 throw VisionMotionTrackingError.trackingLost(.planar, compositionTimes[index])
             }
             let confidence = Double(result.confidence)
