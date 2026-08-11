@@ -4,7 +4,7 @@ import Testing
 import VertexProject
 @testable import Vertex
 
-@Test func expandedNativeEffectsRenderDefaultFrames() throws {
+@Test func expandedNativeEffectsRenderDefaultFrames() {
     #expect(NativeExpandedFrameEffectProcessor.expandedTypes.count == 74)
 
     let extent = CGRect(x: 0, y: 0, width: 96, height: 64)
@@ -14,14 +14,26 @@ import VertexProject
     let input = highlight.composited(over: base)
     let context = CIContext(options: [.cacheIntermediates: false])
     let processor = NativeExpandedFrameEffectProcessor()
+    var failures: [String] = []
 
     for type in NativeExpandedFrameEffectProcessor.expandedTypes.sorted(by: { $0.rawValue < $1.rawValue }) {
-        let effect = ProjectEffect.makeDefault(type)
-        let output = try #require(processor.filteredImage(effect: effect, input: input), "No expanded renderer for \(type.rawValue)")
-        let cropped = output.cropped(to: extent)
-        let rendered = context.createCGImage(cropped, from: extent)
-        #expect(rendered != nil, "Core Image could not render \(type.rawValue)")
+        do {
+            let effect = ProjectEffect.makeDefault(type)
+            guard let output = try processor.filteredImage(effect: effect, input: input) else {
+                failures.append("\(type.rawValue): no expanded renderer")
+                continue
+            }
+            let cropped = output.cropped(to: extent)
+            guard context.createCGImage(cropped, from: extent) != nil else {
+                failures.append("\(type.rawValue): Core Image could not render output")
+                continue
+            }
+        } catch {
+            failures.append("\(type.rawValue): \(error.localizedDescription)")
+        }
     }
+
+    #expect(failures.isEmpty, "Expanded effect render failures: \(failures.joined(separator: " | "))")
 }
 
 @Test func expandedNativeSetPlusLegacyAndAIMatchesDeclaredCatalog() {
