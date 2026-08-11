@@ -3,28 +3,18 @@ import VertexCore
 import VertexProject
 
 struct VertexEffectCatalogEntry: Equatable, Identifiable, Sendable {
-    let type: ProjectEffectType
-    let name: String
-    let category: String
-    let keywords: [String]
-    let description: String
+    let descriptor: ProjectEffectDescriptor
 
-    var id: ProjectEffectType { type }
+    var id: ProjectEffectType { descriptor.type }
+    var type: ProjectEffectType { descriptor.type }
+    var name: String { descriptor.displayName }
+    var category: String { descriptor.category.displayName }
+    var keywords: [String] { descriptor.keywords }
+    var description: String { descriptor.summary }
 }
 
 enum VertexEffectCatalog {
-    static let entries: [VertexEffectCatalogEntry] = [
-        .init(type: .gaussianBlur, name: "Gaussian Blur", category: "Blur & Sharpen", keywords: ["blur", "gaussian", "soften"], description: "True Gaussian blur processed through Core Image in the shared preview/export effect path."),
-        .init(type: .sharpen, name: "Sharpen", category: "Blur & Sharpen", keywords: ["sharpen", "sharpness", "detail"], description: "Luminance sharpening with keyframable sharpness."),
-        .init(type: .exposure, name: "Exposure", category: "Color Correction", keywords: ["exposure", "ev", "stops", "light"], description: "Exposure adjustment in photographic stops."),
-        .init(type: .colorControls, name: "Color Controls", category: "Color Correction", keywords: ["brightness", "contrast", "saturation", "color"], description: "Brightness, contrast, and saturation controls in one stackable effect."),
-        .init(type: .hueAdjust, name: "Hue Adjust", category: "Color Correction", keywords: ["hue", "color", "rotate", "angle"], description: "Rotate hue by a keyframable angle."),
-        .init(type: .invert, name: "Invert", category: "Channel", keywords: ["invert", "negative", "channel"], description: "Invert image channels using the native pixel processor."),
-        .init(type: .depthMap, name: "Depth Map", category: "AI", keywords: ["depth", "depth anything", "z", "3d channel"], description: "Generate an editable depth representation from the selected media layer."),
-        .init(type: .cutout, name: "Cutout", category: "AI", keywords: ["cutout", "mask", "foreground", "person", "remove background"], description: "Create a foreground alpha matte with on-device segmentation."),
-        .init(type: .upscale, name: "Upscale", category: "AI", keywords: ["upscale", "super resolution", "resolution", "4x"], description: "Increase source detail and resolution with the bundled RealESRGAN model."),
-        .init(type: .restore, name: "Restore", category: "AI", keywords: ["restore", "denoise", "deblur", "artifact", "detail"], description: "Denoise and restore compressed or degraded footage.")
-    ]
+    static let entries: [VertexEffectCatalogEntry] = ProjectEffectDescriptorRegistry.all.map(VertexEffectCatalogEntry.init)
 
     static func search(_ query: String) -> [VertexEffectCatalogEntry] {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
