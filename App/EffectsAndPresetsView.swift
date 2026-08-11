@@ -232,27 +232,17 @@ struct EffectsAndPresetsView: View {
         case .cutout: return "person.crop.rectangle"
         case .upscale: return "arrow.up.left.and.arrow.down.right"
         case .restore: return "wand.and.stars"
-        case .gaussianBlur: return "drop.halffull"
-        case .fastBoxBlur: return "rectangle.stack"
-        case .directionalBlur: return "wind"
-        case .sharpen: return "sparkle.magnifyingglass"
-        case .median: return "square.grid.3x3"
-        case .noiseReduction: return "waveform.path.ecg.rectangle"
-        case .exposure: return "sun.max"
-        case .colorControls: return "slider.horizontal.3"
-        case .hueAdjust: return "paintpalette"
-        case .vibrance: return "paintpalette.fill"
-        case .gammaAdjust: return "circle.lefthalf.filled.inverse"
-        case .highlightShadow: return "circle.righthalf.filled"
-        case .sepiaTone: return "camera.filters"
-        case .invert: return "circle.lefthalf.filled"
-        case .posterize: return "square.grid.2x2"
-        case .mosaic: return "square.grid.4x3.fill"
-        case .findEdges: return "scribble.variable"
-        case .glow: return "sun.max.fill"
-        case .vignette: return "viewfinder.circle"
-        case .cartoon: return "wand.and.stars"
-        case .twirl: return "tornado"
+        default: break
+        }
+        switch type.descriptor.category {
+        case .blurAndSharpen: return "drop.halffull"
+        case .colorCorrection: return "slider.horizontal.3"
+        case .channel: return "circle.lefthalf.filled"
+        case .stylize: return "wand.and.stars"
+        case .distort: return "tornado"
+        case .tile: return "square.grid.3x3.square"
+        case .keying: return "person.crop.rectangle.badge.minus"
+        case .ai: return "sparkles"
         }
     }
 }

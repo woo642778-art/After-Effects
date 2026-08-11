@@ -7,6 +7,8 @@ public enum ProjectEffectCategory: String, CaseIterable, Sendable {
     case channel
     case stylize
     case distort
+    case tile
+    case keying
     case ai
 
     public var displayName: String {
@@ -16,6 +18,8 @@ public enum ProjectEffectCategory: String, CaseIterable, Sendable {
         case .channel: "Channel"
         case .stylize: "Stylize"
         case .distort: "Distort"
+        case .tile: "Tile"
+        case .keying: "Keying"
         case .ai: "AI"
         }
     }
@@ -165,7 +169,7 @@ public enum ProjectEffectDescriptorRegistry {
         .init(type: .cutout, displayName: "Cutout", category: .ai, executionMode: .aiBake, keywords: ["cutout", "mask", "foreground", "person", "remove background"], summary: "Create a foreground alpha matte with on-device segmentation.", parameters: [.init(id: CutoutParameterID.quality, displayName: "Quality", defaultValue: .text("balanced"), domain: .text(options: ["preview", "balanced", "quality"])), .init(id: CutoutParameterID.mode, displayName: "Mode", defaultValue: .text("foregroundFast"), domain: .text(options: ["personFast", "foregroundFast", "promptQuality"])), .init(id: CutoutParameterID.feather, displayName: "Feather", defaultValue: .scalar(0.04), domain: .scalar(0...1)), .init(id: CutoutParameterID.edgeCleanup, displayName: "Edge Cleanup", defaultValue: .scalar(0.2), domain: .scalar(0...1)), .init(id: CutoutParameterID.temporalSmoothing, displayName: "Temporal Smooth", defaultValue: .scalar(0.15), domain: .scalar(0...1)), .init(id: CutoutParameterID.promptX, displayName: "Prompt X", defaultValue: .scalar(0.5), domain: .scalar(0...1)), .init(id: CutoutParameterID.promptY, displayName: "Prompt Y", defaultValue: .scalar(0.5), domain: .scalar(0...1))]),
         .init(type: .upscale, displayName: "Upscale", category: .ai, executionMode: .aiBake, keywords: ["upscale", "super resolution", "resolution", "4x"], summary: "Increase source detail and resolution with the bundled RealESRGAN model.", parameters: [.init(id: UpscaleParameterID.quality, displayName: "Quality", defaultValue: .text("balanced"), domain: .text(options: ["preview", "balanced", "quality"])), .init(id: UpscaleParameterID.profile, displayName: "Profile", defaultValue: .text("general"), domain: .text(options: ["general", "animeGame"])), .init(id: UpscaleParameterID.scale, displayName: "Scale", defaultValue: .scalar(2), domain: .scalar(1...4)), .init(id: UpscaleParameterID.tileOverlap, displayName: "Tile Overlap", defaultValue: .integer(32), domain: .integer(0...256))]),
         .init(type: .restore, displayName: "Restore", category: .ai, executionMode: .aiBake, keywords: ["restore", "denoise", "deblur", "artifact", "detail"], summary: "Denoise and restore compressed or degraded footage.", parameters: [.init(id: RestorationParameterID.quality, displayName: "Quality", defaultValue: .text("balanced"), domain: .text(options: ["preview", "balanced", "quality"])), .init(id: RestorationParameterID.denoise, displayName: "Denoise", defaultValue: .scalar(0.45), domain: .scalar(0...1)), .init(id: RestorationParameterID.deblur, displayName: "Deblur", defaultValue: .scalar(0), domain: .scalar(0...1)), .init(id: RestorationParameterID.artifactRemoval, displayName: "Artifact Removal", defaultValue: .scalar(0.25), domain: .scalar(0...1)), .init(id: RestorationParameterID.detailRecovery, displayName: "Detail Recovery", defaultValue: .scalar(0.25), domain: .scalar(0...1)), .init(id: RestorationParameterID.faceRestoration, displayName: "Face Restoration", defaultValue: .boolean(false), domain: .boolean)])
-    ]
+    ] + ProjectEffectExpansionDescriptors.all
 
     private static let byType: [ProjectEffectType: ProjectEffectDescriptor] = Dictionary(uniqueKeysWithValues: all.map { ($0.type, $0) })
 

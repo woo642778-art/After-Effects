@@ -170,17 +170,17 @@ struct AIEffectControlsView: View {
     }
 
     private var interactivePreviewInterval: TimeInterval {
-        // Spatially expensive filters can easily exceed a frame budget on full-resolution iPad media.
-        // Keep their controls responsive by asking for fewer intermediate renders; the final slider
-        // value is always committed below and export remains full quality.
-        switch effect.type {
-        case .gaussianBlur, .fastBoxBlur, .directionalBlur, .median, .noiseReduction,
-             .mosaic, .findEdges, .glow, .cartoon, .twirl:
+        // AI effects do not re-run full inference on every finger sample. Native spatial effects
+        // are also deliberately capped below the color/control cadence because blur, morphology,
+        // halftone, distortion, tile and composite chains can exceed an iPad frame budget on 4K media.
+        guard effect.type.isNativePixelEffect else { return 1.0 / 6.0 }
+        switch descriptor.category {
+        case .blurAndSharpen, .stylize, .distort, .tile, .keying:
             return 1.0 / 8.0
-        case .depthMap, .cutout, .upscale, .restore:
-            return 1.0 / 6.0
-        default:
+        case .colorCorrection, .channel:
             return 1.0 / 15.0
+        case .ai:
+            return 1.0 / 6.0
         }
     }
 

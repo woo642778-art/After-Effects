@@ -4,9 +4,9 @@ import VertexProject
 
 @Test func effectCatalogShowsOnlyActuallyImplementedEffects() {
     let catalog = VertexEffectCatalog.entries
-    #expect(catalog.count == 25)
+    #expect(catalog.count == 99)
     #expect(Set(catalog.map(\.type)) == Set(ProjectEffectType.allCases))
-    #expect(Set(catalog.map(\.category)) == ["AI", "Blur & Sharpen", "Color Correction", "Channel", "Stylize", "Distort"])
+    #expect(Set(catalog.map(\.category)) == ["AI", "Blur & Sharpen", "Color Correction", "Channel", "Stylize", "Distort", "Tile", "Keying"])
 }
 
 @Test func effectCatalogMetadataComesFromSharedDescriptors() {
@@ -23,16 +23,19 @@ import VertexProject
 }
 
 @Test func effectCatalogSearchMatchesNamesKeywordsAndFuzzyAliases() {
-    #expect(VertexEffectCatalog.search("depth").map(\.type) == [.depthMap])
+    #expect(VertexEffectCatalog.search("depth").map(\.type).contains(.depthMap))
     #expect(VertexEffectCatalog.search("denoise").contains(where: { $0.type == .restore || $0.type == .noiseReduction }))
     #expect(VertexEffectCatalog.search("gauss").first?.type == .gaussianBlur)
     #expect(VertexEffectCatalog.search("brt").contains(where: { $0.type == .colorControls }))
     #expect(VertexEffectCatalog.search("glow").contains(where: { $0.type == .glow }))
-    #expect(VertexEffectCatalog.search("").count == 25)
+    #expect(VertexEffectCatalog.search("aura").contains(where: { $0.type == .vertexAuraGlow }))
+    #expect(VertexEffectCatalog.search("kaleido").contains(where: { $0.type == .kaleidoscope || $0.type == .triangleKaleidoscope }))
+    #expect(VertexEffectCatalog.search("").count == 99)
 }
 
-@Test func fullIndexedBrowserIncludesVerifiedReferenceCatalog() {
+@Test func fullIndexedBrowserIncludesVerifiedReferenceCatalogWithoutFalseCommercialClaims() {
     #expect(EffectIndexedCatalog.entries.count == 1_568)
-    #expect(VertexEffectCatalog.searchAll("S_Glow").contains(where: { $0.product == "Boris FX Sapphire" }))
+    #expect(VertexEffectCatalog.searchAll("S_Glow").contains(where: { $0.product == "Boris FX Sapphire" && !$0.isImplemented }))
     #expect(VertexEffectCatalog.searchAll("Deep Glow").contains(where: { !$0.isImplemented }))
+    #expect(VertexEffectCatalog.searchAll("Vertex Aura Glow").contains(where: { $0.product == "Vertex2" && $0.isImplemented }))
 }
