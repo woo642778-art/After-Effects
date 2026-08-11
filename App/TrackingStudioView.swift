@@ -377,17 +377,45 @@ struct TrackingStudioView: View {
             return
         }
         let region = normalizedRegion
+        let frameRate = composition.frameRate
+        guard frameRate.value > 0,
+              frameRate.timescale > 0,
+              frameRate.value <= Int64(Int32.max) else {
+            statusMessage = "Error: The composition frame rate cannot be represented exactly for tracking."
+            return
+        }
+        let frameDuration = RationalTime(
+            value: Int64(frameRate.timescale),
+            timescale: Int32(frameRate.value)
+        )
+        let trackingEnd: RationalTime
+        do {
+            trackingEnd = try layer.timing.outPoint.subtracting(frameDuration)
+        } catch {
+            statusMessage = "Error: \(error.localizedDescription)"
+            return
+        }
+        guard trackingEnd >= layer.timing.inPoint else {
+            statusMessage = "Error: The selected layer must contain at least one full frame for tracking."
+            return
+        }
         let request = ProjectTrackingAnalysisRequest(
             kind: selectedKind,
             region: region,
             startTime: layer.timing.inPoint,
-            endTime: layer.timing.outPoint,
-            frameRate: composition.frameRate,
+            endTime: trackingEnd,
+            frameRate: frameRate,
             frameStride: frameStride,
             minimumConfidence: minimumConfidence
         )
+        let sourceTimes: [RationalTime]
         do {
             _ = try request.validated()
+            let compositionTimes = try request.sampleTimes()
+            sourceTimes = try TrackingSourceTimeMapper.sourceTimes(
+                for: layer,
+                compositionTimes: compositionTimes
+            )
         } catch {
             statusMessage = "Error: \(error.localizedDescription)"
             return
@@ -408,7 +436,11 @@ struct TrackingStudioView: View {
             }
             do {
                 let tracker = VisionMotionTracker()
-                let track = try await tracker.analyze(mediaURL: url, request: request)
+                let track = try await tracker.analyze(
+                    mediaURL: url,
+                    request: request,
+                    sourceTimes: sourceTimes
+                )
                 guard !Task.isCancelled else { return }
                 currentTrack = track
                 isTracking = false
