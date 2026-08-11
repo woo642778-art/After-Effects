@@ -157,11 +157,7 @@ public enum ProjectPrecomposePlanner {
             timing: LayerTiming(startTime: anchor, inPoint: anchor, outPoint: parentOutPoint)
         )
 
-        _ = try childComposition.validated(layerByID: Dictionary(uniqueKeysWithValues: childLayers.map { ($0.id, $0) }))
-        for layer in childLayers { _ = try layer.validated(composition: childComposition) }
-        _ = try nestedLayer.validated(composition: parent)
-
-        return ProjectPrecomposePlan(
+        let plan = ProjectPrecomposePlan(
             sourceLayerIDs: orderedIDs,
             sourceLayers: orderedLayers,
             parentLayerOrderBefore: parent.layerIDs,
@@ -171,6 +167,20 @@ public enum ProjectPrecomposePlanner {
             childLayers: childLayers,
             nestedLayer: nestedLayer
         )
+
+        var candidate = document
+        let sourceIDs = Set(plan.sourceLayerIDs)
+        candidate.layerRegistry.removeAll { sourceIDs.contains($0.id) }
+        candidate.layerRegistry.append(contentsOf: plan.childLayers)
+        candidate.layerRegistry.append(plan.nestedLayer)
+        if let parentIndex = candidate.compositionRegistry.firstIndex(where: { $0.id == compositionID }) {
+            candidate.compositionRegistry[parentIndex].layerIDs = plan.parentLayerOrderAfter
+        }
+        candidate.compositionRegistry.append(plan.childComposition)
+        candidate.selectedLayerID = plan.nestedLayer.id
+        _ = try candidate.validated()
+
+        return plan
     }
 
     private static func validateBoundaryDependencies(layers: [ProjectLayer], selectedIDs: Set<VertexID>) throws {
