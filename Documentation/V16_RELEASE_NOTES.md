@@ -1,6 +1,6 @@
 # Vertex2 16.0.0
 
-Vertex2 16 expands the effects system, adds advanced deterministic pre-compose operations, and reduces interactive effect-control stalls while preserving the full-quality preview/export contract.
+Vertex2 16 expands the effects system, adds advanced deterministic pre-compose operations, reduces interactive effect-control stalls, and introduces persistent offline Focus Music for long editing sessions while preserving the full-quality preview/export contract.
 
 ## Effects scale and compatibility browser
 
@@ -32,10 +32,20 @@ These effects use the same ordered project effect stack and shared preview/expor
 
 ## Interactive performance
 
-- Native effects share a long-lived Core Image context with intermediate caching instead of rebuilding Core Image state for each slider sample/frame.
+- Native effects reuse worker-thread Core Image contexts instead of rebuilding Core Image/Metal state for each slider sample or frame.
 - Continuous scalar controls keep an immediate local UI draft while project mutations and preview renders are coalesced.
 - Spatially expensive blur/noise/glow/distortion filters use a lower adaptive intermediate preview cadence; cheap color transforms retain a higher cadence.
 - The final slider value is always committed when editing ends, so export and settled preview state remain exact and full quality.
+
+## Focus Music
+
+- Added six original Vertex2-generated ambient/lo-fi instrumental tracks: Quiet Desk, Midnight Render, Rainy Timeline, Warm Keyframes, Soft Circuit, and Deep Focus.
+- Focus Music is offline and does not require streaming, a server, or copyrighted commercial songs.
+- The player lives at app scope, so closing its popover or changing editor tools/workspaces does not stop playback.
+- Users can choose tracks, play/pause, move to previous/next tracks, and adjust a dedicated Focus Music volume.
+- Track choice and volume persist between launches; playback itself defaults to off after a fresh launch so the app never starts making sound unexpectedly.
+- Music is generated once into PCM and looped by the audio player, avoiding a continuous synthesis workload during editing.
+- Focus Music is deliberately separate from project/timeline audio and is never included in project exports.
 
 ## Advanced pre-compose
 
