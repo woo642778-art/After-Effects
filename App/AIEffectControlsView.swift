@@ -37,6 +37,8 @@ struct AIEffectControlsView: View {
     @State private var bakeTask: Task<Void, Never>?
     @State private var state: AIEffectPresentationState = .ready
 
+    private var descriptor: ProjectEffectDescriptor { effect.type.descriptor }
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
@@ -54,7 +56,7 @@ struct AIEffectControlsView: View {
                 }
                 .buttonStyle(.bordered)
 
-                if !effect.type.isNativePixelEffect {
+                if descriptor.executionMode == .aiBake {
                     HStack {
                         Button {
                             startBake()
@@ -88,7 +90,7 @@ struct AIEffectControlsView: View {
                     set: { setEnabled($0) }
                 ))
                 .labelsHidden()
-                Text(effect.type.displayName)
+                Text(descriptor.displayName)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text("fx")
@@ -104,8 +106,9 @@ struct AIEffectControlsView: View {
     @ViewBuilder
     private var parameterControls: some View {
         ForEach(effect.parameters) { parameter in
+            let metadata = descriptor.parameter(id: parameter.id)
             HStack(spacing: 8) {
-                Text(parameter.id.replacingOccurrences(of: "temporalSmoothing", with: "Temporal Smooth").capitalized)
+                Text(metadata?.displayName ?? parameter.id)
                     .font(.caption)
                     .frame(width: 112, alignment: .leading)
                 switch parameter.value {
@@ -118,7 +121,7 @@ struct AIEffectControlsView: View {
                 case .scalar(let value):
                     Slider(
                         value: Binding(get: { value }, set: { setParameter(parameter.id, .scalar($0)) }),
-                        in: scalarRange(parameter.id)
+                        in: metadata?.domain.scalarRange ?? 0...1
                     )
                     Text(String(format: "%.2f", value))
                         .font(.caption2.monospacedDigit())
@@ -127,45 +130,19 @@ struct AIEffectControlsView: View {
                     Stepper("\(value)", value: Binding(
                         get: { value },
                         set: { setParameter(parameter.id, .integer($0)) }
-                    ), in: 0...256)
+                    ), in: metadata?.domain.integerRange ?? 0...256)
                     .font(.caption)
                 case .text(let value):
-                    Picker(parameter.id, selection: Binding(
+                    Picker(metadata?.displayName ?? parameter.id, selection: Binding(
                         get: { value },
                         set: { setParameter(parameter.id, .text($0)) }
                     )) {
-                        ForEach(textOptions(parameter.id, current: value), id: \.self) { Text($0).tag($0) }
+                        ForEach(metadata?.domain.textOptions ?? [value], id: \.self) { Text($0).tag($0) }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
                 }
             }
-        }
-    }
-
-    private func scalarRange(_ id: String) -> ClosedRange<Double> {
-        switch id {
-        case UpscaleParameterID.scale: 1...4
-        case GaussianBlurParameterID.radius: 0...200
-        case SharpenParameterID.sharpness: 0...2
-        case ExposureEffectParameterID.stops: -10...10
-        case ColorControlsParameterID.brightness: -1...1
-        case ColorControlsParameterID.contrast: 0...4
-        case ColorControlsParameterID.saturation: 0...2
-        case HueAdjustParameterID.degrees: -180...180
-        default: 0...1
-        }
-    }
-
-    private func textOptions(_ id: String, current: String) -> [String] {
-        switch id {
-        case DepthMapParameterID.model: return ["depth-anything-v2-small-f16"]
-        case DepthMapParameterID.quality, CutoutParameterID.quality, UpscaleParameterID.quality, RestorationParameterID.quality:
-            return ["preview", "balanced", "quality"]
-        case DepthMapParameterID.output: return ["depth", "alpha"]
-        case CutoutParameterID.mode: return ["personFast", "foregroundFast", "promptQuality"]
-        case UpscaleParameterID.profile: return ["general", "animeGame"]
-        default: return [current]
         }
     }
 
@@ -206,7 +183,7 @@ struct AIEffectControlsView: View {
     }
 
     private func startBake() {
-        guard !effect.type.isNativePixelEffect else { return }
+        guard descriptor.executionMode == .aiBake else { return }
         state = .computing
         let task = Task { @MainActor in
             do {
