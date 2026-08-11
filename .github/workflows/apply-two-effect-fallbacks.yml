@@ -35,3 +35,4 @@ jobs:
           git add App/NativeExpandedFrameEffectProcessor.swift
           git commit -m 'fix: replace unstable wrap and reflected tile filters'
           git push origin HEAD:agent/phase16-effects-expansion
+# trigger existing workflow after registration
