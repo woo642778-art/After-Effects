@@ -1,19 +1,16 @@
-name: Vertex2 16 Release IPA
+name: Vertex2 17 Release IPA
 
 on:
   push:
     branches:
-      - agent/phase16-precomp-effects-performance
-  pull_request:
-    branches:
-      - agent/phase15-effects-architecture
+      - agent/phase17-particles-focus-audio
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: vertex2-16-release-${{ github.ref }}
+  group: vertex2-17-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Select Xcode and install XcodeGen
         run: |
@@ -31,32 +28,28 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
-      - name: Verify v16 identity, effects scale, pre-compose, performance, and Focus Music gates
+      - name: Verify V17 identity and feature contracts
         run: |
           set -euo pipefail
-          grep -q 'MARKETING_VERSION: 16.0.0' project.yml
-          grep -q 'CURRENT_PROJECT_VERSION: 16' project.yml
-          grep -q 'currentAppVersion = "16.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'MARKETING_VERSION: 17.0.0' project.yml
+          grep -q 'CURRENT_PROJECT_VERSION: 17' project.yml
+          grep -q 'currentAppVersion = "17.0.0"' Sources/VertexProject/ProjectSchema.swift
+          grep -q 'currentSchemaVersion = 5' Sources/VertexProject/ProjectSchema.swift
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER: com.woo642778.aftereffects' project.yml
           grep -q 'TARGETED_DEVICE_FAMILY: "2"' project.yml
-          grep -q 'EffectIndexedCatalog.entries.count == 1_568' Tests/VertexProjectTests/Phase16EffectsCatalogTests.swift
-          grep -q 'EffectPreviewUpdateGate' App/AIEffectControlsView.swift
-          grep -q 'Thread.current.threadDictionary' App/NativeFrameEffectProcessor.swift
+          grep -q 'ProjectEffectType.allCases.count == 113' Tests/VertexProjectTests/Phase17ParticlesAndProceduralTests.swift
+          grep -q 'EffectIndexedCatalog.entries.count == 1_568' Tests/VertexAppTests/EffectsAndPresetsCatalogTests.swift
+          grep -q 'tracks.count >= 24' Tests/VertexAppTests/FocusMusicTests.swift
+          grep -q 'static let category: AVAudioSession.Category = .playback' App/FocusMusicPlayer.swift
+          grep -q 'struct V17GPUFrameEffectProcessor' App/V17GPUFrameEffectProcessor.swift
+          grep -q 'float angle=p\[10\]\*0.017453292519943295f' App/V17GPUFrameEffectProcessor.swift
           grep -q 'ProjectPrecomposePlanner' Sources/VertexProject/ProjectPrecomposePlanner.swift
-          grep -q 'case glow' Sources/VertexProject/ProjectEffect.swift
-          grep -q 'case twirl' Sources/VertexProject/ProjectEffect.swift
-          grep -q 'final class FocusMusicPlayer' App/FocusMusicPlayer.swift
-          grep -q 'numberOfLoops = -1' App/FocusMusicPlayer.swift
-          grep -q 'FocusMusicSynthesizer.render' App/FocusMusicPlayer.swift
-          grep -q 'environmentObject(focusMusic)' App/VertexApp.swift
-          grep -q 'FocusMusicView()' App/AEWorkspaceChrome.swift
-          grep -q 'independent from project/timeline audio' App/FocusMusicPlayer.swift
           git diff --check
 
       - name: Run portable Swift tests
         run: |
           set -o pipefail
-          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v16-swift-tests.log"
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v17-swift-tests.log"
 
       - name: Validate AI model locks and tooling
         run: |
@@ -108,7 +101,7 @@ jobs:
           xcrun simctl boot "$SIM_UDID" || true
           xcrun simctl bootstatus "$SIM_UDID" -b
 
-      - name: Run iPad app regression tests
+      - name: Run complete iPad app regression tests
         env:
           VERTEX_AI_MODEL_ROOT: ${{ github.workspace }}/App/GeneratedAIResources
         run: |
@@ -119,11 +112,11 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination "id=$SIM_UDID" \
-            -derivedDataPath "$PWD/DerivedDataV16Tests" \
+            -derivedDataPath "$PWD/DerivedDataV17Tests" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            test 2>&1 | tee "$RUNNER_TEMP/vertex2-v16-ipad-tests.log"
+            test 2>&1 | tee "$RUNNER_TEMP/vertex2-v17-ipad-tests.log"
 
       - name: Build unsigned iPad Release app
         env:
@@ -136,24 +129,24 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath "$PWD/DerivedDataV16Release" \
+            -derivedDataPath "$PWD/DerivedDataV17Release" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-v16-release-build.log"
+            clean build 2>&1 | tee "$RUNNER_TEMP/vertex2-v17-release-build.log"
 
       - name: Package and audit unsigned IPA
         run: |
           set -euo pipefail
-          APP="$PWD/DerivedDataV16Release/Build/Products/Release-iphoneos/Vertex2.app"
+          APP="$PWD/DerivedDataV17Release/Build/Products/Release-iphoneos/Vertex2.app"
           test -d "$APP"
           VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
           BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")
           BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
           FAMILY=$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist")
           MINIMUM_OS=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")
-          test "$VERSION" = '16.0.0'
-          test "$BUILD" = '16'
+          test "$VERSION" = '17.0.0'
+          test "$BUILD" = '17'
           test "$BUNDLE" = 'com.woo642778.aftereffects'
           test "$FAMILY" = '2'
           test "$MINIMUM_OS" = '17.0'
@@ -163,22 +156,27 @@ jobs:
           test ! -f "$APP/embedded.mobileprovision"
           test -f "$APP/AI_MODEL_MANIFEST.json"
           test -f "$APP/Vertex_VertexRenderMetal.bundle/default.metallib"
+          test -d "$APP/AIModels/DepthAnythingV2SmallF16.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3-denoise.mlmodelc"
+          test -d "$APP/AIModels/RealESRGAN-x4v3.mlmodelc"
+          MODEL_COUNT="$(find "$APP/AIModels" -maxdepth 1 -type d -name '*.mlmodelc' | wc -l | tr -d ' ')"
+          test "$MODEL_COUNT" = '3'
           rm -rf Payload artifacts
           mkdir -p Payload artifacts
           cp -R "$APP" Payload/Vertex2.app
-          /usr/bin/zip -qry artifacts/Vertex2-16.0.0-unsigned.ipa Payload
-          unzip -tq artifacts/Vertex2-16.0.0-unsigned.ipa
-          shasum -a 256 artifacts/Vertex2-16.0.0-unsigned.ipa | tee artifacts/Vertex2-16.0.0-unsigned.ipa.sha256
-          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > artifacts/commit-sha.txt
+          /usr/bin/zip -qry artifacts/Vertex2-17.0.0-unsigned.ipa Payload
+          unzip -tq artifacts/Vertex2-17.0.0-unsigned.ipa
+          shasum -a 256 artifacts/Vertex2-17.0.0-unsigned.ipa | tee artifacts/Vertex2-17.0.0-unsigned.ipa.sha256
+          printf '%s\n' '${{ github.sha }}' > artifacts/Vertex2-17.0.0-commit-sha.txt
 
-      - name: Upload v16 IPA artifact
+      - name: Upload V17 IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-16.0.0-unsigned-ipa
+          name: Vertex2-17.0.0-unsigned-ipa
           path: |
-            artifacts/Vertex2-16.0.0-unsigned.ipa
-            artifacts/Vertex2-16.0.0-unsigned.ipa.sha256
-            artifacts/commit-sha.txt
+            artifacts/Vertex2-17.0.0-unsigned.ipa
+            artifacts/Vertex2-17.0.0-unsigned.ipa.sha256
+            artifacts/Vertex2-17.0.0-commit-sha.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -187,24 +185,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG='v16.0.0'
-          TITLE='Vertex2 16.0.0'
-          TARGET='${{ github.event.pull_request.head.sha || github.sha }}'
+          TAG='v17.0.0'
+          TITLE='Vertex2 17.0.0'
+          TARGET='${{ github.sha }}'
+          NOTES='Vertex2 17.0.0 expands the executable effects catalog, adds deterministic Metal particle/procedural rendering, and improves persistent Focus Music while retaining the iPad-only editing architecture.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V16_RELEASE_NOTES.md
-            gh release upload "$TAG" artifacts/Vertex2-16.0.0-unsigned.ipa artifacts/Vertex2-16.0.0-unsigned.ipa.sha256 --clobber
+            gh release edit "$TAG" --target "$TARGET" --title "$TITLE" --notes "$NOTES"
+            gh release upload "$TAG" artifacts/Vertex2-17.0.0-unsigned.ipa artifacts/Vertex2-17.0.0-unsigned.ipa.sha256 --clobber
           else
-            gh release create "$TAG" --target "$TARGET" --title "$TITLE" --notes-file Documentation/V16_RELEASE_NOTES.md artifacts/Vertex2-16.0.0-unsigned.ipa artifacts/Vertex2-16.0.0-unsigned.ipa.sha256
+            gh release create "$TAG" --target "$TARGET" --title "$TITLE" --notes "$NOTES" artifacts/Vertex2-17.0.0-unsigned.ipa artifacts/Vertex2-17.0.0-unsigned.ipa.sha256
           fi
 
       - name: Upload validation and build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Vertex2-16.0.0-validation-build-logs
+          name: Vertex2-17.0.0-validation-build-logs
           path: |
-            ${{ runner.temp }}/vertex2-v16-swift-tests.log
-            ${{ runner.temp }}/vertex2-v16-ipad-tests.log
-            ${{ runner.temp }}/vertex2-v16-release-build.log
+            ${{ runner.temp }}/vertex2-v17-swift-tests.log
+            ${{ runner.temp }}/vertex2-v17-ipad-tests.log
+            ${{ runner.temp }}/vertex2-v17-release-build.log
           if-no-files-found: warn
           retention-days: 14
