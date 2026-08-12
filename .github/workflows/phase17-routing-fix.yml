@@ -1,0 +1,60 @@
+name: Apply V17 Routing Fix
+on:
+  push:
+    branches: [agent/phase17-particles-focus-audio]
+    paths: [.github/workflows/phase17-routing-fix.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase17-particles-focus-audio
+          fetch-depth: 0
+      - run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('App/NativeFrameEffectProcessor.swift'); s=p.read_text()
+          if 'import VertexCore\n' not in s:
+              s=s.replace('import VertexComposition\n','import VertexComposition\nimport VertexCore\n',1)
+          s=s.replace('exactTime: VertexCore.RationalTime','exactTime: RationalTime')
+          p.write_text(s)
+          p=Path('App/NativeExpandedFrameEffectProcessor.swift'); s=p.read_text()
+          anchor='''    private static let legacyNativeTypes: Set<ProjectEffectType> = [
+              .gaussianBlur, .fastBoxBlur, .directionalBlur, .sharpen, .median, .noiseReduction,
+              .exposure, .colorControls, .hueAdjust, .vibrance, .gammaAdjust, .highlightShadow,
+              .sepiaTone, .invert, .posterize, .mosaic, .findEdges, .glow, .vignette, .cartoon, .twirl
+          ]
+
+              static let expandedTypes: Set<ProjectEffectType> = Set(
+              ProjectEffectType.allCases.filter { $0.isNativePixelEffect && !legacyNativeTypes.contains($0) }
+          )'''.replace('              ','    ')
+          repl='''    private static let legacyNativeTypes: Set<ProjectEffectType> = [
+              .gaussianBlur, .fastBoxBlur, .directionalBlur, .sharpen, .median, .noiseReduction,
+              .exposure, .colorControls, .hueAdjust, .vibrance, .gammaAdjust, .highlightShadow,
+              .sepiaTone, .invert, .posterize, .mosaic, .findEdges, .glow, .vignette, .cartoon, .twirl
+          ]
+              private static let v17NativeTypes: Set<ProjectEffectType> = [
+              .vertexParticleEmitter, .vertexParticleTrails, .vertexParticleBurst, .vertexParticleSnow,
+              .vertexFractalNoise, .vertexTurbulenceField, .vertexProceduralGrid, .vertexProceduralRays,
+              .vertexProceduralDots, .vertexPlasma, .vertexVoronoi, .vertexChecker, .vertexGradient, .vertexStarField
+          ]
+
+              static let expandedTypes: Set<ProjectEffectType> = Set(
+              ProjectEffectType.allCases.filter { $0.isNativePixelEffect && !legacyNativeTypes.contains($0) && !v17NativeTypes.contains($0) }
+          )'''.replace('              ','    ')
+          if anchor not in s: raise SystemExit('V16 expanded routing anchor missing')
+          p.write_text(s.replace(anchor,repl,1))
+          PY
+          git diff --check
+      - run: |
+          rm .github/workflows/phase17-routing-fix.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add App/NativeFrameEffectProcessor.swift App/NativeExpandedFrameEffectProcessor.swift .github/workflows/phase17-routing-fix.yml
+          git commit -m 'fix: isolate V17 GPU effects from V16 renderer'
+          git push origin HEAD:agent/phase17-particles-focus-audio
+# trigger

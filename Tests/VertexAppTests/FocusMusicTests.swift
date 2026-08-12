@@ -1,20 +1,31 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import Vertex
 
-@Test func focusMusicCatalogHasDistinctOriginalWorkTracks() {
+@Test func focusMusicCatalogHasManyDistinctOriginalWorkTracks() {
     let tracks = FocusMusicTrack.allCases
-    #expect(tracks.count == 6)
+    #expect(tracks.count >= 24)
     #expect(Set(tracks.map(\.rawValue)).count == tracks.count)
     #expect(Set(tracks.map(\.title)).count == tracks.count)
-    #expect(tracks.allSatisfy { (55...85).contains($0.bpm) })
+    #expect(tracks.allSatisfy { (52...92).contains($0.bpm) })
 }
 
-@Test func focusMusicSynthesizerProducesPlayablePCMContainer() {
-    let data = FocusMusicSynthesizer.render(track: .deepFocus)
-    #expect(data.count > 44)
-    #expect(String(data: data.prefix(4), encoding: .ascii) == "RIFF")
-    #expect(String(data: data.dropFirst(8).prefix(4), encoding: .ascii) == "WAVE")
+@Test func focusMusicSynthesizerProducesPlayablePCMContainer() throws {
+    for track in [FocusMusicTrack.deepFocus, .rainyTimeline, .finalExport] {
+        let data = FocusMusicSynthesizer.render(track: track)
+        #expect(data.count > 44)
+        #expect(String(data: data.prefix(4), encoding: .ascii) == "RIFF")
+        #expect(String(data: data.dropFirst(8).prefix(4), encoding: .ascii) == "WAVE")
+        let player = try AVAudioPlayer(data: data)
+        #expect(player.duration > 5)
+        #expect(player.numberOfChannels == 2)
+    }
+}
+
+@Test func focusMusicUsesAudiblePlaybackSessionPolicy() {
+    #expect(FocusMusicPlaybackPolicy.category == .playback)
+    #expect(FocusMusicPlaybackPolicy.options.contains(.mixWithOthers))
 }
 
 @MainActor

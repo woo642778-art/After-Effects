@@ -5,10 +5,9 @@ import VertexProject
 @testable import Vertex
 
 @Test func expandedNativeEffectsRenderDefaultFrames() {
-    #expect(NativeExpandedFrameEffectProcessor.expandedTypes.count == 74)
+    let v16Types = NativeExpandedFrameEffectProcessor.expandedTypes.subtracting(V17GPUFrameEffectProcessor.supportedTypes)
+    #expect(v16Types.count == 74)
 
-    // Use a realistic video-sized frame so spatial defaults such as radius 300
-    // and tile width 100 are qualified in the scale they are designed for.
     let extent = CGRect(x: 0, y: 0, width: 640, height: 360)
     let base = CIImage(color: CIColor(red: 0.12, green: 0.42, blue: 0.82, alpha: 1)).cropped(to: extent)
     let highlight = CIImage(color: CIColor(red: 1, green: 0.72, blue: 0.18, alpha: 1))
@@ -18,7 +17,7 @@ import VertexProject
     let processor = NativeExpandedFrameEffectProcessor()
     var failures: [String] = []
 
-    for type in NativeExpandedFrameEffectProcessor.expandedTypes.sorted(by: { $0.rawValue < $1.rawValue }) {
+    for type in v16Types.sorted(by: { $0.rawValue < $1.rawValue }) {
         do {
             let effect = ProjectEffect.makeDefault(type)
             guard let output = try processor.filteredImage(effect: effect, input: input) else {
@@ -40,7 +39,7 @@ import VertexProject
 
 @Test func expandedNativeSetPlusLegacyAndAIMatchesDeclaredCatalog() {
     let native = Set(ProjectEffectType.allCases.filter(\.isNativePixelEffect))
-    #expect(native.count == 95)
+    #expect(native.count == 109)
     #expect(NativeExpandedFrameEffectProcessor.expandedTypes.isSubset(of: native))
-    #expect(ProjectEffectType.allCases.count == 99)
+    #expect(ProjectEffectType.allCases.count == 113)
 }

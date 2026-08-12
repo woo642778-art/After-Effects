@@ -1,9 +1,9 @@
-name: Apply Vertex2 16 Version
+name: Apply Vertex2 17 Version
 
 on:
   push:
     branches:
-      - agent/phase16-precomp-effects-performance
+      - agent/phase17-particles-focus-audio
     paths:
       - .github/workflows/phase16-version-apply.yml
 
@@ -16,9 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/phase16-precomp-effects-performance
+          ref: agent/phase17-particles-focus-audio
           fetch-depth: 0
-      - name: Update V16 identity
+      - name: Update V17 identity
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -26,27 +26,27 @@ jobs:
 
           project = Path('project.yml')
           text = project.read_text()
-          text = text.replace('MARKETING_VERSION: 15.0.0', 'MARKETING_VERSION: 16.0.0', 1)
-          text = text.replace('CURRENT_PROJECT_VERSION: 15', 'CURRENT_PROJECT_VERSION: 16', 1)
-          if 'MARKETING_VERSION: 16.0.0' not in text or 'CURRENT_PROJECT_VERSION: 16' not in text:
-              raise SystemExit('Unable to establish Vertex2 16 project identity')
+          text = text.replace('MARKETING_VERSION: 16.0.0', 'MARKETING_VERSION: 17.0.0', 1)
+          text = text.replace('CURRENT_PROJECT_VERSION: 16', 'CURRENT_PROJECT_VERSION: 17', 1)
+          if 'MARKETING_VERSION: 17.0.0' not in text or 'CURRENT_PROJECT_VERSION: 17' not in text:
+              raise SystemExit('Unable to establish Vertex2 17 project identity')
           project.write_text(text)
 
           schema = Path('Sources/VertexProject/ProjectSchema.swift')
           text = schema.read_text()
-          text = text.replace('currentAppVersion = "15.0.0"', 'currentAppVersion = "16.0.0"', 1)
-          if 'currentAppVersion = "16.0.0"' not in text:
-              raise SystemExit('Unable to establish Vertex2 16 app contract')
+          text = text.replace('currentAppVersion = "16.0.0"', 'currentAppVersion = "17.0.0"', 1)
+          if 'currentAppVersion = "17.0.0"' not in text:
+              raise SystemExit('Unable to establish Vertex2 17 app contract')
           schema.write_text(text)
           PY
           git diff --check
-      - name: Commit V16 identity
+      - name: Commit V17 identity
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add project.yml Sources/VertexProject/ProjectSchema.swift
           if ! git diff --cached --quiet; then
-            git commit -m 'chore: set Vertex2 version to 16.0.0'
-            git push origin HEAD:agent/phase16-precomp-effects-performance
+            git commit -m 'chore: set Vertex2 version to 17.0.0'
+            git push origin HEAD:agent/phase17-particles-focus-audio
           fi
