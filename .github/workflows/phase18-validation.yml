@@ -1,0 +1,35 @@
+name: Vertex2 18 Validation
+
+on:
+  push:
+    branches:
+      - agent/phase18-node-compositor
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vertex2-18-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable-contracts:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Run portable Swift tests
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/vertex2-v18-swift-tests.log"
+      - name: Upload V18 portable log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vertex2-v18-portable-log
+          path: ${{ runner.temp }}/vertex2-v18-swift-tests.log
+          if-no-files-found: warn
+          retention-days: 7
