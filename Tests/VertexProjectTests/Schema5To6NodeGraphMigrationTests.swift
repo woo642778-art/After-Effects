@@ -7,7 +7,32 @@ import VertexCore
 struct Schema5To6NodeGraphMigrationTests {
     @Test func migrationPreservesSchema5ContentAndAddsEmptyNodeGraphs() throws {
         let current = try ProjectDocument.makeFixture(timestamp: Date(timeIntervalSince1970: 1_700_000_000), media: [])
-        let data = try DeterministicProjectCodec().encode(current)
+        let legacy = Schema5ProjectDocument(
+            schemaVersion: 5,
+            minimumReaderVersion: 5,
+            projectID: current.projectID,
+            revision: current.revision,
+            metadata: ProjectMetadata(
+                name: current.metadata.name,
+                createdAt: current.metadata.createdAt,
+                modifiedAt: current.metadata.modifiedAt,
+                createdByAppVersion: "17.0.0",
+                lastSavedByAppVersion: "17.0.0"
+            ),
+            settings: current.settings,
+            mediaRegistry: current.mediaRegistry,
+            compositionRegistry: current.compositionRegistry.map { composition in
+                var copy = composition
+                copy.nodeGraph = nil
+                return copy
+            },
+            layerRegistry: current.layerRegistry,
+            aiAssetRegistry: current.aiAssetRegistry,
+            activeCompositionID: current.activeCompositionID,
+            selectedLayerID: current.selectedLayerID,
+            selectedMediaID: current.selectedMediaID
+        )
+        let data = try Schema5ProjectCodec.encode(legacy)
         let result = try Schema5To6Migrator().migrate(data)
         let header = try ProjectSchemaHeader.decode(from: result.data)
         #expect(header.schemaVersion == 6)
@@ -16,6 +41,7 @@ struct Schema5To6NodeGraphMigrationTests {
 
         let decoded = try DeterministicProjectCodec().decode(result.data, supportedSchema: 6)
         #expect(decoded.schemaVersion == 6)
+        #expect(decoded.metadata.lastSavedByAppVersion == "18.0.0")
         #expect(decoded.compositionRegistry.allSatisfy { $0.nodeGraph == nil })
     }
 
