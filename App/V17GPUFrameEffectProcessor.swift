@@ -96,12 +96,12 @@ struct V17GPUFrameEffectProcessor {
         ]
     }
 
-    private final class Renderer: NSObject {
+    private final class Renderer {
         private let device: MTLDevice
         private let queue: MTLCommandQueue
         private let pipeline: MTLComputePipelineState
 
-        override init() throws {
+        init() throws {
             guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
                 throw V17GPUFrameEffectError.metalUnavailable
             }
@@ -116,7 +116,6 @@ struct V17GPUFrameEffectProcessor {
             } catch {
                 throw V17GPUFrameEffectError.libraryCompilation(error.localizedDescription)
             }
-            super.init()
         }
 
         func render(width: Int, height: Int, values: [Float]) throws -> CIImage {
