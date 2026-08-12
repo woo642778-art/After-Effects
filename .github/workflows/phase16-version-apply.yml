@@ -1,9 +1,9 @@
-name: Apply Vertex2 17 Version
+name: Apply Vertex2 18 Version
 
 on:
   push:
     branches:
-      - agent/phase17-particles-focus-audio
+      - agent/phase18-node-compositor
     paths:
       - .github/workflows/phase16-version-apply.yml
 
@@ -16,9 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/phase17-particles-focus-audio
+          ref: agent/phase18-node-compositor
           fetch-depth: 0
-      - name: Update V17 identity
+      - name: Update V18 identity and schema
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -26,27 +26,28 @@ jobs:
 
           project = Path('project.yml')
           text = project.read_text()
-          text = text.replace('MARKETING_VERSION: 16.0.0', 'MARKETING_VERSION: 17.0.0', 1)
-          text = text.replace('CURRENT_PROJECT_VERSION: 16', 'CURRENT_PROJECT_VERSION: 17', 1)
-          if 'MARKETING_VERSION: 17.0.0' not in text or 'CURRENT_PROJECT_VERSION: 17' not in text:
-              raise SystemExit('Unable to establish Vertex2 17 project identity')
+          text = text.replace('MARKETING_VERSION: 17.0.0', 'MARKETING_VERSION: 18.0.0', 1)
+          text = text.replace('CURRENT_PROJECT_VERSION: 17', 'CURRENT_PROJECT_VERSION: 18', 1)
+          if 'MARKETING_VERSION: 18.0.0' not in text or 'CURRENT_PROJECT_VERSION: 18' not in text:
+              raise SystemExit('Unable to establish Vertex2 18 project identity')
           project.write_text(text)
 
           schema = Path('Sources/VertexProject/ProjectSchema.swift')
           text = schema.read_text()
-          text = text.replace('currentAppVersion = "16.0.0"', 'currentAppVersion = "17.0.0"', 1)
-          if 'currentAppVersion = "17.0.0"' not in text:
-              raise SystemExit('Unable to establish Vertex2 17 app contract')
+          text = text.replace('currentSchemaVersion = 5', 'currentSchemaVersion = 6', 1)
+          text = text.replace('currentAppVersion = "17.0.0"', 'currentAppVersion = "18.0.0"', 1)
+          if 'currentSchemaVersion = 6' not in text or 'currentAppVersion = "18.0.0"' not in text:
+              raise SystemExit('Unable to establish Vertex2 18 schema/app contract')
           schema.write_text(text)
           PY
           git diff --check
-      - name: Commit V17 identity
+      - name: Commit V18 identity and schema
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add project.yml Sources/VertexProject/ProjectSchema.swift
           if ! git diff --cached --quiet; then
-            git commit -m 'chore: set Vertex2 version to 17.0.0'
-            git push origin HEAD:agent/phase17-particles-focus-audio
+            git commit -m 'chore: set Vertex2 version to 18.0.0 and schema 6'
+            git push origin HEAD:agent/phase18-node-compositor
           fi
