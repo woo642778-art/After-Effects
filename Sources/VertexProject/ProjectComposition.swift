@@ -40,6 +40,9 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
     public var motionBlurShutterAngle: Double
     public var motionBlurShutterPhase: Double
     public var rendererMode: ProjectCompositionRendererMode
+    /// Optional V18 free-form compositor graph. A nil graph means the composition
+    /// continues to render exclusively from its canonical layer stack.
+    public var nodeGraph: ProjectNodeGraph?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -60,6 +63,7 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         case motionBlurShutterAngle
         case motionBlurShutterPhase
         case rendererMode
+        case nodeGraph
     }
 
     public init(
@@ -80,7 +84,8 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         bpm: Double? = nil,
         motionBlurShutterAngle: Double = 180,
         motionBlurShutterPhase: Double = -90,
-        rendererMode: ProjectCompositionRendererMode = .classic2D
+        rendererMode: ProjectCompositionRendererMode = .classic2D,
+        nodeGraph: ProjectNodeGraph? = nil
     ) {
         self.id = id
         self.name = name
@@ -100,6 +105,7 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         self.motionBlurShutterAngle = motionBlurShutterAngle
         self.motionBlurShutterPhase = motionBlurShutterPhase
         self.rendererMode = rendererMode
+        self.nodeGraph = nodeGraph
     }
 
     public init(from decoder: Decoder) throws {
@@ -122,6 +128,7 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         motionBlurShutterAngle = try container.decodeIfPresent(Double.self, forKey: .motionBlurShutterAngle) ?? 180
         motionBlurShutterPhase = try container.decodeIfPresent(Double.self, forKey: .motionBlurShutterPhase) ?? -90
         rendererMode = try container.decodeIfPresent(ProjectCompositionRendererMode.self, forKey: .rendererMode) ?? .classic2D
+        nodeGraph = try container.decodeIfPresent(ProjectNodeGraph.self, forKey: .nodeGraph)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -144,6 +151,7 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
         try container.encode(motionBlurShutterAngle, forKey: .motionBlurShutterAngle)
         try container.encode(motionBlurShutterPhase, forKey: .motionBlurShutterPhase)
         try container.encode(rendererMode, forKey: .rendererMode)
+        try container.encodeIfPresent(nodeGraph, forKey: .nodeGraph)
     }
 
     public func validated(layerByID: [VertexID: ProjectLayer]) throws -> Self {
@@ -192,6 +200,12 @@ public struct ProjectComposition: Codable, Equatable, Sendable, Identifiable {
             guard layer.compositionID == id else {
                 throw ProjectError.invalidValue("Layer ownership does not match its composition order.")
             }
+        }
+        if let nodeGraph {
+            guard nodeGraph.compositionID == id else {
+                throw ProjectError.invalidValue("Composition node graph must belong to its composition.")
+            }
+            _ = try nodeGraph.validatedStructure(requireOutput: true)
         }
         return self
     }
