@@ -97,9 +97,32 @@ func aiReferencedMediaCannotBeRemoved() throws {
             ProjectCommandRequest(
                 projectID: registered.projectID,
                 baseRevision: registered.revision,
-                payload: .removeMedia(asset.outputMediaID)
+                payload: .removeMedia(id: asset.outputMediaID)
             ),
             for: registered
         )
     }
+}
+
+@Test("Canonical JSON contains references but no runtime cache state")
+func aiAssetCanonicalJSONIsReferenceOnly() throws {
+    let engine = ProjectCommandEngine()
+    let document = try aiDocument()
+    let asset = aiAsset()
+    let transition = try engine.prepare(
+        ProjectCommandRequest(
+            projectID: document.projectID,
+            baseRevision: document.revision,
+            payload: .registerAIAsset(asset)
+        ),
+        for: document
+    )
+    let registered = try engine.apply(transition, to: document)
+    let json = String(decoding: try DeterministicProjectCodec().encode(registered), as: UTF8.self)
+
+    #expect(json.contains("aiAssetRegistry"))
+    #expect(json.contains("recipeDigest"))
+    #expect(!json.contains("completedChunks"))
+    #expect(!json.contains("neuralEngineCache"))
+    #expect(!json.contains("runtimeModelState"))
 }
