@@ -19,10 +19,10 @@ import VertexProject
 
     for type in types {
         let effect = ProjectEffect.makeDefault(type)
-        let first = try #require(processor.filteredImage(effect: effect, input: input, exactTime: time))
-        let second = try #require(processor.filteredImage(effect: effect, input: input, exactTime: time))
-        let a = try #require(context.pngRepresentation(of: first.cropped(to: extent), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()))
-        let b = try #require(context.pngRepresentation(of: second.cropped(to: extent), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()))
+        let first = try #require(try processor.filteredImage(effect: effect, input: input, exactTime: time))
+        let second = try #require(try processor.filteredImage(effect: effect, input: input, exactTime: time))
+        let a = try #require(try context.pngRepresentation(of: first.cropped(to: extent), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()))
+        let b = try #require(try context.pngRepresentation(of: second.cropped(to: extent), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()))
         #expect(a == b, "V17 effect must be deterministic: \(type.rawValue)")
     }
 }
