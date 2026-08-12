@@ -65,7 +65,8 @@ public struct ProjectMigrationRegistry: Sendable {
         Schema1To2Migrator(),
         Schema2To3Migrator(),
         Schema3To4Migrator(),
-        Schema4To5Migrator()
+        Schema4To5Migrator(),
+        Schema5To6Migrator()
     ])
 
     private let migrators: [any ProjectMigrator]
