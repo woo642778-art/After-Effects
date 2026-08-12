@@ -56,7 +56,7 @@ func v18ParameterLinkValidation() throws {
     let effect = ProjectNode(name: "Exposure", kind: .effect(ProjectEffect.makeDefault(.exposure)), position: .init(x: 220, y: 0))
     let link = ProjectNodeParameterLink(
         source: .init(nodeID: constant.id, portID: "value"),
-        target: .init(nodeID: effect.id, parameterID: "amount"),
+        target: .init(nodeID: effect.id, parameterID: ExposureEffectParameterID.stops),
         scale: 2,
         offset: -0.5
     )
