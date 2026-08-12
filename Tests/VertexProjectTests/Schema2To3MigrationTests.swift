@@ -43,10 +43,11 @@ func schema2MigratesThroughCurrentSchema() throws {
 
     #expect(migrated.schemaVersion == ProjectDocument.currentSchemaVersion)
     #expect(migrated.minimumReaderVersion == ProjectDocument.currentSchemaVersion)
-    #expect(migrated.metadata.lastSavedByAppVersion == "9.0.0")
+    #expect(migrated.metadata.lastSavedByAppVersion == ProjectDocument.currentAppVersion)
     #expect(migrated.revision == 12)
     #expect(migrated.mediaRegistry.count == 1)
     #expect(migrated.compositionRegistry.count == 1)
+    #expect(migrated.compositionRegistry.allSatisfy { $0.nodeGraph == nil })
     #expect(migrated.layerRegistry.isEmpty)
     #expect(migrated.aiAssetRegistry.isEmpty)
 }
