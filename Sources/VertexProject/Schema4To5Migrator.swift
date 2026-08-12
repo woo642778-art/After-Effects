@@ -73,9 +73,10 @@ public struct Schema4To5Migrator: ProjectMigrator {
         for index in compositions.indices {
             compositions[index].workArea = nil
             compositions[index].markers = []
+            compositions[index].nodeGraph = nil
         }
 
-        let migrated = try ProjectDocument(
+        let migrated = Schema5ProjectDocument(
             schemaVersion: 5,
             minimumReaderVersion: 5,
             projectID: legacy.projectID,
@@ -89,10 +90,10 @@ public struct Schema4To5Migrator: ProjectMigrator {
             activeCompositionID: legacy.activeCompositionID,
             selectedLayerID: legacy.selectedLayerID,
             selectedMediaID: legacy.selectedMediaID
-        ).validated()
+        )
 
         return ProjectMigrationStepResult(
-            data: try DeterministicProjectCodec().encode(migrated),
+            data: try Schema5ProjectCodec.encode(migrated),
             report: ProjectMigrationReport(
                 sourceVersion: 4,
                 destinationVersion: 5,
