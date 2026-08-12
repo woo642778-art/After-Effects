@@ -173,7 +173,7 @@ kernel void vertexV17Generate(texture2d<float, access::write> outTex [[texture(0
     float2 uv=(float2(gid)+0.5f)/float2(W,H); float aspect=float(W)/max(1.0f,float(H));
     int mode=int(p[0]+0.5f); float t=p[1], seed=p[2], intensity=p[3], size=p[4]/max(1.0f,float(H));
     float speed=p[5], gravity=p[6], turb=p[7], density=p[8], scale=max(1.0f,p[9]);
-    float angle=radians(p[10]), hue=p[11], cx=p[12], cy=p[13], life=max(0.2f,p[14]), rate=max(1.0f,p[15]);
+    float angle=p[10]*0.017453292519943295f, hue=p[11], cx=p[12], cy=p[13], life=max(0.2f,p[14]), rate=max(1.0f,p[15]);
     float3 col=float3(0); float alpha=0.0f; float2 q=float2((uv.x-cx)*aspect, uv.y-cy);
 
     if(mode<=3){
@@ -204,17 +204,17 @@ kernel void vertexV17Generate(texture2d<float, access::write> outTex [[texture(0
     } else if(mode==8){
         float2 cell=fract(uv*scale)-0.5f; float dot=1.0f-smoothstep(0.12f,0.34f,length(cell)); col=hsv2rgb(float3(hue,0.45f,1)); alpha=dot*intensity*0.82f;
     } else if(mode==9){
-        float v=sin((uv.x*scale+t)*1.7f)+sin((uv.y*scale-t*0.7f)*2.1f)+sin((uv.x+uv.y)*scale*1.15f+t*0.6f); v=0.5f+0.5f*sin(v+seed); col=hsv2rgb(float3(fract(hue+v*0.28f),0.62f,0.85f+0.15f*v)); alpha=clamp(intensity*0.62f,0,0.9f);
+        float v=sin((uv.x*scale+t)*1.7f)+sin((uv.y*scale-t*0.7f)*2.1f)+sin((uv.x+uv.y)*scale*1.15f+t*0.6f); v=0.5f+0.5f*sin(v+seed); col=hsv2rgb(float3(fract(hue+v*0.28f),0.62f,0.85f+0.15f*v)); alpha=clamp(intensity*0.62f,0.0f,0.9f);
     } else if(mode==10){
         float2 g=uv*scale, id=floor(g), f=fract(g); float md=10.0f;
         for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){ float2 o=float2(x,y); float2 h=hash22(id+o+seed); md=min(md,length(o+h-f)); }
-        float edge=1.0f-smoothstep(0.02f,0.13f,md); col=hsv2rgb(float3(fract(hue+md*0.22f),0.48f,0.75f+edge*0.25f)); alpha=clamp((0.28f+edge*0.5f)*intensity,0,0.88f);
+        float edge=1.0f-smoothstep(0.02f,0.13f,md); col=hsv2rgb(float3(fract(hue+md*0.22f),0.48f,0.75f+edge*0.25f)); alpha=clamp((0.28f+edge*0.5f)*intensity,0.0f,0.88f);
     } else if(mode==11){
-        float2 cell=floor(uv*scale); float c=fmod(cell.x+cell.y,2.0f); col=hsv2rgb(float3(fract(hue+c*0.12f),0.35f,0.7f+0.3f*c)); alpha=clamp(intensity*0.58f,0,0.86f);
+        float2 cell=floor(uv*scale); float c=fmod(cell.x+cell.y,2.0f); col=hsv2rgb(float3(fract(hue+c*0.12f),0.35f,0.7f+0.3f*c)); alpha=clamp(intensity*0.58f,0.0f,0.86f);
     } else if(mode==12){
-        float a=clamp((cos(angle)*q.x+sin(angle)*q.y)+0.5f,0.0f,1.0f); col=hsv2rgb(float3(fract(hue+a*0.18f),0.48f,0.55f+0.45f*a)); alpha=clamp(intensity*0.66f,0,0.9f);
+        float a=clamp((cos(angle)*q.x+sin(angle)*q.y)+0.5f,0.0f,1.0f); col=hsv2rgb(float3(fract(hue+a*0.18f),0.48f,0.55f+0.45f*a)); alpha=clamp(intensity*0.66f,0.0f,0.9f);
     } else {
-        float2 cell=floor(uv*scale*1.7f); float h=hash21(cell+seed); float2 star=(cell+hash22(cell+seed))/(scale*1.7f); float d=distance(uv,star); float twinkle=0.65f+0.35f*sin(t*2.0f+h*20.0f); float s=(h>1.0f-density*0.18f)?(1.0f-smoothstep(size*0.25f,size*1.4f,d))*twinkle:0.0f; col=hsv2rgb(float3(fract(hue+h*0.15f),0.2f,1)); alpha=clamp(s*intensity,0,0.95f);
+        float2 cell=floor(uv*scale*1.7f); float h=hash21(cell+seed); float2 star=(cell+hash22(cell+seed))/(scale*1.7f); float d=distance(uv,star); float twinkle=0.65f+0.35f*sin(t*2.0f+h*20.0f); float s=(h>1.0f-density*0.18f)?(1.0f-smoothstep(size*0.25f,size*1.4f,d))*twinkle:0.0f; col=hsv2rgb(float3(fract(hue+h*0.15f),0.2f,1)); alpha=clamp(s*intensity,0.0f,0.95f);
     }
     outTex.write(float4(col*alpha,alpha),gid);
 }
