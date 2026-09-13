@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
+import VertexCore
 import VertexProject
 
 struct CompositionWorkspaceView: View {
@@ -9,6 +10,9 @@ struct CompositionWorkspaceView: View {
     @State private var isPNGExporterPresented = false
     @State private var compositionName = ""
     @State private var layerName = ""
+    @State private var selectedMaskID: VertexID?
+    @State private var selectedMaskVertexIndex: Int?
+    @State private var isMaskEditingMode = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -136,44 +140,76 @@ struct CompositionWorkspaceView: View {
         }
     }
 
-    private var previewSurface: some View {
+private var previewSurface: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("EXACT FRAME PREVIEW")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(AfterEffectsTheme.accent)
                 Spacer()
+                
+                if let layer = workspace.selectedLayer, !layer.masks.isEmpty {
+                    Toggle("Mask Edit", isOn: $isMaskEditingMode)
+                        .toggleStyle(.button)
+                        .font(.caption)
+                        .help("Edit mask vertices in viewport")
+                }
+                
                 Button { render() } label: { Image(systemName: "arrow.clockwise") }
                     .buttonStyle(.bordered)
                     .tint(AfterEffectsTheme.accent)
             }
-
-            ZStack {
-                checkerboard
-                if let result = preview.result, let image = UIImage(data: result.image.data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                } else if preview.isRendering {
-                    ProgressView("Rendering exact frame")
-                        .tint(AfterEffectsTheme.accent)
-                        .foregroundStyle(.white)
-                } else {
-                    Text("No rendered frame")
-                        .font(.caption)
-                        .foregroundStyle(AfterEffectsTheme.secondaryText)
+            
+            GeometryReader { geo in
+                ZStack {
+                    checkerboard
+                    if let result = preview.result, let image = UIImage(data: result.image.data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                    } else if preview.isRendering {
+                        ProgressView("Rendering exact frame")
+                            .tint(AfterEffectsTheme.accent)
+                            .foregroundStyle(.white)
+                    } else {
+                        Text("No rendered frame")
+                            .font(.caption)
+                            .foregroundStyle(AfterEffectsTheme.secondaryText)
+                    }
+                    
+                    if isMaskEditingMode, let layer = workspace.selectedLayer,
+                       let maskID = selectedMaskID ?? layer.masks.first?.id,
+                       let mask = layer.masks.first(where: { $0.id == maskID }),
+                       let result = preview.result, let image = UIImage(data: result.image.data) {
+                        MaskVertexOverlay(
+                            mask: mask,
+                            imageSize: CGSize(width: image.size.width, height: image.size.height),
+                            previewSize: geo.size,
+                            selectedVertexIndex: Binding(
+                                get: { selectedMaskVertexIndex },
+                                set: { selectedMaskVertexIndex = $0 }
+                            ),
+                            onVertexDrag: { index, newPoint in
+                                updateMaskVertex(maskID: maskID, index: index, point: newPoint)
+                            },
+                            onAddVertex: { point in
+                                addMaskVertex(maskID: maskID, point: point)
+                            }
+                        )
+                    }
                 }
+                .aspectRatio(previewAspectRatio, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .aspectRatio(previewAspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
+            .frame(height: 400)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
+            
             if let error = preview.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
-
+            
             if let metrics = preview.result?.metrics {
                 HStack {
                     metric("Total", metrics.totalMilliseconds)
@@ -184,7 +220,7 @@ struct CompositionWorkspaceView: View {
                         .foregroundStyle(AfterEffectsTheme.secondaryText)
                 }
             }
-
+            
             Button {
                 isPNGExporterPresented = true
             } label: {
@@ -586,7 +622,7 @@ struct CompositionWorkspaceView: View {
         return Double(composition.width) / Double(max(1, composition.height))
     }
 
-    private func metric(_ name: String, _ value: Double?) -> some View {
+private func metric(_ name: String, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(name)
                 .font(.caption2)
@@ -596,7 +632,7 @@ struct CompositionWorkspaceView: View {
                 .foregroundStyle(.white)
         }
     }
-
+    
     private var checkerboard: some View {
         Canvas { context, size in
             let cell: CGFloat = 12
@@ -612,12 +648,174 @@ struct CompositionWorkspaceView: View {
         }
         .background(Color.black.opacity(0.35))
     }
-
+    
+    private func updateMaskVertex(maskID: VertexID, index: Int, point: CGPoint) {
+        guard let project = workspace.project,
+              let layer = workspace.selectedLayer,
+              let maskIndex = layer.masks.firstIndex(where: { $0.id == maskID }),
+              index < layer.masks[maskIndex].path.vertices.count else { return }
+        
+        var layerCopy = layer
+        var mask = layerCopy.masks[maskIndex]
+        var vertices = mask.path.vertices
+        
+        let compWidth = CGFloat(workspace.activeComposition?.width ?? 1920)
+        let compHeight = CGFloat(workspace.activeComposition?.height ?? 1080)
+        let normX = point.x / previewAspectRatio / compWidth * 2 - 1
+        let normY = (1 - point.y / compHeight * 2) * -1 + 1
+        
+        vertices[index].anchor = ProjectVector2(x: normX, y: normY)
+        mask.path = ProjectBezierPath(vertices: vertices, closed: mask.path.closed)
+        layerCopy.masks[maskIndex] = mask
+        
+        do {
+            try workspace.setLayerMasks(layerID: layer.id, masks: layerCopy.masks)
+            render()
+        } catch { print("Failed to update mask vertex: \(error)") }
+    }
+    
+    private func addMaskVertex(maskID: VertexID, point: CGPoint) {
+        guard let project = workspace.project,
+              let layer = workspace.selectedLayer,
+              let maskIndex = layer.masks.firstIndex(where: { $0.id == maskID }) else { return }
+        
+        var layerCopy = layer
+        var mask = layerCopy.masks[maskIndex]
+        var vertices = mask.path.vertices
+        
+        let compWidth = CGFloat(workspace.activeComposition?.width ?? 1920)
+        let compHeight = CGFloat(workspace.activeComposition?.height ?? 1080)
+        let normX = point.x / previewAspectRatio / compWidth * 2 - 1
+        let normY = (1 - point.y / compHeight * 2) * -1 + 1
+        
+        let newVertex = ProjectBezierVertex(anchor: ProjectVector2(x: normX, y: normY))
+        vertices.append(newVertex)
+        mask.path = ProjectBezierPath(vertices: vertices, closed: mask.path.closed)
+        layerCopy.masks[maskIndex] = mask
+        
+        do {
+            try workspace.setLayerMasks(layerID: layer.id, masks: layerCopy.masks)
+            render()
+        } catch { print("Failed to add mask vertex: \(error)") }
+    }
+    
     private func render() {
         guard let project = workspace.project else {
             preview.cancel()
             return
         }
         preview.render(project: project, packageURL: workspace.packageURL)
+    }
+}
+
+struct MaskVertexOverlay: View {
+    let mask: ProjectMask
+    let imageSize: CGSize
+    let previewSize: CGSize
+    @Binding var selectedVertexIndex: Int?
+    let onVertexDrag: (Int, CGPoint) -> Void
+    let onAddVertex: (CGPoint) -> Void
+    
+    private var scaleX: CGFloat { previewSize.width / imageSize.width }
+    private var scaleY: CGFloat { previewSize.height / imageSize.height }
+    
+    var body: some View {
+        Canvas { context, size in
+            drawMaskPath(context: context, size: size)
+            drawVertices(context: context)
+            drawHandles(context: context)
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let localPoint = value.location
+                    var closestIndex: Int?
+                    var closestDist: CGFloat = 20
+                    for (index, vertex) in mask.path.vertices.enumerated() {
+                        let vertexPoint = vertexToPreview(vertex.anchor)
+                        let dist = hypot(localPoint.x - vertexPoint.x, localPoint.y - vertexPoint.y)
+                        if dist < closestDist {
+                            closestDist = dist
+                            closestIndex = index
+                        }
+                    }
+                    if let index = closestIndex {
+                        selectedVertexIndex = index
+                        onVertexDrag(index, localPoint)
+                    }
+                }
+                .onEnded { _ in
+                    selectedVertexIndex = nil
+                }
+        )
+        .onTapGesture(count: 2) { location in
+            onAddVertex(location)
+        }
+    }
+    
+    private func drawMaskPath(context: GraphicsContext, size: CGSize) {
+        let vertices = mask.path.vertices
+        guard vertices.count >= 2 else { return }
+        var path = Path()
+        let firstPoint = vertexToPreview(vertices[0].anchor)
+        path.move(to: firstPoint)
+        for i in 1..<vertices.count {
+            path.addLine(to: vertexToPreview(vertices[i].anchor))
+        }
+        if mask.path.closed { path.closeSubpath() }
+        context.stroke(path, with: .color(AfterEffectsTheme.accent), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+    }
+    
+    private func drawVertices(context: GraphicsContext) {
+        for (index, vertex) in mask.path.vertices.enumerated() {
+            let point = vertexToPreview(vertex.anchor)
+            let isSelected = selectedVertexIndex == index
+            let fillColor = isSelected ? AfterEffectsTheme.accent : .white
+            let strokeColor = isSelected ? Color.white : AfterEffectsTheme.accent
+            let rect = CGRect(x: point.x - 8, y: point.y - 8, width: 16, height: 16)
+            context.fill(Path(ellipseIn: rect), with: .color(fillColor))
+            context.stroke(Path(ellipseIn: rect), with: .color(strokeColor), lineWidth: 2)
+        }
+    }
+    
+    private func drawHandles(context: GraphicsContext) {
+        for vertex in mask.path.vertices {
+            let anchorPoint = vertexToPreview(vertex.anchor)
+            
+            if vertex.incomingTangent.x != 0 || vertex.incomingTangent.y != 0 {
+                let handlePoint = vertexToPreview(ProjectVector2(
+                    x: vertex.anchor.x + vertex.incomingTangent.x,
+                    y: vertex.anchor.y + vertex.incomingTangent.y
+                ))
+                let handlePath = Path { p in
+                    p.move(to: anchorPoint)
+                    p.addLine(to: handlePoint)
+                }
+                context.stroke(handlePath, with: .color(.white.opacity(0.5)), lineWidth: 1)
+                let handleRect = CGRect(x: handlePoint.x - 5, y: handlePoint.y - 5, width: 10, height: 10)
+                context.fill(Path(ellipseIn: handleRect), with: .color(.white.opacity(0.7)))
+            }
+            
+            if vertex.outgoingTangent.x != 0 || vertex.outgoingTangent.y != 0 {
+                let handlePoint = vertexToPreview(ProjectVector2(
+                    x: vertex.anchor.x + vertex.outgoingTangent.x,
+                    y: vertex.anchor.y + vertex.outgoingTangent.y
+                ))
+                let handlePath = Path { p in
+                    p.move(to: anchorPoint)
+                    p.addLine(to: handlePoint)
+                }
+                context.stroke(handlePath, with: .color(.white.opacity(0.5)), lineWidth: 1)
+                let handleRect = CGRect(x: handlePoint.x - 5, y: handlePoint.y - 5, width: 10, height: 10)
+                context.fill(Path(ellipseIn: handleRect), with: .color(.white.opacity(0.7)))
+            }
+        }
+    }
+    
+    private func vertexToPreview(_ vertex: ProjectVector2) -> CGPoint {
+        let x = (vertex.x + 1) * 0.5 * imageSize.width * scaleX
+        let y = (1 - (vertex.y + 1) * 0.5) * imageSize.height * scaleY
+        return CGPoint(x: x, y: y)
     }
 }

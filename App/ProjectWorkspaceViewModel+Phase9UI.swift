@@ -91,28 +91,6 @@ extension ProjectWorkspaceViewModel {
             mergeKey: nil
         )
     }
-
-    func phase9UpdateTemporalHandle(
-        layerID: VertexID,
-        channelID: VertexID,
-        keyframeID: VertexID,
-        incoming: ProjectBezierHandle?,
-        outgoing: ProjectBezierHandle?
-    ) throws {
-        guard let layer = project?.layer(id: layerID),
-              let channelIndex = layer.animationChannels.firstIndex(where: { $0.id == channelID }),
-              let keyframeIndex = layer.animationChannels[channelIndex].keyframes.firstIndex(where: { $0.id == keyframeID }) else {
-            throw ProjectError.invalidOperation("Animation keyframe no longer exists.")
-        }
-        var channels = layer.animationChannels
-        channels[channelIndex].keyframes[keyframeIndex].incomingTemporalHandle = incoming
-        channels[channelIndex].keyframes[keyframeIndex].outgoingTemporalHandle = outgoing
-        _ = try channels.validatedAnimationChannels(for: layer.masks, effects: layer.effects)
-        perform(
-            .setLayerMotionState(id: layerID, animationChannels: channels, masks: layer.masks, trackMatte: layer.trackMatte),
-            mergeKey: "graph.\(channelID.rawValue).\(keyframeID.rawValue)"
-        )
-    }
 }
 
 enum EffectControlAction: Equatable {

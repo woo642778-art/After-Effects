@@ -39,6 +39,7 @@ public enum ProjectCommandPayload: Equatable, Sendable {
     case setLayerBlendMode(id: VertexID, mode: LayerBlendMode)
     case setLayerSource(id: VertexID, source: LayerSource)
     case setLayerMarkers(id: VertexID, markers: [ProjectMarker])
+    case setLayerMasks(id: VertexID, masks: [ProjectMask])
     case setLayerParent(id: VertexID, parentLayerID: VertexID?)
     case setLayerOperations(id: VertexID, operations: [LayerOperation])
     case setLayerEffects(id: VertexID, effects: [ProjectEffect])

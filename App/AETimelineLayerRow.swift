@@ -45,7 +45,9 @@ struct AETimelineLayerRow: View {
                         toggle(&editorState.expandedMasksLayerIDs)
                     }
                     if editorState.expandedMasksLayerIDs.contains(layer.id) {
-                        ForEach(layer.masks) { mask in simpleSubRow(mask.name, detail: mask.mode.rawValue) }
+                        ForEach(layer.masks) { mask in
+                            maskGroupRow(mask)
+                        }
                     }
                 }
             }
@@ -294,6 +296,186 @@ struct AETimelineLayerRow: View {
         }
         .foregroundStyle(AfterEffectsTheme.secondaryText)
     }
+    
+    private func maskGroupRow(_ mask: ProjectMask) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Button { editorState.toggleMaskDisclosure(mask.id) } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: editorState.expandedMaskIDs.contains(mask.id) ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 7, weight: .bold))
+                        Text(mask.name).font(.system(size: 10, weight: .medium))
+                        Text("(\(mask.mode.rawValue))").font(.system(size: 8)).foregroundStyle(AfterEffectsTheme.tertiaryText)
+                        Spacer()
+                    }
+                    .padding(.leading, 26)
+                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .frame(width: AETimelineView.controlsWidth, height: 25)
+                Rectangle().fill(AfterEffectsTheme.border).frame(width: 1)
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(Color.white.opacity(0.01))
+                    Rectangle().fill(AfterEffectsTheme.accent.opacity(0.55)).frame(width: 1)
+                        .offset(x: CGFloat(editorState.playhead.seconds * editorState.pixelsPerSecond))
+                }
+                .frame(width: CGFloat(max(600, composition.duration.seconds * editorState.pixelsPerSecond + 80)), height: 25)
+            }
+            
+            if editorState.expandedMaskIDs.contains(mask.id) {
+                maskPropertyRow(mask: mask, property: .path)
+                maskPropertyRow(mask: mask, property: .opacity)
+                maskPropertyRow(mask: mask, property: .feather)
+                maskPropertyRow(mask: mask, property: .expansion)
+            }
+        }
+    }
+    
+    private func maskPropertyRow(mask: ProjectMask, property: ProjectMaskAnimatableProperty) -> some View {
+        let channel = layer.animationChannels.first { $0.property == .mask(maskID: mask.id, property: property) }
+        return HStack(spacing: 0) {
+            HStack(spacing: 5) {
+                Button { ensureMaskAnimated(maskID: mask.id, property: property) } label: {
+                    Image(systemName: channel == nil ? "stopwatch" : "stopwatch.fill")
+                        .foregroundStyle(channel == nil ? AfterEffectsTheme.tertiaryText : AfterEffectsTheme.accent)
+                }
+                .buttonStyle(.plain)
+                
+                Text(maskPropertyDisplayName(property)).font(.system(size: 10)).frame(width: 74, alignment: .leading)
+                Text(maskPropertyValueText(mask, property: property, channel: channel))
+                    .font(.system(size: 9).monospacedDigit())
+                    .foregroundStyle(AfterEffectsTheme.secondaryText)
+                    .lineLimit(1)
+                Spacer()
+                if channel != nil {
+                    Button { toggleMaskKeyframe(maskID: mask.id, property: property, channel: channel) } label: {
+                        Image(systemName: hasKeyframeAtPlayhead(channel) ? "diamond.fill" : "diamond")
+                            .font(.system(size: 9))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.leading, 43)
+            .padding(.trailing, 7)
+            .foregroundStyle(AfterEffectsTheme.primaryText)
+            .frame(width: AETimelineView.controlsWidth, height: 24)
+            
+            Rectangle().fill(AfterEffectsTheme.border).frame(width: 1)
+            maskKeyframeTrack(mask, property: property, channel: channel)
+                .frame(width: CGFloat(max(600, composition.duration.seconds * editorState.pixelsPerSecond + 80)), height: 24)
+        }
+    }
+    
+    private func maskKeyframeTrack(_ mask: ProjectMask, property: ProjectMaskAnimatableProperty, channel: ProjectAnimationChannel?) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle().fill(Color.white.opacity(0.008))
+            if let channel {
+                ForEach(channel.keyframes) { keyframe in
+                    Button {
+                        editorState.selectKeyframe(keyframe.id)
+                        editorState.setPlayhead(keyframe.time, composition: composition)
+                    } label: {
+                        Rectangle()
+                            .rotation(.degrees(45))
+                            .fill(editorState.selectedKeyframeIDs.contains(keyframe.id) ? AfterEffectsTheme.accent : Color.white.opacity(0.78))
+                            .frame(width: 7, height: 7)
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: CGFloat(keyframe.time.seconds * editorState.pixelsPerSecond) - 3.5)
+                    .contextMenu {
+                        ForEach(ProjectKeyframeEaseCommand.allCases, id: \.self) { ease in
+                            Button(ease.rawValue.capitalized) {
+                                applyEase(ease, to: keyframe.id, in: channel)
+                            }
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onChanged { value in
+                                dragOffset[keyframe.id] = value.translation.width
+                            }
+                            .onEnded { value in
+                                defer { dragOffset.removeValue(forKey: keyframe.id) }
+                                guard !layer.locked else { return }
+                                do {
+                                    let delta = try AETimelineInteractionModel.exactDelta(points: Double(value.translation.width), pixelsPerSecond: editorState.pixelsPerSecond, frameRate: composition.frameRate)
+                                    try moveKeyframe(keyframe.id, by: delta, in: channel)
+                                } catch { interactionError = error.localizedDescription }
+                            }
+                    )
+                }
+            }
+            Rectangle().fill(AfterEffectsTheme.accent.opacity(0.75)).frame(width: 1)
+                .offset(x: CGFloat(editorState.playhead.seconds * editorState.pixelsPerSecond))
+        }
+    }
+    
+    private func ensureMaskAnimated(maskID: VertexID, property: ProjectMaskAnimatableProperty) {
+        guard layer.animationChannels.first(where: { $0.property == .mask(maskID: maskID, property: property) }) == nil else { return }
+        do {
+            let key = ProjectKeyframe(time: editorState.playhead, value: maskStaticValue(maskID: maskID, property: property), interpolation: .linear)
+            let channel = ProjectAnimationChannel(property: .mask(maskID: maskID, property: property), keyframes: [key])
+            try workspace.setAnimationChannels(layerID: layer.id, channels: layer.animationChannels + [channel])
+            interactionError = nil
+        } catch { interactionError = error.localizedDescription }
+    }
+    
+    private func toggleMaskKeyframe(maskID: VertexID, property: ProjectMaskAnimatableProperty, channel: ProjectAnimationChannel?) {
+        guard let channel else { ensureMaskAnimated(maskID: maskID, property: property); return }
+        do {
+            var channels = layer.animationChannels
+            guard let channelIndex = channels.firstIndex(where: { $0.id == channel.id }) else { return }
+            if let existing = channel.keyframes.first(where: { $0.time == editorState.playhead }) {
+                if channel.keyframes.count == 1 {
+                    channels.remove(at: channelIndex)
+                } else {
+                    channels[channelIndex] = try AnimationEditEngine().removeKeyframes(ids: [existing.id], from: channel)
+                }
+            } else {
+                let value = try channel.evaluatedValue(at: editorState.playhead)
+                let key = ProjectKeyframe(time: editorState.playhead, value: value, interpolation: .linear)
+                channels[channelIndex] = try AnimationEditEngine().addKeyframe(key, to: channel)
+            }
+            try workspace.setAnimationChannels(layerID: layer.id, channels: channels)
+            interactionError = nil
+        } catch { interactionError = error.localizedDescription }
+    }
+    
+    private func hasKeyframeAtPlayhead(_ channel: ProjectAnimationChannel?) -> Bool {
+        channel?.keyframes.contains(where: { $0.time == editorState.playhead }) == true
+    }
+    
+    private func maskPropertyValueText(_ mask: ProjectMask, property: ProjectMaskAnimatableProperty, channel: ProjectAnimationChannel?) -> String {
+        let value: ProjectAnimatableValue
+        if let channel, let evaluated = try? channel.evaluatedValue(at: editorState.playhead) { value = evaluated }
+        else { value = maskStaticValue(maskID: mask.id, property: property) }
+        switch (property, value) {
+        case (.opacity, .scalar(let v)): return String(format: "%.1f%%", v * 100)
+        case (.feather, .scalar(let v)): return String(format: "%.1f", v)
+        case (.expansion, .scalar(let v)): return String(format: "%.1f", v)
+        case (.path, .bezierPath(let path)): return "\(path.vertices.count) pts"
+        default: return ""
+        }
+    }
+    
+    private func maskPropertyDisplayName(_ property: ProjectMaskAnimatableProperty) -> String {
+        switch property {
+        case .path: return "Mask Path"
+        case .opacity: return "Opacity"
+        case .feather: return "Feather"
+        case .expansion: return "Expansion"
+        }
+    }
+    
+    private func maskStaticValue(maskID: VertexID, property: ProjectMaskAnimatableProperty) -> ProjectAnimatableValue {
+        guard let mask = layer.masks.first(where: { $0.id == maskID }) else { return .scalar(0) }
+        switch property {
+        case .path: return .bezierPath(mask.path)
+        case .opacity: return .scalar(mask.opacity)
+        case .feather: return .scalar(mask.featherPixels)
+        case .expansion: return .scalar(mask.expansionPixels)
+        }
+    }
 
     private func ensureAnimated(_ property: ProjectLayerAnimatableProperty) {
         guard layer.animationChannels.first(where: { $0.property == .layer(property) }) == nil else { return }
@@ -321,15 +503,11 @@ struct AETimelineLayerRow: View {
                 let key = ProjectKeyframe(time: editorState.playhead, value: value, interpolation: .linear)
                 channels[channelIndex] = try AnimationEditEngine().addKeyframe(key, to: channel)
             }
-            try workspace.setAnimationChannels(layerID: layer.id, channels: channels)
+try workspace.setAnimationChannels(layerID: layer.id, channels: channels)
             interactionError = nil
         } catch { interactionError = error.localizedDescription }
     }
-
-    private func hasKeyframeAtPlayhead(_ channel: ProjectAnimationChannel?) -> Bool {
-        channel?.keyframes.contains(where: { $0.time == editorState.playhead }) == true
-    }
-
+    
     private func propertyValueText(_ property: ProjectLayerAnimatableProperty, channel: ProjectAnimationChannel?) -> String {
         let value: Double
         if let channel, case .scalar(let evaluated) = try? channel.evaluatedValue(at: editorState.playhead) { value = evaluated }

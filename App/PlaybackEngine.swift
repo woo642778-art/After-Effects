@@ -6,6 +6,10 @@ import VertexProject
 import VertexRender
 import VertexRenderMetal
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 @MainActor
 public final class CompositionPlaybackEngine: ObservableObject {
     public enum State: Equatable {
@@ -32,8 +36,13 @@ public final class CompositionPlaybackEngine: ObservableObject {
     @Published public private(set) var currentFrameIndex: Int64 = 0
     @Published public private(set) var fps: Double = 0
     
+    #if canImport(UIKit)
+    private var displayLink: CADisplayLink?
+    #else
     private var displayLink: CVDisplayLink?
-    private var composition: ProjectComposition?
+    #endif
+    
+    var composition: ProjectComposition?
     private var project: ProjectDocument?
     private var packageURL: URL?
     private var renderCoordinator: LatestRenderCoordinator?
@@ -58,10 +67,16 @@ public final class CompositionPlaybackEngine: ObservableObject {
     }
     
     deinit {
-        stopDisplayLink()
+        // displayLink cleanup handled by ARC; explicit invalidation not needed in deinit
+        // due to MainActor isolation. Call stop() explicitly when done.
     }
     
     private func setupDisplayLink() {
+        #if canImport(UIKit)
+        let link = CADisplayLink(target: self, selector: #selector(displayLinkCallback(_:)))
+        link.add(to: .main, forMode: .common)
+        self.displayLink = link
+        #else
         var displayLink: CVDisplayLink?
         let err = CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
         guard err == kCVReturnSuccess, let link = displayLink else {
@@ -79,23 +94,38 @@ public final class CompositionPlaybackEngine: ObservableObject {
         
         CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(self).toOpaque())
         self.displayLink = link
+        #endif
     }
     
     private func stopDisplayLink() {
+        #if canImport(UIKit)
+        displayLink?.invalidate()
+        displayLink = nil
+        #else
         if let link = displayLink {
             CVDisplayLinkStop(link)
             displayLink = nil
         }
+        #endif
     }
     
+    #if canImport(UIKit)
+    @objc private func displayLinkCallback(_ link: CADisplayLink) {
+        displayLinkCallbackImpl(targetSeconds: link.timestamp)
+    }
+    #else
     private func displayLinkCallback(now: UnsafePointer<CVTimeStamp>, outputTime: UnsafePointer<CVTimeStamp>) {
+        let targetTime = outputTime.pointee.videoTime
+        let targetSeconds = Double(targetTime.timeValue) / Double(targetTime.timeScale)
+        displayLinkCallbackImpl(targetSeconds: targetSeconds)
+    }
+    #endif
+    
+    private func displayLinkCallbackImpl(targetSeconds: Double) {
         guard state == .playing, !isSeeking,
               let composition = composition,
               let coordinator = renderCoordinator,
               let outputSpec = outputSpec else { return }
-        
-        let targetTime = outputTime.pointee.videoTime
-        let targetSeconds = Double(targetTime.timeValue) / Double(targetTime.timeScale)
         
         let frameDuration = composition.frameRate.seconds
         let targetFrameIndex = Int64((targetSeconds / frameDuration).rounded())
@@ -105,7 +135,7 @@ public final class CompositionPlaybackEngine: ObservableObject {
             Task { @MainActor in
                 self.pause()
                 self.currentFrameIndex = maxFrame
-                self.currentTime = try? self.exactFrameTime(frameIndex: maxFrame, frameRate: composition.frameRate)
+                self.currentTime = (try? self.exactFrameTime(frameIndex: maxFrame, frameRate: composition.frameRate)) ?? .zero
             }
             return
         }
@@ -154,15 +184,23 @@ public final class CompositionPlaybackEngine: ObservableObject {
         guard state != .playing, composition != nil, displayLink != nil else { return }
         state = .playing
         lastFrameTime = CACurrentMediaTime()
+        #if canImport(UIKit)
+        displayLink?.isPaused = false
+        #else
         CVDisplayLinkStart(displayLink!)
+        #endif
     }
     
     public func pause() {
         guard state == .playing else { return }
         state = .paused
+        #if canImport(UIKit)
+        displayLink?.isPaused = true
+        #else
         if let link = displayLink {
             CVDisplayLinkStop(link)
         }
+        #endif
     }
     
     public func stop() {
@@ -193,7 +231,11 @@ public final class CompositionPlaybackEngine: ObservableObject {
         seekTargetTime = nil
         
         if state == .playing {
+            #if canImport(UIKit)
+            displayLink?.isPaused = false
+            #else
             CVDisplayLinkStart(displayLink!)
+            #endif
         }
     }
     
@@ -284,7 +326,7 @@ public final class CompositionPlaybackEngine: ObservableObject {
         guard state != .stopped else { return }
         
         currentFrameIndex = frameIndex
-        currentTime = try? exactFrameTime(frameIndex: frameIndex, frameRate: composition!.frameRate)
+        currentTime = (try? exactFrameTime(frameIndex: frameIndex, frameRate: composition!.frameRate)) ?? .zero
         
         let now = CACurrentMediaTime()
         frameTimes.append(now)

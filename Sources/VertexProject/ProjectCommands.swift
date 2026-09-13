@@ -249,6 +249,12 @@ public struct ProjectCommandEngine: Sendable {
             for marker in markers { _ = try marker.validated(compositionDuration: composition.duration) }
             forward = .setLayerMarkers(layerID: id, before: layer.markers, after: markers)
 
+        case .setLayerMasks(let id, let masks):
+            let layer = try editableLayer(id, in: document)
+            guard masks != layer.masks else { throw ProjectError.invalidOperation("Layer masks are unchanged.") }
+            for mask in masks { _ = try mask.validated() }
+            forward = .setLayerMasks(layerID: id, before: layer.masks, after: masks)
+
         case .setLayerParent(let id, let parentLayerID):
             let layer = try editableLayer(id, in: document)
             guard layer.parentLayerID != parentLayerID else { throw ProjectError.invalidOperation("Layer parent is unchanged.") }
@@ -507,6 +513,7 @@ public struct ProjectCommandEngine: Sendable {
         case .setLayerBlendMode(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].blendMode == before else { throw ProjectError.invalidOperation("Layer blend-mode precondition did not match.") }; document.layerRegistry[index].blendMode = after
         case .setLayerSource(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].source == before else { throw ProjectError.invalidOperation("Layer source precondition did not match.") }; document.layerRegistry[index].source = after
         case .setLayerMarkers(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].markers == before else { throw ProjectError.invalidOperation("Layer-marker precondition did not match.") }; document.layerRegistry[index].markers = after
+        case .setLayerMasks(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].masks == before else { throw ProjectError.invalidOperation("Layer-masks precondition did not match.") }; document.layerRegistry[index].masks = after
         case .setLayerParent(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].parentLayerID == before else { throw ProjectError.invalidOperation("Layer-parent precondition did not match.") }; document.layerRegistry[index].parentLayerID = after
         case .setLayerOperations(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].operations == before else { throw ProjectError.invalidOperation("Layer operations precondition did not match.") }; document.layerRegistry[index].operations = after
         case .setLayerEffects(let id, let before, let after): let index = try layerIndex(id, in: document); guard document.layerRegistry[index].effects == before else { throw ProjectError.invalidOperation("Layer effects precondition did not match.") }; document.layerRegistry[index].effects = after

@@ -37,7 +37,7 @@ final class CompositionPreviewController: ObservableObject {
     private var aiService: AIFrameEffectService?
     
     private var playbackEngine: CompositionPlaybackEngine?
-    private var isUsingPlaybackEngine = false
+    var isUsingPlaybackEngine = false
     
     init() {
         do { coordinator = LatestRenderCoordinator(backend: try MetalRenderBackend()) }

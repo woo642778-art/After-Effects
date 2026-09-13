@@ -554,6 +554,10 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         perform(.setLayerMarkers(id: layer.id, markers: markers), mergeKey: nil)
     }
 
+    func setLayerMasks(layerID: VertexID, masks: [ProjectMask]) {
+        perform(.setLayerMasks(id: layerID, masks: masks), mergeKey: "layer.\(layerID.rawValue).masks")
+    }
+
 
     func bakeEffect(layerID: VertexID, effectID: VertexID) async throws {
         guard let project, let packageURL else { throw ProjectError.invalidOperation("Save the project package before baking AI output.") }

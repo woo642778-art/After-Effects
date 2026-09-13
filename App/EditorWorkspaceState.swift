@@ -30,6 +30,7 @@ final class EditorWorkspaceState: ObservableObject {
     @Published var expandedTransformLayerIDs: Set<VertexID> = []
     @Published var expandedEffectsLayerIDs: Set<VertexID> = []
     @Published var expandedMasksLayerIDs: Set<VertexID> = []
+    @Published var expandedMaskIDs: Set<VertexID> = []
     @Published var activeTool: TimelineTool = .selection
     @Published var snappingEnabled = true
     @Published var pixelsPerSecond: Double = 120
@@ -148,6 +149,10 @@ final class EditorWorkspaceState: ObservableObject {
 
     func toggleTransformDisclosure(_ id: VertexID) {
         if expandedTransformLayerIDs.remove(id) == nil { expandedTransformLayerIDs.insert(id) }
+    }
+    
+    func toggleMaskDisclosure(_ id: VertexID) {
+        if expandedMaskIDs.remove(id) == nil { expandedMaskIDs.insert(id) }
     }
 
     func selectKeyframe(_ id: VertexID, additive: Bool = false) {
