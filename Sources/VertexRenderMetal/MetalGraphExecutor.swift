@@ -225,7 +225,7 @@ internal struct MetalGraphExecutor {
 
         try await cancellationToken.throwIfCancelled()
         commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
+        await commandBuffer.completed()
         guard commandBuffer.status != .error else {
             throw RenderError.commandFailure(
                 commandBuffer.error?.localizedDescription

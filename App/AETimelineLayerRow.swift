@@ -231,11 +231,54 @@ struct AETimelineLayerRow: View {
                     }
                     .buttonStyle(.plain)
                     .offset(x: CGFloat(keyframe.time.seconds * editorState.pixelsPerSecond) - 3.5)
+                    .contextMenu {
+                        ForEach(ProjectKeyframeEaseCommand.allCases, id: \.self) { ease in
+                            Button(ease.rawValue.capitalized) {
+                                applyEase(ease, to: keyframe.id, in: channel)
+                            }
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onChanged { value in
+                                dragOffset[keyframe.id] = value.translation.width
+                            }
+                            .onEnded { value in
+                                defer { dragOffset.removeValue(forKey: keyframe.id) }
+                                guard !layer.locked else { return }
+                                do {
+                                    let delta = try AETimelineInteractionModel.exactDelta(points: Double(value.translation.width), pixelsPerSecond: editorState.pixelsPerSecond, frameRate: composition.frameRate)
+                                    try moveKeyframe(keyframe.id, by: delta, in: channel)
+                                } catch { interactionError = error.localizedDescription }
+                            }
+                    )
                 }
             }
             Rectangle().fill(AfterEffectsTheme.accent.opacity(0.75)).frame(width: 1)
                 .offset(x: CGFloat(editorState.playhead.seconds * editorState.pixelsPerSecond))
         }
+    }
+    
+    @State private var dragOffset: [VertexID: CGFloat] = [:]
+    
+    private func applyEase(_ ease: ProjectKeyframeEaseCommand, to keyframeID: VertexID, in channel: ProjectAnimationChannel) {
+        do {
+            var channels = layer.animationChannels
+            guard let channelIndex = channels.firstIndex(where: { $0.id == channel.id }) else { return }
+            channels[channelIndex] = try AnimationEditEngine().applyEase(ease, keyframeIDs: [keyframeID], in: channel)
+            workspace.setAnimationChannels(layerID: layer.id, channels: channels)
+            interactionError = nil
+        } catch { interactionError = error.localizedDescription }
+    }
+    
+    private func moveKeyframe(_ keyframeID: VertexID, by delta: RationalTime, in channel: ProjectAnimationChannel) {
+        do {
+            var channels = layer.animationChannels
+            guard let channelIndex = channels.firstIndex(where: { $0.id == channel.id }) else { return }
+            channels[channelIndex] = try AnimationEditEngine().moveKeyframes(ids: [keyframeID], by: delta, in: channel)
+            workspace.setAnimationChannels(layerID: layer.id, channels: channels)
+            interactionError = nil
+        } catch { interactionError = error.localizedDescription }
     }
 
     private func simpleSubRow(_ title: String, detail: String) -> some View {

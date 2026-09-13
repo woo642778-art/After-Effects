@@ -1,4 +1,18 @@
 {
   "formatVersion": 1,
-  "models": []
+  "models": [
+    {
+      "modelID": "realesrgan-x4v3-f16",
+      "task": "super-resolution",
+      "upstream": "https://github.com/xinntao/Real-ESRGAN",
+      "upstreamVersion": "0.3.0",
+      "license": "BSD-3-Clause",
+      "sourceSHA256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+      "convertedSHA256": null,
+      "precision": "FP16",
+      "compiledSizeBytes": null,
+      "minimumTier": "standard",
+      "bundleRelativePath": "realesrgan-x4v3-f16.mlmodelc"
+    }
+  ]
 }

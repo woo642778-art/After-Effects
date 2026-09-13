@@ -28,45 +28,72 @@ final class CompositionPreviewController: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var isRendering = false
     @Published private(set) var aiResultGeneration: UInt64 = 0
-
+    
     private var coordinator: LatestRenderCoordinator?
     private var renderTask: Task<Void, Never>?
     private var compileToken: RenderCancellationToken?
     private var generation: UInt64 = 0
     private var aiEnvironment: BundledAIEnvironment?
     private var aiService: AIFrameEffectService?
-
+    
+    private var playbackEngine: CompositionPlaybackEngine?
+    private var isUsingPlaybackEngine = false
+    
     init() {
         do { coordinator = LatestRenderCoordinator(backend: try MetalRenderBackend()) }
         catch { errorMessage = error.localizedDescription }
     }
-
+    
     var exportDocument: CompositionPNGDocument? {
         result.map { CompositionPNGDocument(data: $0.image.data) }
     }
-
+    
+    var playbackState: CompositionPlaybackEngine.State {
+        playbackEngine?.state ?? .stopped
+    }
+    
+    var playbackFPS: Double {
+        playbackEngine?.fps ?? 0
+    }
+    
+    var playbackProgress: Double {
+        playbackEngine?.progress ?? 0
+    }
+    
+    var playbackCurrentTime: RationalTime {
+        playbackEngine?.currentTime ?? .zero
+    }
+    
+    var playbackDuration: RationalTime {
+        playbackEngine?.duration ?? .zero
+    }
+    
     func setFrameIndex(_ value: Int64, composition: ProjectComposition) {
+        stopPlayback()
         let clamped = min(max(0, value), lastFrameIndex(for: composition))
         guard clamped != frameIndex else { return }
         frameIndex = clamped
         exactTime = (try? currentTime(for: composition)) ?? .zero
     }
-
+    
     func step(by frames: Int64, composition: ProjectComposition) {
+        stopPlayback()
         let sum = frameIndex.addingReportingOverflow(frames)
         setFrameIndex(sum.overflow ? (frames < 0 ? 0 : Int64.max) : sum.partialValue, composition: composition)
     }
-
+    
     func resetForComposition(_ composition: ProjectComposition) {
+        stopPlayback()
         frameIndex = 0
         exactTime = .zero
     }
-
+    
     func currentTime(for composition: ProjectComposition) throws -> RationalTime {
         try exactFrameTime(frameIndex: frameIndex, frameRate: composition.frameRate)
     }
-
+    
     func render(project: ProjectDocument, packageURL: URL?) {
+        stopPlayback()
         guard let compositionID = project.activeCompositionID,
               let composition = project.composition(id: compositionID) else {
             errorMessage = "Create or select a composition before rendering."
@@ -75,8 +102,9 @@ final class CompositionPreviewController: ObservableObject {
         let time = (try? currentTime(for: composition)) ?? .zero
         render(project: project, packageURL: packageURL, at: time)
     }
-
+    
     func render(project: ProjectDocument, packageURL: URL?, at requestedTime: RationalTime) {
+        stopPlayback()
         guard let compositionID = project.activeCompositionID,
               let composition = project.composition(id: compositionID),
               let coordinator else {
@@ -94,7 +122,7 @@ final class CompositionPreviewController: ObservableObject {
         compileToken = token
         isRendering = true
         errorMessage = nil
-
+        
         let effectResolver: (any CompositionEffectResolver)?
         do { effectResolver = try effectResolverIfNeeded(project: project) }
         catch {
@@ -102,7 +130,7 @@ final class CompositionPreviewController: ObservableObject {
             isRendering = false
             return
         }
-
+        
         renderTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -149,12 +177,107 @@ final class CompositionPreviewController: ObservableObject {
             }
         }
     }
-
+    
+    func preparePlayback(
+        project: ProjectDocument,
+        packageURL: URL?,
+        compositionID: VertexID
+    ) async throws {
+        guard let composition = project.composition(id: compositionID) else {
+            throw PlaybackError.compositionNotFound
+        }
+        
+        let engine = CompositionPlaybackEngine()
+        let outputSpec = try RenderOutputSpecification(
+            width: composition.width,
+            height: composition.height,
+            color: composition.color
+        )
+        
+        try await engine.prepare(
+            project: project,
+            packageURL: packageURL,
+            compositionID: compositionID,
+            outputSpec: outputSpec,
+            purpose: .interactivePreview
+        )
+        
+        self.playbackEngine = engine
+        self.isUsingPlaybackEngine = true
+        
+        self.frameIndex = 0
+        self.exactTime = .zero
+        self.result = nil
+        self.errorMessage = nil
+    }
+    
+    func play() {
+        guard isUsingPlaybackEngine, let engine = playbackEngine else { return }
+        engine.play()
+    }
+    
+    func pause() {
+        playbackEngine?.pause()
+    }
+    
+    func stop() {
+        stopPlayback()
+    }
+    
+    func seek(to time: RationalTime) async {
+        guard let engine = playbackEngine else { return }
+        await engine.seek(to: time)
+        if let result = await engine.resultForCurrentFrame() {
+            self.result = result
+            self.frameIndex = engine.currentFrameIndex
+            self.exactTime = engine.currentTime
+        }
+    }
+    
+    func seekToFrame(_ frameIndex: Int64) async {
+        guard let engine = playbackEngine, let composition = engine.composition else { return }
+        await engine.seekToFrame(frameIndex)
+        if let result = await engine.resultForCurrentFrame() {
+            self.result = result
+            self.frameIndex = engine.currentFrameIndex
+            self.exactTime = engine.currentTime
+        }
+    }
+    
+    func stepForward() async {
+        guard let engine = playbackEngine else { return }
+        await engine.stepForward()
+        if let result = await engine.resultForCurrentFrame() {
+            self.result = result
+            self.frameIndex = engine.currentFrameIndex
+            self.exactTime = engine.currentTime
+        }
+    }
+    
+    func stepBackward() async {
+        guard let engine = playbackEngine else { return }
+        await engine.stepBackward()
+        if let result = await engine.resultForCurrentFrame() {
+            self.result = result
+            self.frameIndex = engine.currentFrameIndex
+            self.exactTime = engine.currentTime
+        }
+    }
+    
+    private func stopPlayback() {
+        if isUsingPlaybackEngine {
+            playbackEngine?.stop()
+            playbackEngine = nil
+            isUsingPlaybackEngine = false
+        }
+    }
+    
     func notifyAIResultGenerationChanged() {
         aiResultGeneration &+= 1
     }
-
+    
     func cancel() {
+        stopPlayback()
         generation &+= 1
         renderTask?.cancel()
         renderTask = nil
@@ -162,13 +285,13 @@ final class CompositionPreviewController: ObservableObject {
         if let coordinator { Task { await coordinator.cancelActiveRender() } }
         isRendering = false
     }
-
+    
     func lastFrameIndex(for composition: ProjectComposition) -> Int64 {
         let count = floor(composition.duration.seconds * composition.frameRate.seconds + 0.0000001)
         guard count.isFinite, count > 1 else { return 0 }
         return Int64(min(count - 1, Double(Int64.max)))
     }
-
+    
     private func effectResolverIfNeeded(project: ProjectDocument) throws -> (any CompositionEffectResolver)? {
         guard project.layerRegistry.contains(where: { $0.effects.contains(where: \.enabled) }) else { return nil }
         let environment: BundledAIEnvironment
@@ -185,13 +308,13 @@ final class CompositionPreviewController: ObservableObject {
         }
         return CompositionEffectResolverAdapter(service: service, environment: environment)
     }
-
+    
     private func frameIndex(for time: RationalTime, composition: ProjectComposition) -> Int64 {
         let value = time.seconds * composition.frameRate.seconds
         guard value.isFinite, value > 0 else { return 0 }
         return min(max(0, Int64(value.rounded())), lastFrameIndex(for: composition))
     }
-
+    
     private func exactFrameTime(frameIndex: Int64, frameRate: RationalTime) throws -> RationalTime {
         guard frameRate.value > 0, frameRate.value <= Int64(Int32.max) else {
             throw CompositionError.invalidTimingRange("Frame rate cannot be represented as an exact frame denominator.")

@@ -201,20 +201,78 @@ struct CompositionWorkspaceView: View {
     private var frameNavigator: some View {
         if let composition = workspace.activeComposition {
             VStack(spacing: 8) {
-                HStack {
-                    Button { preview.step(by: -1, composition: composition) } label: {
+                HStack(spacing: 8) {
+                    Button { 
+                        Task { await preview.stepBackward() }
+                    } label: {
+                        Image(systemName: "backward.end.fill")
+                    }
+                    .help("Go to First Frame")
+                    
+                    Button { 
+                        Task { await preview.stepBackward() }
+                    } label: {
                         Image(systemName: "backward.frame")
                     }
-                    Button { preview.step(by: 1, composition: composition) } label: {
+                    .help("Previous Frame")
+                    
+                    Button {
+                        if preview.playbackState == .playing {
+                            preview.pause()
+                        } else {
+                            Task {
+                                if !preview.isUsingPlaybackEngine {
+                                    try? await preview.preparePlayback(
+                                        project: workspace.project!,
+                                        packageURL: workspace.packageURL,
+                                        compositionID: composition.id
+                                    )
+                                }
+                                preview.play()
+                            }
+                        }
+                    } label: {
+                        Image(systemName: preview.playbackState == .playing ? "pause.fill" : "play.fill")
+                    }
+                    .help(preview.playbackState == .playing ? "Pause" : "Play")
+                    
+                    Button { 
+                        Task { await preview.stepForward() }
+                    } label: {
                         Image(systemName: "forward.frame")
                     }
+                    .help("Next Frame")
+                    
+                    Button { 
+                        Task { 
+                            await preview.seekToFrame(preview.lastFrameIndex(for: composition))
+                        }
+                    } label: {
+                        Image(systemName: "forward.end.fill")
+                    }
+                    .help("Go to Last Frame")
+                    
+                    Button { preview.stop() } label: {
+                        Image(systemName: "stop.fill")
+                    }
+                    .help("Stop")
+                    .disabled(preview.playbackState == .stopped)
+                    
                     Spacer()
+                    
                     Text("Frame \(preview.frameIndex) / \(preview.lastFrameIndex(for: composition))")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.white)
+                    
+                    if preview.playbackState == .playing || preview.playbackState == .buffering {
+                        Text("\(Int(preview.playbackFPS)) fps")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(AfterEffectsTheme.accent)
+                    }
                 }
                 .buttonStyle(.bordered)
                 .tint(AfterEffectsTheme.accent)
+                .disabled(workspace.project == nil)
 
                 Slider(
                     value: Binding(

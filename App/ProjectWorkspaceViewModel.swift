@@ -464,6 +464,40 @@ final class ProjectWorkspaceViewModel: ObservableObject {
         )
     }
 
+    func setAnimationChannels(layerID: VertexID, channels: [ProjectAnimationChannel]) {
+        guard let project, let layer = project.layer(id: layerID) else { return }
+        let mergeKey = "layer.\(layerID.rawValue).animation"
+        do {
+            try channels.validatedAnimationChannels(for: layer.masks, effects: layer.effects)
+        } catch {
+            return
+        }
+        perform(.setLayerMotionState(
+            id: layerID,
+            animationChannels: channels,
+            masks: layer.masks,
+            trackMatte: layer.trackMatte
+        ), mergeKey: mergeKey)
+    }
+
+    func phase9UpdateTemporalHandle(
+        layerID: VertexID,
+        channelID: VertexID,
+        keyframeID: VertexID,
+        incoming: ProjectBezierHandle?,
+        outgoing: ProjectBezierHandle?
+    ) {
+        guard let project, let layer = project.layer(id: layerID) else { return }
+        var channels = layer.animationChannels
+        guard let channelIndex = channels.firstIndex(where: { $0.id == channelID }) else { return }
+        var channel = channels[channelIndex]
+        guard let keyframeIndex = channel.keyframes.firstIndex(where: { $0.id == keyframeID }) else { return }
+        channel.keyframes[keyframeIndex].outgoingTemporalHandle = outgoing
+        channel.keyframes[keyframeIndex].incomingTemporalHandle = incoming
+        channels[channelIndex] = channel
+        setAnimationChannels(layerID: layerID, channels: channels)
+    }
+
 
     func commitTimelineEdit(_ edit: TimelineEdit, compositionID: VertexID) throws {
         guard let project, let composition = project.composition(id: compositionID) else { return }

@@ -270,13 +270,32 @@ public final class DepthInferenceEngine: @unchecked Sendable {
                 }
             }
         } else if isFloat16 {
-            guard rowBytes >= width * MemoryLayout<Float16>.stride else {
+            // Float16 not available on macOS; convert via bit pattern (IEEE 754 half-precision)
+            guard rowBytes >= width * 2 else {
                 throw AIError.inferenceFailed("Depth Float16 row stride is smaller than the image width.")
             }
             for y in 0..<height {
-                let row = baseAddress.advanced(by: y * rowBytes).assumingMemoryBound(to: Float16.self)
+                let row = baseAddress.advanced(by: y * rowBytes).assumingMemoryBound(to: UInt16.self)
                 for x in 0..<width {
-                    values[y * width + x] = Float(row[x])
+                    let bits = row[x]
+                    let sign = Float((bits & 0x8000) != 0 ? -1.0 : 1.0)
+                    let exponent = Int((bits & 0x7C00) >> 10)
+                    let mantissa = bits & 0x03FF
+                    var value: Float
+                    if exponent == 0 {
+                        if mantissa == 0 {
+                            value = 0.0
+                        } else {
+                            // Subnormal
+                            value = sign * Float(mantissa) * Float.ulpOfOne * 0.5
+                        }
+                    } else if exponent == 31 {
+                        value = mantissa == 0 ? sign * Float.infinity : Float.nan
+                    } else {
+                        // Normal
+                        value = sign * Float(1.0 + Float(mantissa) / 1024.0) * Float(1 << (exponent - 15))
+                    }
+                    values[y * width + x] = value
                 }
             }
         } else {
